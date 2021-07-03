@@ -21,9 +21,6 @@ public class SchemaGenerator {
 
     public SchemaGenerator() throws SQLException {
         Properties info = new Properties();
-        info.setProperty(CalciteConnectionProperty.LEX.camelName(), "MYSQL");
-        info.setProperty(CalciteConnectionProperty.FUN.camelName(), "mysql");
-        info.setProperty(CalciteConnectionProperty.MATERIALIZATIONS_ENABLED.camelName(), "true");
         info.setProperty(CalciteConnectionProperty.PARSER_FACTORY.camelName(), ServerDdlExecutor.class.getName() + "#PARSER_FACTORY");
         Connection connection = DriverManager.getConnection("jdbc:calcite:", info);
         calciteConnection = connection.unwrap(CalciteConnection.class);

@@ -1,5 +1,9 @@
 package org.cosette;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import org.apache.calcite.jdbc.JavaTypeFactoryImpl;
 import org.apache.calcite.plan.RelOptTable;
 import org.apache.calcite.plan.RelOptUtil;
 import org.apache.calcite.prepare.PlannerImpl;
@@ -7,6 +11,11 @@ import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.RelRoot;
 import org.apache.calcite.rel.RelWriter;
 import org.apache.calcite.rel.externalize.RelJsonWriter;
+import org.apache.calcite.rel.type.RelDataTypeFactory;
+import org.apache.calcite.rel.type.RelDataTypeField;
+import org.apache.calcite.rel.type.RelDataTypeSystem;
+import org.apache.calcite.schema.SchemaPlus;
+import org.apache.calcite.schema.Table;
 import org.apache.calcite.sql.*;
 import org.apache.calcite.sql.parser.SqlParseException;
 import org.apache.calcite.tools.ValidationException;
@@ -40,24 +49,47 @@ public class SQLParse {
         rootList.add(relRoot);
     }
 
-    public List<RelRoot> dump() {
-        return rootList;
+    public void dumpToJSON() throws JsonProcessingException {
+        ObjectMapper mapper = new ObjectMapper();
+        SchemaPlus schema = schemaGenerator.extractSchema();
+
+        ObjectNode mainJSON = mapper.createObjectNode();
+
+        ObjectNode schemaJSON = mapper.createObjectNode();
+        for (String tableName: schema.getTableNames()) {
+            Table table = Objects.requireNonNull(schema.getTable(tableName));
+            ObjectNode tableJSON = mapper.createObjectNode();
+            ObjectNode fieldJSON = mapper.createObjectNode();
+            for (RelDataTypeField field: table.getRowType(new JavaTypeFactoryImpl()).getFieldList()) {
+                fieldJSON.put(String.valueOf(field.getIndex()), field.getType().toString());
+            }
+            tableJSON.set("type", fieldJSON);
+            schemaJSON.set(tableName, tableJSON);
+        }
+        mainJSON.set("schema", schemaJSON);
+
+        for (RelRoot root: rootList) {
+            RelNode relNode = root.project();
+        }
+
+        String json = mapper.writerWithDefaultPrettyPrinter().writeValueAsString(mainJSON);
+        System.out.println(json);
     }
 
     public void done() throws SQLException {
         schemaGenerator.close();
     }
 
-    public static void main( String[] args ) throws SQLException, SqlParseException, ValidationException {
-        SQLParse parse = new SQLParse();
-        parse.applyDDL("""
+    public static void main( String[] args ) throws SQLException, SqlParseException, ValidationException, JsonProcessingException {
+        SQLParse sqlParse = new SQLParse();
+        sqlParse.applyDDL("""
                                   CREATE TABLE EMP (
-                                    EMP_ID INTEGER,
+                                    EMP_ID INTEGER NOT NULL,
                                     EMP_NAME VARCHAR,
                                     DEPT_ID INTEGER
                                  )
                              """);
-        parse.applyDDL("""
+        sqlParse.applyDDL("""
                                 CREATE TABLE DEPT (
                                       DEPT_ID INTEGER,
                                       DEPT_NAME VARCHAR NOT NULL
@@ -76,36 +108,12 @@ public class SQLParse {
                 WHERE 15 > T.EMP_ID
                 """;
 
-        parse.parseDML(sql1);
-        parse.parseDML(sql2);
+        sqlParse.parseDML(sql1);
+        sqlParse.parseDML(sql2);
 
-        for (RelRoot root: parse.dump()) {
-            RelNode relNode = root.project();
-            System.out.println(relNode.explain());
-        }
+        sqlParse.dumpToJSON();
 
-    }
-}
+        sqlParse.done();
 
-class RelJsonCustomizedWriter implements RelWriter {
-
-    @Override
-    public void explain(RelNode relNode, List<Pair<String, @Nullable Object>> list) {
-
-    }
-
-    @Override
-    public SqlExplainLevel getDetailLevel() {
-        return SqlExplainLevel.EXPPLAN_ATTRIBUTES;
-    }
-
-    @Override
-    public RelWriter item(String s, @Nullable Object o) {
-        return null;
-    }
-
-    @Override
-    public RelWriter done(RelNode relNode) {
-        return null;
     }
 }
