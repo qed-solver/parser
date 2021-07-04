@@ -29,6 +29,12 @@ public class RelJsonShuttle implements RelShuttle {
         return relNode;
     }
 
+    private ObjectNode visitRexNode(RexNode rex) {
+        RexJSONVisitor rexJSONVisitor = new RexJSONVisitor(relMapper);
+        rex.accept(rexJSONVisitor);
+        return rexJSONVisitor.getRexNode();
+    }
+
     private ObjectNode visitChild(RelNode child) {
         RelJsonShuttle childShuttle = new RelJsonShuttle(relMapper, relOptTables);
         child.accept(childShuttle);
@@ -75,8 +81,7 @@ public class RelJsonShuttle implements RelShuttle {
         ObjectNode childNode = visitChild(filter.getInput());
         ArrayNode arguments = relNode.putArray("filter");
         RexNode rexNode = filter.getCondition();
-
-        arguments.add(rexNode.toString());
+        arguments.add(visitRexNode(rexNode));
         arguments.add(childNode);
         return null;
     }
@@ -92,7 +97,7 @@ public class RelJsonShuttle implements RelShuttle {
         ArrayNode arguments = relNode.putArray("project");
         ArrayNode targets = arguments.addArray();
         for (RexNode target : project.getProjects()) {
-            targets.add(target.toString());
+            targets.add(visitRexNode(target));
         }
         arguments.add(childNode);
         return null;
@@ -147,24 +152,47 @@ public class RelJsonShuttle implements RelShuttle {
 
 class RexJSONVisitor implements RexVisitor<ObjectNode> {
 
+    private final ObjectMapper rexMapper;
+    private final ObjectNode rexNode;
+
+    public RexJSONVisitor(ObjectMapper mapper) {
+        rexMapper = mapper;
+        rexNode = rexMapper.createObjectNode();
+    }
+
+    public ObjectNode getRexNode() {
+        return rexNode;
+    }
+
+    private ObjectNode visitChild(RexNode rex) {
+        RexJSONVisitor childVisitor = new RexJSONVisitor(rexMapper);
+        return rex.accept(childVisitor);
+    }
+
     @Override
     public ObjectNode visitInputRef(RexInputRef inputRef) {
-        return null;
+        return rexNode.put("column", inputRef.getIndex());
     }
 
     @Override
     public ObjectNode visitLocalRef(RexLocalRef localRef) {
-        return null;
+        return rexNode.put("local", localRef.getIndex());
     }
 
     @Override
     public ObjectNode visitLiteral(RexLiteral literal) {
-        return null;
+        rexNode.put("type", literal.getType().toString());
+        return rexNode.put("literal", literal.toString());
     }
 
     @Override
     public ObjectNode visitCall(RexCall call) {
-        return null;
+        rexNode.put("operator", call.getOperator().toString());
+        ArrayNode arguments = rexNode.putArray("operands");
+        for (RexNode operand: call.getOperands()) {
+            arguments.add(visitChild(operand));
+        }
+        return rexNode;
     }
 
     @Override
