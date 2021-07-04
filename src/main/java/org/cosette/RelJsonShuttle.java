@@ -9,7 +9,7 @@ import org.apache.calcite.rel.RelShuttle;
 import org.apache.calcite.rel.core.TableFunctionScan;
 import org.apache.calcite.rel.core.TableScan;
 import org.apache.calcite.rel.logical.*;
-import org.apache.calcite.rex.RexNode;
+import org.apache.calcite.rex.*;
 
 import java.util.List;
 
@@ -74,7 +74,9 @@ public class RelJsonShuttle implements RelShuttle {
     public RelNode visit(LogicalFilter filter) {
         ObjectNode childNode = visitChild(filter.getInput());
         ArrayNode arguments = relNode.putArray("filter");
-        arguments.add(filter.getCondition().toString());
+        RexNode rexNode = filter.getCondition();
+
+        arguments.add(rexNode.toString());
         arguments.add(childNode);
         return null;
     }
@@ -141,4 +143,67 @@ public class RelJsonShuttle implements RelShuttle {
         return visitChildren(other);
     }
 
+}
+
+class RexJSONVisitor implements RexVisitor<ObjectNode> {
+
+    @Override
+    public ObjectNode visitInputRef(RexInputRef inputRef) {
+        return null;
+    }
+
+    @Override
+    public ObjectNode visitLocalRef(RexLocalRef localRef) {
+        return null;
+    }
+
+    @Override
+    public ObjectNode visitLiteral(RexLiteral literal) {
+        return null;
+    }
+
+    @Override
+    public ObjectNode visitCall(RexCall call) {
+        return null;
+    }
+
+    @Override
+    public ObjectNode visitOver(RexOver over) {
+        return null;
+    }
+
+    @Override
+    public ObjectNode visitCorrelVariable(RexCorrelVariable correlVariable) {
+        return null;
+    }
+
+    @Override
+    public ObjectNode visitDynamicParam(RexDynamicParam dynamicParam) {
+        return null;
+    }
+
+    @Override
+    public ObjectNode visitRangeRef(RexRangeRef rangeRef) {
+        return null;
+    }
+
+    @Override
+    public ObjectNode visitFieldAccess(RexFieldAccess fieldAccess) {
+        return null;
+    }
+
+    @Override
+    public ObjectNode visitSubQuery(RexSubQuery subQuery) {
+        return null;
+    }
+
+    @Override
+    public ObjectNode visitTableInputRef(RexTableInputRef fieldRef) {
+        return null;
+    }
+
+    @Override
+    public ObjectNode visitPatternFieldRef(RexPatternFieldRef fieldRef) {
+        return null;
+    }
 }
