@@ -23,7 +23,6 @@
     <orderEntry type="library" name="Maven: org.checkerframework:checker-qual:3.10.0" level="project" />
     <orderEntry type="library" name="Maven: org.slf4j:slf4j-api:1.7.25" level="project" />
     <orderEntry type="library" name="Maven: com.fasterxml.jackson.core:jackson-core:2.10.0" level="project" />
-    <orderEntry type="library" name="Maven: com.fasterxml.jackson.core:jackson-databind:2.10.0" level="project" />
     <orderEntry type="library" scope="RUNTIME" name="Maven: com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:2.10.0" level="project" />
     <orderEntry type="library" scope="RUNTIME" name="Maven: org.yaml:snakeyaml:1.24" level="project" />
     <orderEntry type="library" scope="RUNTIME" name="Maven: com.google.uzaygezen:uzaygezen-core:0.2" level="project" />
@@ -50,5 +49,6 @@
     <orderEntry type="library" name="Maven: com.google.protobuf:protobuf-java:3.6.1" level="project" />
     <orderEntry type="library" scope="RUNTIME" name="Maven: org.apache.httpcomponents:httpclient:4.5.9" level="project" />
     <orderEntry type="library" scope="RUNTIME" name="Maven: org.apache.httpcomponents:httpcore:4.4.11" level="project" />
+    <orderEntry type="library" name="Maven: com.fasterxml.jackson.core:jackson-databind:2.10.0" level="project" />
   </component>
 </module>
