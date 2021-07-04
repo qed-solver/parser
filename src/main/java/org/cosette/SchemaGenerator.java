@@ -6,6 +6,7 @@ import org.apache.calcite.jdbc.CalciteConnection;
 import org.apache.calcite.prepare.PlannerImpl;
 import org.apache.calcite.schema.SchemaPlus;
 import org.apache.calcite.server.ServerDdlExecutor;
+import org.apache.calcite.sql2rel.SqlToRelConverter;
 import org.apache.calcite.tools.FrameworkConfig;
 import org.apache.calcite.tools.Frameworks;
 
@@ -21,6 +22,10 @@ public class SchemaGenerator {
 
     public SchemaGenerator() throws SQLException {
         Properties info = new Properties();
+        info.setProperty(CalciteConnectionProperty.LEX.camelName(), "ORACLE");
+        info.setProperty(CalciteConnectionProperty.FUN.camelName(), "standard");
+        info.setProperty(CalciteConnectionProperty.FORCE_DECORRELATE.camelName(), "false");
+        info.setProperty(CalciteConnectionProperty.MATERIALIZATIONS_ENABLED.camelName(), "false");
         info.setProperty(CalciteConnectionProperty.PARSER_FACTORY.camelName(), ServerDdlExecutor.class.getName() + "#PARSER_FACTORY");
         Connection connection = DriverManager.getConnection("jdbc:calcite:", info);
         calciteConnection = connection.unwrap(CalciteConnection.class);
@@ -37,8 +42,18 @@ public class SchemaGenerator {
     }
 
     public PlannerImpl createPlanner() {
+        SqlToRelConverter.Config converterConfig = SqlToRelConverter.config()
+                .withRelBuilderConfigTransform(c -> c.withPushJoinCondition(false)
+                        .withSimplify(false)
+                        .withSimplifyValues(false)
+                        .withBloat(-1)
+                        .withDedupAggregateCalls(false)
+                        .withPruneInputOfAggregate(false))
+                .withDecorrelationEnabled(false)
+                .withTrimUnusedFields(false);
         FrameworkConfig config = Frameworks.newConfigBuilder()
                 .defaultSchema(extractSchema())
+                .sqlToRelConverterConfig(converterConfig)
                 .build();
         return new PlannerImpl(config);
     }
