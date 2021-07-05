@@ -6,7 +6,6 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.apache.calcite.plan.RelOptTable;
 import org.apache.calcite.plan.RelOptUtil;
-import org.apache.calcite.prepare.PlannerImpl;
 import org.apache.calcite.rel.*;
 import org.apache.calcite.rel.type.RelDataTypeField;
 import org.apache.calcite.sql.*;
@@ -69,9 +68,8 @@ public class SQLParse {
     }
 
     public void parseDML(String dml) throws SqlParseException, ValidationException {
-        PlannerImpl planner = schemaGenerator.createPlanner();
+        RawPlanner planner = schemaGenerator.createPlanner();
         SqlNode sqlNode = planner.parse(dml);
-        planner.validate(sqlNode);
         RelRoot relRoot = planner.rel(sqlNode);
         rootList.add(relRoot);
         tableSet.addAll(RelOptUtil.findTables(relRoot.project()));

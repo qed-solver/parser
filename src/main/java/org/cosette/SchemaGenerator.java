@@ -41,21 +41,8 @@ public class SchemaGenerator {
         return calciteConnection.getRootSchema();
     }
 
-    public PlannerImpl createPlanner() {
-        SqlToRelConverter.Config converterConfig = SqlToRelConverter.config()
-                .withRelBuilderConfigTransform(c -> c.withPushJoinCondition(false)
-                        .withSimplify(false)
-                        .withSimplifyValues(false)
-                        .withBloat(-1)
-                        .withDedupAggregateCalls(false)
-                        .withPruneInputOfAggregate(false))
-                .withDecorrelationEnabled(false)
-                .withTrimUnusedFields(false);
-        FrameworkConfig config = Frameworks.newConfigBuilder()
-                .defaultSchema(extractSchema())
-                .sqlToRelConverterConfig(converterConfig)
-                .build();
-        return new PlannerImpl(config);
+    public RawPlanner createPlanner() {
+        return new RawPlanner(extractSchema());
     }
 
     public void close() throws SQLException {
