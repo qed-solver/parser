@@ -78,6 +78,7 @@ public class RawPlanner implements RelOptTable.ViewExpander {
                         .withDedupAggregateCalls(false)
                         .withPruneInputOfAggregate(false))
                 .withDecorrelationEnabled(false)
+                .withExpand(false)
                 .withTrimUnusedFields(false);
         FrameworkConfig config = Frameworks.newConfigBuilder()
                 .defaultSchema(schema)

@@ -44,8 +44,14 @@ public class SQLParse {
                 WHERE 15 > T.EMP_ID
                 """;
 
-        sqlParse.parseDML(sql1);
-        sqlParse.parseDML(sql2);
+        String sql3 = """
+                SELECT * FROM EMP AS T WHERE EXISTS (SELECT * FROM EMP
+                WHERE EXISTS (SELECT * FROM DEPT WHERE DEPT_ID = EMP.DEPT_ID AND DEPT_ID = T.DEPT_ID))
+                """;
+
+//        sqlParse.parseDML(sql1);
+//        sqlParse.parseDML(sql2);
+        sqlParse.parseDML(sql3);
 
         sqlParse.dumpToJSON();
 
@@ -55,12 +61,10 @@ public class SQLParse {
 
     private final SchemaGenerator schemaGenerator;
     private final List<RelRoot> rootList;
-    private final Set<RelOptTable> tableSet;
 
     public SQLParse() throws SQLException {
         schemaGenerator = new SchemaGenerator();
         rootList = new ArrayList<>();
-        tableSet = new HashSet<>();
     }
 
     public void applyDDL(String ddl) throws SQLException {
@@ -72,7 +76,6 @@ public class SQLParse {
         SqlNode sqlNode = planner.parse(dml);
         RelRoot relRoot = planner.rel(sqlNode);
         rootList.add(relRoot);
-        tableSet.addAll(RelOptUtil.findTables(relRoot.project()));
     }
 
     public void dumpToJSON() throws JsonProcessingException {
@@ -81,7 +84,21 @@ public class SQLParse {
         ObjectNode mainObject = mapper.createObjectNode();
 
         ArrayNode schemaArray = mainObject.putArray("schemas");
-        List<RelOptTable> tableList = new ArrayList<>(tableSet);
+
+        ArrayNode queryArray = mainObject.putArray("queries");
+
+        List<RelOptTable> tableList = new ArrayList<>();
+
+        for (RelRoot root: rootList) {
+            Environment environment = new Environment(mapper, tableList);
+            RelJsonShuttle relJsonShuttle = new RelJsonShuttle(environment);
+            RelNode relNode = root.project();
+            System.out.println(relNode.explain());
+            relNode.accept(relJsonShuttle);
+            queryArray.add(relJsonShuttle.getRelNode());
+            tableList = environment.getRelOptTables();
+        }
+
         for (RelOptTable table: tableList) {
             ObjectNode tableObject = mapper.createObjectNode();
             ArrayNode typeArray = tableObject.putArray("types");
@@ -92,16 +109,6 @@ public class SQLParse {
 
             table.getReferentialConstraints();
             schemaArray.add(tableObject);
-        }
-
-        ArrayNode queryArray = mainObject.putArray("queries");
-
-        for (RelRoot root: rootList) {
-            RelJsonShuttle relJsonShuttle = new RelJsonShuttle(mapper, tableList);
-            RelNode relNode = root.project();
-            System.out.println(relNode.explain());
-            relNode.accept(relJsonShuttle);
-            queryArray.add(relJsonShuttle.getRelNode());
         }
 
         String json = mapper.writerWithDefaultPrettyPrinter().writeValueAsString(mainObject);
