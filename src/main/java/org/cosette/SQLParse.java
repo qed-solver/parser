@@ -5,7 +5,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.apache.calcite.plan.RelOptTable;
-import org.apache.calcite.plan.RelOptUtil;
 import org.apache.calcite.rel.*;
 import org.apache.calcite.rel.type.RelDataTypeField;
 import org.apache.calcite.sql.*;
@@ -14,63 +13,34 @@ import org.apache.calcite.tools.ValidationException;
 import java.sql.*;
 import java.util.*;
 
+/**
+ * A SQLParse instance can parse DDL statements and valid DML statements into JSON format.
+ */
 public class SQLParse {
-
-    public static void main( String[] args ) throws SQLException, SqlParseException, ValidationException, JsonProcessingException {
-        SQLParse sqlParse = new SQLParse();
-        sqlParse.applyDDL("""
-                                  CREATE TABLE EMP (
-                                    EMP_ID INTEGER NOT NULL,
-                                    EMP_NAME VARCHAR,
-                                    DEPT_ID INTEGER
-                                 )
-                             """);
-        sqlParse.applyDDL("""
-                                CREATE TABLE DEPT (
-                                      DEPT_ID INTEGER,
-                                      DEPT_NAME VARCHAR NOT NULL
-                                  )
-                                """);
-
-        String sql1 = """
-                SELECT * FROM
-                (SELECT * FROM EMP WHERE DEPT_ID = 10) AS T
-                WHERE T.DEPT_ID + 5 > T.EMP_ID
-                    """;
-
-        String sql2 = """
-                SELECT * FROM
-                (SELECT * FROM EMP WHERE DEPT_ID = 10) AS T
-                WHERE 15 > T.EMP_ID
-                """;
-
-        String sql3 = """
-                SELECT * FROM EMP AS T WHERE EXISTS (SELECT * FROM EMP
-                WHERE EXISTS (SELECT * FROM DEPT WHERE DEPT_ID = EMP.DEPT_ID AND DEPT_ID = T.DEPT_ID))
-                """;
-
-//        sqlParse.parseDML(sql1);
-//        sqlParse.parseDML(sql2);
-        sqlParse.parseDML(sql3);
-
-        sqlParse.dumpToJSON();
-
-        sqlParse.done();
-
-    }
 
     private final SchemaGenerator schemaGenerator;
     private final List<RelRoot> rootList;
 
+    /**
+     * Create a new instance by setting up the SchemaGenerator instance and the list of RelRoot within.
+     */
     public SQLParse() throws SQLException {
         schemaGenerator = new SchemaGenerator();
         rootList = new ArrayList<>();
     }
 
+    /**
+     * Apply a DDL statement to generate schema.
+     * @param ddl The DDL statement to be applied.
+     */
     public void applyDDL(String ddl) throws SQLException {
         schemaGenerator.applyDDL(ddl);
     }
 
+    /**
+     * Parse a DML statement with current schema.
+     * @param dml The DML statement to be parsed.
+     */
     public void parseDML(String dml) throws SqlParseException, ValidationException {
         RawPlanner planner = schemaGenerator.createPlanner();
         SqlNode sqlNode = planner.parse(dml);
@@ -78,6 +48,9 @@ public class SQLParse {
         rootList.add(relRoot);
     }
 
+    /**
+     * Dump schema and relational expressions in JSON format.
+     */
     public void dumpToJSON() throws JsonProcessingException {
         ObjectMapper mapper = new ObjectMapper();
 
@@ -91,7 +64,7 @@ public class SQLParse {
 
         for (RelRoot root: rootList) {
             Environment environment = new Environment(mapper, tableList);
-            RelJsonShuttle relJsonShuttle = new RelJsonShuttle(environment);
+            RelJSONShuttle relJsonShuttle = new RelJSONShuttle(environment);
             RelNode relNode = root.project();
             System.out.println(relNode.explain());
             relNode.accept(relJsonShuttle);
@@ -116,6 +89,9 @@ public class SQLParse {
 
     }
 
+    /**
+     * Close the SchemaGenerator instance within.
+     */
     public void done() throws SQLException {
         schemaGenerator.close();
     }

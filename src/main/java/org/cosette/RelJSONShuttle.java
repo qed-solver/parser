@@ -11,31 +11,57 @@ import org.apache.calcite.rex.*;
 import java.util.List;
 import java.util.Set;
 
-public class RelJsonShuttle implements RelShuttle {
+/**
+ * A implementation of RelShuttle interface that could convert a RelNode instance to a ObjectNode instance.
+ */
+public class RelJSONShuttle implements RelShuttle {
 
     private final ObjectNode relNode;
     private final Environment environment;
     private int columns;
 
-    public RelJsonShuttle(Environment existing) {
+    /**
+     * Initialize the shuttle with a given environment.
+     * @param existing The given environment.
+     */
+    public RelJSONShuttle(Environment existing) {
         environment = existing;
         relNode = environment.createNode();
     }
 
+    /**
+     * @return The ObjectNode instance corresponding to the RelNode instance.
+     */
     public ObjectNode getRelNode() {
         return relNode;
     }
 
+    /**
+     * @return The number of columns corresponding to the RelNode instance.
+     */
     public int getColumns() { return columns; }
 
+    /**
+     * Visit a RexNode instance with the given environment and input.
+     * @param rex The RexNode instance to be visited.
+     * @param context The given environment.
+     * @param input The number of columns in the input, which could be viewed as additional environment.
+     * @return A RexJSONVisitor instance that has visited the given RexNode.
+     */
     private RexJSONVisitor visitRexNode(RexNode rex, Environment context, int input) {
         RexJSONVisitor rexJSONVisitor = new RexJSONVisitor(context, input);
         rex.accept(rexJSONVisitor);
         return rexJSONVisitor;
     }
 
-    private RelJsonShuttle visitChild(RelNode child, Environment context) {
-        RelJsonShuttle childShuttle = new RelJsonShuttle(context);
+    /**
+     * Visit a RelNode instance with the given environment.
+     * @param child The RelNode instance to be visited.
+     * @param context The given environment.
+     * @return A RelJSONShuttle that has traversed through the given RelNode instance.
+     */
+    private RelJSONShuttle visitChild(RelNode child, Environment context) {
+        RelJSONShuttle childShuttle = new RelJSONShuttle(context);
         child.accept(childShuttle);
         columns = childShuttle.getColumns();
         return childShuttle;
@@ -48,9 +74,14 @@ public class RelJsonShuttle implements RelShuttle {
         return null;
     }
 
+    /**
+     * Visit a LogicalAggregation node.
+     * @param aggregate The given RelNode instance.
+     * @return Null, a placeholder required by interface.
+     */
     @Override
     public RelNode visit(LogicalAggregate aggregate) {
-        ObjectNode childNode = visitChild(aggregate.getInput(), environment).getRelNode();
+        ObjectNode childShuttle = visitChild(aggregate.getInput(), environment).getRelNode();
         ArrayNode arguments = relNode.putArray("aggregate");
         ArrayNode parameters = arguments.addArray();
         // TODO: Group by?
@@ -63,7 +94,7 @@ public class RelJsonShuttle implements RelShuttle {
             }
             parameters.add(aggregation);
         }
-        arguments.add(childNode);
+        arguments.add(childShuttle);
         return null;
     }
 
@@ -73,6 +104,11 @@ public class RelJsonShuttle implements RelShuttle {
         return null;
     }
 
+    /**
+     * Visit a TableScan node.
+     * @param scan The given RelNode instance.
+     * @return Null, a placeholder required by interface.
+     */
     @Override
     public RelNode visit(TableScan scan) {
         columns = scan.getTable().getRowType().getFieldCount();
@@ -90,15 +126,19 @@ public class RelJsonShuttle implements RelShuttle {
         return values;
     }
 
+    /**
+     * Visit a LogicalFilter node.
+     * @param filter The given RelNode instance.
+     * @return Null, a placeholder required by interface.
+     */
     @Override
     public RelNode visit(LogicalFilter filter) {
-        RelJsonShuttle childNode = visitChild(filter.getInput(), environment);
+        RelJSONShuttle childShuttle = visitChild(filter.getInput(), environment);
         ArrayNode arguments = relNode.putArray("filter");
         Set<CorrelationId> variableSet = filter.getVariablesSet();
         CorrelationId correlationId = environment.delta(variableSet);
-        RexNode rexNode = filter.getCondition();
-        arguments.add(visitRexNode(rexNode, environment.amend(correlationId, 0), childNode.getColumns()).getRexNode());
-        arguments.add(childNode.getRelNode());
+        arguments.add(visitRexNode(filter.getCondition(), environment.amend(correlationId, 0), childShuttle.getColumns()).getRexNode());
+        arguments.add(childShuttle.getRelNode());
         return null;
     }
 
@@ -107,17 +147,22 @@ public class RelJsonShuttle implements RelShuttle {
         return visitChildren(calc);
     }
 
+    /**
+     * Visit a LogicalProject node.
+     * @param project The given RelNode instance.
+     * @return Null, a placeholder required by interface.
+     */
     @Override
     public RelNode visit(LogicalProject project) {
-        RelJsonShuttle childNode = visitChild(project.getInput(), environment);
+        RelJSONShuttle childShuttle = visitChild(project.getInput(), environment);
         ArrayNode arguments = relNode.putArray("project");
         ArrayNode parameters = arguments.addArray();
         List<RexNode> projects = project.getProjects();
         columns = projects.size();
         for (RexNode target : projects) {
-            parameters.add(visitRexNode(target, environment, childNode.getColumns()).getRexNode());
+            parameters.add(visitRexNode(target, environment, childShuttle.getColumns()).getRexNode());
         }
-        arguments.add(childNode.getRelNode());
+        arguments.add(childShuttle.getRelNode());
         return null;
     }
 
@@ -126,16 +171,21 @@ public class RelJsonShuttle implements RelShuttle {
         return visitChildren(join);
     }
 
+    /**
+     * Visit a LogicalCorrelate node.
+     * @param correlate The given RelNode instance.
+     * @return Null, a placeholder required by interface.
+     */
     @Override
     public RelNode visit(LogicalCorrelate correlate) {
         if (correlate.getJoinType() != JoinRelType.LEFT) {
             System.err.println("Join type is not LEFT.");
         }
-        RelJsonShuttle leftNode = visitChild(correlate.getLeft(), environment);
-        RelJsonShuttle rightNode = visitChild(correlate.getRight(), environment.amend(correlate.getCorrelationId(), leftNode.getColumns()));
+        RelJSONShuttle leftShuttle = visitChild(correlate.getLeft(), environment);
+        RelJSONShuttle rightShuttle = visitChild(correlate.getRight(), environment.amend(correlate.getCorrelationId(), leftShuttle.getColumns()));
         ArrayNode arguments = relNode.putArray("correlate");
-        arguments.add(leftNode.getRelNode());
-        arguments.add(rightNode.getRelNode());
+        arguments.add(leftShuttle.getRelNode());
+        arguments.add(rightShuttle.getRelNode());
         return null;
     }
 
@@ -174,99 +224,4 @@ public class RelJsonShuttle implements RelShuttle {
         return visitChildren(other);
     }
 
-}
-
-class RexJSONVisitor implements RexVisitor<ObjectNode> {
-
-    private final ObjectNode rexNode;
-    private final Environment environment;
-    private final int input;
-
-    public RexJSONVisitor(Environment existing, int provided) {
-        environment = existing;
-        rexNode = environment.createNode();
-        input = provided;
-    }
-
-    public ObjectNode getRexNode() {
-        return rexNode;
-    }
-
-    private ObjectNode visitChild(RexNode rex) {
-        RexJSONVisitor childVisitor = new RexJSONVisitor(environment, input);
-        return rex.accept(childVisitor);
-    }
-
-    @Override
-    public ObjectNode visitInputRef(RexInputRef inputRef) {
-        return rexNode.put("column", inputRef.getIndex() + environment.getLevel());
-    }
-
-    @Override
-    public ObjectNode visitLocalRef(RexLocalRef localRef) {
-        return rexNode.put("local", localRef.getIndex() + environment.getLevel());
-    }
-
-    @Override
-    public ObjectNode visitLiteral(RexLiteral literal) {
-        rexNode.put("type", literal.getType().toString());
-        return rexNode.put("literal", literal.toString());
-    }
-
-    @Override
-    public ObjectNode visitCall(RexCall call) {
-        rexNode.put("operator", call.getOperator().toString());
-        ArrayNode arguments = rexNode.putArray("operands");
-        for (RexNode operand: call.getOperands()) {
-            arguments.add(visitChild(operand));
-        }
-        return rexNode;
-    }
-
-    @Override
-    public ObjectNode visitOver(RexOver over) {
-        return null;
-    }
-
-    @Override
-    public ObjectNode visitCorrelVariable(RexCorrelVariable correlVariable) {
-        rexNode.put("correlation", correlVariable.toString());
-        return rexNode;
-    }
-
-    @Override
-    public ObjectNode visitDynamicParam(RexDynamicParam dynamicParam) {
-        return null;
-    }
-
-    @Override
-    public ObjectNode visitRangeRef(RexRangeRef rangeRef) {
-        return null;
-    }
-
-    @Override
-    public ObjectNode visitFieldAccess(RexFieldAccess fieldAccess) {
-        rexNode.put("column", fieldAccess.getField().getIndex() + environment.findLevel(((RexCorrelVariable) fieldAccess.getReferenceExpr()).id));
-        return rexNode;
-    }
-
-    @Override
-    public ObjectNode visitSubQuery(RexSubQuery subQuery) {
-        rexNode.put("operator", subQuery.getOperator().toString());
-        ArrayNode arguments = rexNode.putArray("operands");
-        RelJsonShuttle relJsonShuttle = new RelJsonShuttle(environment.amend(null, input));
-        subQuery.rel.accept(relJsonShuttle);
-        arguments.add(relJsonShuttle.getRelNode());
-        return rexNode;
-    }
-
-    @Override
-    public ObjectNode visitTableInputRef(RexTableInputRef fieldRef) {
-        return null;
-    }
-
-    @Override
-    public ObjectNode visitPatternFieldRef(RexPatternFieldRef fieldRef) {
-        return null;
-    }
 }

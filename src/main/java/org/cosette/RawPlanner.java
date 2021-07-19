@@ -11,7 +11,6 @@ import org.apache.calcite.jdbc.JavaTypeFactoryImpl;
 import org.apache.calcite.plan.*;
 import org.apache.calcite.plan.volcano.VolcanoPlanner;
 import org.apache.calcite.prepare.CalciteCatalogReader;
-import org.apache.calcite.prepare.PlannerImpl;
 import org.apache.calcite.rel.RelCollationTraitDef;
 import org.apache.calcite.rel.RelRoot;
 import org.apache.calcite.rel.type.RelDataType;
@@ -39,6 +38,10 @@ import java.io.Reader;
 import java.util.List;
 
 import static java.util.Objects.requireNonNull;
+
+/**
+ * A copy of the PlannerImpl that disables all rewrite rules.
+ */
 
 public class RawPlanner implements RelOptTable.ViewExpander {
     private final SqlOperatorTable operatorTable;
