@@ -31,7 +31,8 @@ public class Environment {
 
     /**
      * Create a new environment with no correlation information. Default global level is 0.
-     * @param mapper A ObjectMapper instance that could be used to generate JSON.
+     *
+     * @param mapper  A ObjectMapper instance that could be used to generate JSON.
      * @param schemas A list of tables as input reference.
      */
     public Environment(ObjectMapper mapper, List<RelOptTable> schemas) {
@@ -48,6 +49,7 @@ public class Environment {
     /**
      * Find the index of the given table in the reference. If it is not currently in the reference, append it to the end
      * and return its index.
+     *
      * @param table The RelOptTable instance to be located.
      * @return The index of the given RelOptTable instance.
      */
@@ -69,7 +71,8 @@ public class Environment {
     /**
      * Record the level for a correlation variable and increment the global level in a new Environment instance based on
      * the current Environment instance. This will not change the current environment.
-     * @param id The correlation variable. If this is null, nothing will be recorded.
+     *
+     * @param id    The correlation variable. If this is null, nothing will be recorded.
      * @param delta The change in global level.
      * @return A new Environment instance after the change.
      */
@@ -83,21 +86,23 @@ public class Environment {
 
     /**
      * Find the new correlation variable in the given correlation variable set.
+     *
      * @param variableSet The input variable set for comparison.
      * @return The new correlation variable. If there is zero or more than one such variables, nothing will be returned.
      */
     public CorrelationId delta(Set<CorrelationId> variableSet) {
         HashSet<CorrelationId> copy = new HashSet<>(variableSet);
-       copy.removeAll(environment.keySet());
-       if (copy.size() == 1) {
-           return copy.iterator().next();
-       }
-       return null;
+        copy.removeAll(environment.keySet());
+        if (copy.size() == 1) {
+            return copy.iterator().next();
+        }
+        return null;
     }
 
 
     /**
      * Find the level for a correlation variable.
+     *
      * @param id The correlation variable.
      * @return The level of the correlation variable. If the given correlation variable is not recorded, the global
      * level will be returned.

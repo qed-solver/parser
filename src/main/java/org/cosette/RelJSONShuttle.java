@@ -6,7 +6,7 @@ import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.RelShuttle;
 import org.apache.calcite.rel.core.*;
 import org.apache.calcite.rel.logical.*;
-import org.apache.calcite.rex.*;
+import org.apache.calcite.rex.RexNode;
 
 import java.util.List;
 import java.util.Set;
@@ -22,6 +22,7 @@ public class RelJSONShuttle implements RelShuttle {
 
     /**
      * Initialize the shuttle with a given environment.
+     *
      * @param existing The given environment.
      */
     public RelJSONShuttle(Environment existing) {
@@ -39,13 +40,16 @@ public class RelJSONShuttle implements RelShuttle {
     /**
      * @return The number of columns corresponding to the RelNode instance.
      */
-    public int getColumns() { return columns; }
+    public int getColumns() {
+        return columns;
+    }
 
     /**
      * Visit a RexNode instance with the given environment and input.
-     * @param rex The RexNode instance to be visited.
+     *
+     * @param rex     The RexNode instance to be visited.
      * @param context The given environment.
-     * @param input The number of columns in the input, which could be viewed as additional environment.
+     * @param input   The number of columns in the input, which could be viewed as additional environment.
      * @return A RexJSONVisitor instance that has visited the given RexNode.
      */
     private RexJSONVisitor visitRexNode(RexNode rex, Environment context, int input) {
@@ -56,7 +60,8 @@ public class RelJSONShuttle implements RelShuttle {
 
     /**
      * Visit a RelNode instance with the given environment.
-     * @param child The RelNode instance to be visited.
+     *
+     * @param child   The RelNode instance to be visited.
      * @param context The given environment.
      * @return A RelJSONShuttle that has traversed through the given RelNode instance.
      */
@@ -76,6 +81,7 @@ public class RelJSONShuttle implements RelShuttle {
 
     /**
      * Visit a LogicalAggregation node.
+     *
      * @param aggregate The given RelNode instance.
      * @return Null, a placeholder required by interface.
      */
@@ -89,7 +95,7 @@ public class RelJSONShuttle implements RelShuttle {
             ObjectNode aggregation = environment.createNode();
             aggregation.put("type", call.getAggregation().toString());
             ArrayNode on = aggregation.putArray("on");
-            for (int element: call.getArgList()) {
+            for (int element : call.getArgList()) {
                 on.add(element);
             }
             parameters.add(aggregation);
@@ -106,6 +112,7 @@ public class RelJSONShuttle implements RelShuttle {
 
     /**
      * Visit a TableScan node.
+     *
      * @param scan The given RelNode instance.
      * @return Null, a placeholder required by interface.
      */
@@ -128,6 +135,7 @@ public class RelJSONShuttle implements RelShuttle {
 
     /**
      * Visit a LogicalFilter node.
+     *
      * @param filter The given RelNode instance.
      * @return Null, a placeholder required by interface.
      */
@@ -149,6 +157,7 @@ public class RelJSONShuttle implements RelShuttle {
 
     /**
      * Visit a LogicalProject node.
+     *
      * @param project The given RelNode instance.
      * @return Null, a placeholder required by interface.
      */
@@ -173,6 +182,7 @@ public class RelJSONShuttle implements RelShuttle {
 
     /**
      * Visit a LogicalCorrelate node.
+     *
      * @param correlate The given RelNode instance.
      * @return Null, a placeholder required by interface.
      */

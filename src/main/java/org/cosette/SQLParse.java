@@ -5,14 +5,16 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.apache.calcite.plan.RelOptTable;
-import org.apache.calcite.rel.*;
+import org.apache.calcite.rel.RelNode;
+import org.apache.calcite.rel.RelRoot;
 import org.apache.calcite.rel.type.RelDataTypeField;
-import org.apache.calcite.sql.*;
+import org.apache.calcite.sql.SqlNode;
 import org.apache.calcite.sql.parser.SqlParseException;
 import org.apache.calcite.tools.ValidationException;
 
-import java.sql.*;
-import java.util.*;
+import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * A SQLParse instance can parse DDL statements and valid DML statements into JSON format.
@@ -32,6 +34,7 @@ public class SQLParse {
 
     /**
      * Apply a DDL statement to generate schema.
+     *
      * @param ddl The DDL statement to be applied.
      */
     public void applyDDL(String ddl) throws SQLException {
@@ -40,6 +43,7 @@ public class SQLParse {
 
     /**
      * Parse a DML statement with current schema.
+     *
      * @param dml The DML statement to be parsed.
      */
     public void parseDML(String dml) throws SqlParseException, ValidationException {
@@ -63,7 +67,7 @@ public class SQLParse {
 
         List<RelOptTable> tableList = new ArrayList<>();
 
-        for (RelRoot root: rootList) {
+        for (RelRoot root : rootList) {
             Environment environment = new Environment(mapper, tableList);
             RelJSONShuttle relJsonShuttle = new RelJSONShuttle(environment);
             RelNode relNode = root.project();
@@ -76,10 +80,10 @@ public class SQLParse {
             tableList = environment.getRelOptTables();
         }
 
-        for (RelOptTable table: tableList) {
+        for (RelOptTable table : tableList) {
             ObjectNode tableObject = mapper.createObjectNode();
             ArrayNode typeArray = tableObject.putArray("types");
-            for (RelDataTypeField field: table.getRowType().getFieldList()) {
+            for (RelDataTypeField field : table.getRowType().getFieldList()) {
                 typeArray.add(field.getType().toString());
             }
             // TODO: Support referential constraints (e.g. PRIMARY, UNIQUE)

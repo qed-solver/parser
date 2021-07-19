@@ -42,7 +42,6 @@ import static java.util.Objects.requireNonNull;
 /**
  * A copy of the PlannerImpl that disables all rewrite rules.
  */
-
 public class RawPlanner implements RelOptTable.ViewExpander {
     private final SqlOperatorTable operatorTable;
     private final ImmutableList<Program> programs;
@@ -50,24 +49,25 @@ public class RawPlanner implements RelOptTable.ViewExpander {
     private final Context context;
     private final CalciteConnectionConfig connectionConfig;
 
-    /** Holds the trait definitions to be registered with planner. May be null. */
+    /**
+     * Holds the trait definitions to be registered with planner. May be null.
+     */
     private final @Nullable ImmutableList<RelTraitDef> traitDefs;
 
     private final SqlParser.Config parserConfig;
     private final SqlValidator.Config sqlValidatorConfig;
     private final SqlToRelConverter.Config sqlToRelConverterConfig;
     private final SqlRexConvertletTable convertletTable;
-
+    // set in STATE_2_READY
+    private @Nullable
+    final SchemaPlus defaultSchema;
+    private @Nullable
+    final RexExecutor executor;
     // set in STATE_1_RESET
     @SuppressWarnings("unused")
     private boolean open;
-
-    // set in STATE_2_READY
-    private @Nullable SchemaPlus defaultSchema;
     private @Nullable JavaTypeFactory typeFactory;
     private @Nullable RelOptPlanner planner;
-    private @Nullable RexExecutor executor;
-
     // set in STATE_4_VALIDATE
     private @Nullable SqlValidator validator;
     private @Nullable SqlNode validatedSqlNode;
@@ -117,6 +117,16 @@ public class RawPlanner implements RelOptTable.ViewExpander {
         return config;
     }
 
+    private static SchemaPlus rootSchema(SchemaPlus schema) {
+        for (; ; ) {
+            SchemaPlus parentSchema = schema.getParentSchema();
+            if (parentSchema == null) {
+                return schema;
+            }
+            schema = parentSchema;
+        }
+    }
+
     private void ready() {
         RelDataTypeSystem typeSystem =
                 connectionConfig.typeSystem(RelDataTypeSystem.class,
@@ -146,7 +156,7 @@ public class RawPlanner implements RelOptTable.ViewExpander {
         ready();
         Reader reader = new SourceStringReader(sql);
         SqlParser parser = SqlParser.create(reader, parserConfig);
-        SqlNode sqlNode =  parser.parseStmt();
+        SqlNode sqlNode = parser.parseStmt();
         this.validator = createSqlValidator(createCatalogReader());
         try {
             validatedSqlNode = validator.validate(sqlNode);
@@ -177,16 +187,6 @@ public class RawPlanner implements RelOptTable.ViewExpander {
                 CalciteSchema.from(rootSchema),
                 CalciteSchema.from(defaultSchema).path(null),
                 getTypeFactory(), connectionConfig);
-    }
-
-    private static SchemaPlus rootSchema(SchemaPlus schema) {
-        for (;;) {
-            SchemaPlus parentSchema = schema.getParentSchema();
-            if (parentSchema == null) {
-                return schema;
-            }
-            schema = parentSchema;
-        }
     }
 
     public JavaTypeFactory getTypeFactory() {
@@ -253,19 +253,21 @@ public class RawPlanner implements RelOptTable.ViewExpander {
 class RawSqlValidator extends SqlValidatorImpl {
 
     RawSqlValidator(SqlOperatorTable opTab,
-                        CalciteCatalogReader catalogReader, JavaTypeFactory typeFactory,
-                        Config config) {
+                    CalciteCatalogReader catalogReader, JavaTypeFactory typeFactory,
+                    Config config) {
         super(opTab, catalogReader, typeFactory, config);
     }
 
-    @Override protected RelDataType getLogicalSourceRowType(
+    @Override
+    protected RelDataType getLogicalSourceRowType(
             RelDataType sourceRowType, SqlInsert insert) {
         final RelDataType superType =
                 super.getLogicalSourceRowType(sourceRowType, insert);
         return ((JavaTypeFactory) typeFactory).toSql(superType);
     }
 
-    @Override protected RelDataType getLogicalTargetRowType(
+    @Override
+    protected RelDataType getLogicalTargetRowType(
             RelDataType targetRowType, SqlInsert insert) {
         final RelDataType superType =
                 super.getLogicalTargetRowType(targetRowType, insert);

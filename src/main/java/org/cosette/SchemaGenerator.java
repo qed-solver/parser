@@ -37,6 +37,7 @@ public class SchemaGenerator {
 
     /**
      * Execute a DDL statement.
+     *
      * @param ddl The given DDL statement.
      */
     public void applyDDL(String ddl) throws SQLException {

@@ -15,7 +15,8 @@ public class RexJSONVisitor implements RexVisitor<ObjectNode> {
 
     /**
      * Initialize the visitor with given environment and input.
-     * @param context The given environment.
+     *
+     * @param context  The given environment.
      * @param provided The given input.
      */
     public RexJSONVisitor(Environment context, int provided) {
@@ -33,6 +34,7 @@ public class RexJSONVisitor implements RexVisitor<ObjectNode> {
 
     /**
      * Visit a RexNode instance using the current environment and input.
+     *
      * @param rex The given RexNode instance.
      * @return A ObjectNode instance corresponding to the given RexNode instance.
      */
@@ -44,6 +46,7 @@ public class RexJSONVisitor implements RexVisitor<ObjectNode> {
 
     /**
      * Visit a RexInputRef node.
+     *
      * @param inputRef The given RexNode instance.
      * @return The ObjectNode corresponding to the given RexNode instance.
      */
@@ -59,6 +62,7 @@ public class RexJSONVisitor implements RexVisitor<ObjectNode> {
 
     /**
      * Visit a RexLiteral node.
+     *
      * @param literal The given RexNode instance.
      * @return The ObjectNode corresponding to the given RexNode instance.
      */
@@ -70,6 +74,7 @@ public class RexJSONVisitor implements RexVisitor<ObjectNode> {
 
     /**
      * Visit a RexCall node.
+     *
      * @param call The given RexNode instance.
      * @return The ObjectNode corresponding to the given RexNode instance.
      */
@@ -105,6 +110,7 @@ public class RexJSONVisitor implements RexVisitor<ObjectNode> {
 
     /**
      * Visit a FieldAccess node.
+     *
      * @param fieldAccess The given RexNode instance.
      * @return The ObjectNode corresponding to the given RexNode instance.
      */
@@ -116,6 +122,7 @@ public class RexJSONVisitor implements RexVisitor<ObjectNode> {
 
     /**
      * Visit a RexSubQuery node.
+     *
      * @param subQuery The given RexNode instance.
      * @return The ObjectNode corresponding to the given RexNode instance.
      */
