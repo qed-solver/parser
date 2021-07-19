@@ -10,6 +10,7 @@ import org.apache.calcite.rel.type.RelDataTypeField;
 import org.apache.calcite.sql.*;
 import org.apache.calcite.sql.parser.SqlParseException;
 import org.apache.calcite.tools.ValidationException;
+
 import java.sql.*;
 import java.util.*;
 
@@ -51,7 +52,7 @@ public class SQLParse {
     /**
      * Dump schema and relational expressions in JSON format.
      */
-    public void dumpToJSON() throws JsonProcessingException {
+    public String dumpToJSON() throws JsonProcessingException {
         ObjectMapper mapper = new ObjectMapper();
 
         ObjectNode mainObject = mapper.createObjectNode();
@@ -66,7 +67,10 @@ public class SQLParse {
             Environment environment = new Environment(mapper, tableList);
             RelJSONShuttle relJsonShuttle = new RelJSONShuttle(environment);
             RelNode relNode = root.project();
+
+            // Explanation for debugging.
             System.out.println(relNode.explain());
+
             relNode.accept(relJsonShuttle);
             queryArray.add(relJsonShuttle.getRelNode());
             tableList = environment.getRelOptTables();
@@ -84,8 +88,7 @@ public class SQLParse {
             schemaArray.add(tableObject);
         }
 
-        String json = mapper.writerWithDefaultPrettyPrinter().writeValueAsString(mainObject);
-        System.out.println(json);
+        return mapper.writerWithDefaultPrettyPrinter().writeValueAsString(mainObject);
 
     }
 

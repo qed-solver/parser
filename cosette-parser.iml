@@ -40,7 +40,6 @@
     <orderEntry type="library" scope="RUNTIME" name="Maven: org.apache.commons:commons-dbcp2:2.6.0" level="project" />
     <orderEntry type="library" scope="RUNTIME" name="Maven: org.apache.commons:commons-pool2:2.6.1" level="project" />
     <orderEntry type="library" scope="RUNTIME" name="Maven: org.apache.commons:commons-lang3:3.8" level="project" />
-    <orderEntry type="library" scope="RUNTIME" name="Maven: commons-io:commons-io:2.4" level="project" />
     <orderEntry type="library" scope="RUNTIME" name="Maven: org.codehaus.janino:commons-compiler:3.0.11" level="project" />
     <orderEntry type="library" scope="RUNTIME" name="Maven: org.codehaus.janino:janino:3.0.11" level="project" />
     <orderEntry type="library" name="Maven: org.apache.calcite:calcite-server:1.27.0" level="project" />
@@ -50,5 +49,6 @@
     <orderEntry type="library" scope="RUNTIME" name="Maven: org.apache.httpcomponents:httpclient:4.5.9" level="project" />
     <orderEntry type="library" scope="RUNTIME" name="Maven: org.apache.httpcomponents:httpcore:4.4.11" level="project" />
     <orderEntry type="library" name="Maven: com.fasterxml.jackson.core:jackson-databind:2.10.0" level="project" />
+    <orderEntry type="library" name="Maven: commons-io:commons-io:2.6" level="project" />
   </component>
 </module>
