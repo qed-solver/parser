@@ -45,7 +45,8 @@ public class RexJSONVisitor implements RexVisitor<ObjectNode> {
 
 
     /**
-     * Visit a RexInputRef node.
+     * Visit a RexInputRef node. <br>
+     * Format: {column: level}
      *
      * @param inputRef The given RexNode instance.
      * @return The ObjectNode corresponding to the given RexNode instance.
@@ -61,7 +62,8 @@ public class RexJSONVisitor implements RexVisitor<ObjectNode> {
     }
 
     /**
-     * Visit a RexLiteral node.
+     * Visit a RexLiteral node. <br>
+     * Format: {type: type, literal: value}
      *
      * @param literal The given RexNode instance.
      * @return The ObjectNode corresponding to the given RexNode instance.
@@ -73,7 +75,8 @@ public class RexJSONVisitor implements RexVisitor<ObjectNode> {
     }
 
     /**
-     * Visit a RexCall node.
+     * Visit a RexCall node. <br>
+     * Format: {operator: operator, operands: [operands]}
      *
      * @param call The given RexNode instance.
      * @return The ObjectNode corresponding to the given RexNode instance.
@@ -109,7 +112,8 @@ public class RexJSONVisitor implements RexVisitor<ObjectNode> {
     }
 
     /**
-     * Visit a FieldAccess node.
+     * Visit a FieldAccess node. <br>
+     * Format: {column: level}
      *
      * @param fieldAccess The given RexNode instance.
      * @return The ObjectNode corresponding to the given RexNode instance.
@@ -121,7 +125,8 @@ public class RexJSONVisitor implements RexVisitor<ObjectNode> {
     }
 
     /**
-     * Visit a RexSubQuery node.
+     * Visit a RexSubQuery node. <br>
+     * Format: {operator: operator, operands: {query}}
      *
      * @param subQuery The given RexNode instance.
      * @return The ObjectNode corresponding to the given RexNode instance.

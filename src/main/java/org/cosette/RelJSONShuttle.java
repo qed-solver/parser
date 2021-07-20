@@ -8,6 +8,7 @@ import org.apache.calcite.rel.core.*;
 import org.apache.calcite.rel.logical.*;
 import org.apache.calcite.rex.RexNode;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
@@ -16,8 +17,8 @@ import java.util.Set;
  */
 public class RelJSONShuttle implements RelShuttle {
 
-    private final ObjectNode relNode;
     private final Environment environment;
+    private final ObjectNode relNode;
     private int columns;
 
     /**
@@ -28,6 +29,7 @@ public class RelJSONShuttle implements RelShuttle {
     public RelJSONShuttle(Environment existing) {
         environment = existing;
         relNode = environment.createNode();
+        columns = 0;
     }
 
     /**
@@ -68,19 +70,21 @@ public class RelJSONShuttle implements RelShuttle {
     private RelJSONShuttle visitChild(RelNode child, Environment context) {
         RelJSONShuttle childShuttle = new RelJSONShuttle(context);
         child.accept(childShuttle);
-        columns = childShuttle.getColumns();
+        columns += childShuttle.getColumns();
         return childShuttle;
     }
 
-    private RelNode visitChildren(RelNode rel) {
+    private List<RelJSONShuttle> visitChildren(RelNode rel) {
+        List<RelJSONShuttle> childrenShuttles = new ArrayList<>();
         for (RelNode child : rel.getInputs()) {
-            visitChild(child, environment);
+            childrenShuttles.add(visitChild(child, environment));
         }
-        return null;
+        return childrenShuttles;
     }
 
     /**
-     * Visit a LogicalAggregation node.
+     * Visit a LogicalAggregation node. <br>
+     * Format: {aggregate: [[[groups], [types]], {input}]}
      *
      * @param aggregate The given RelNode instance.
      * @return Null, a placeholder required by interface.
@@ -90,15 +94,18 @@ public class RelJSONShuttle implements RelShuttle {
         ObjectNode childShuttle = visitChild(aggregate.getInput(), environment).getRelNode();
         ArrayNode arguments = relNode.putArray("aggregate");
         ArrayNode parameters = arguments.addArray();
-        // TODO: Group by?
+        ArrayNode groups = parameters.addArray();
+        ArrayNode types = parameters.addArray();
+        for (int group : aggregate.getGroupSet()) {
+            groups.add(group);
+        }
         for (AggregateCall call : aggregate.getAggCallList()) {
-            ObjectNode aggregation = environment.createNode();
-            aggregation.put("type", call.getAggregation().toString());
+            ObjectNode aggregation = environment.createNode().put("type", call.getAggregation().toString());
             ArrayNode on = aggregation.putArray("on");
             for (int element : call.getArgList()) {
                 on.add(element);
             }
-            parameters.add(aggregation);
+            types.add(aggregation);
         }
         arguments.add(childShuttle);
         return null;
@@ -111,7 +118,8 @@ public class RelJSONShuttle implements RelShuttle {
     }
 
     /**
-     * Visit a TableScan node.
+     * Visit a TableScan node. <br>
+     * Format: {scan: table}
      *
      * @param scan The given RelNode instance.
      * @return Null, a placeholder required by interface.
@@ -125,7 +133,8 @@ public class RelJSONShuttle implements RelShuttle {
 
     @Override
     public RelNode visit(TableFunctionScan scan) {
-        return visitChildren(scan);
+        visitChildren(scan);
+        return null;
     }
 
     @Override
@@ -134,7 +143,8 @@ public class RelJSONShuttle implements RelShuttle {
     }
 
     /**
-     * Visit a LogicalFilter node.
+     * Visit a LogicalFilter node. <br>
+     * Format: {filter: [{condition}, {input}]}
      *
      * @param filter The given RelNode instance.
      * @return Null, a placeholder required by interface.
@@ -152,11 +162,13 @@ public class RelJSONShuttle implements RelShuttle {
 
     @Override
     public RelNode visit(LogicalCalc calc) {
-        return visitChildren(calc);
+        visitChildren(calc);
+        return null;
     }
 
     /**
-     * Visit a LogicalProject node.
+     * Visit a LogicalProject node. <br>
+     * Format: {project: [[projects], {input}]}
      *
      * @param project The given RelNode instance.
      * @return Null, a placeholder required by interface.
@@ -175,13 +187,32 @@ public class RelJSONShuttle implements RelShuttle {
         return null;
     }
 
+    /**
+     * Visit a LogicalJoin node. <br>
+     * Format: {join: [[type, {condition}], {left}, {right}]}
+     *
+     * @param join The given RelNode instance.
+     * @return Null, a placeholder required by interface.
+     */
+
     @Override
     public RelNode visit(LogicalJoin join) {
-        return visitChildren(join);
+        ArrayNode arguments = relNode.putArray("join");
+        ArrayNode parameters = arguments.addArray();
+        ObjectNode type = environment.createNode().put("type", join.getJoinType().toString());
+        ObjectNode condition = visitRexNode(join.getCondition(), environment, 0).getRexNode();
+        RelJSONShuttle leftShuttle = visitChild(join.getLeft(), environment);
+        RelJSONShuttle rightShuttle = visitChild(join.getRight(), environment);
+        parameters.add(type);
+        parameters.add(condition);
+        arguments.add(leftShuttle.getRelNode());
+        arguments.add(rightShuttle.getRelNode());
+        return null;
     }
 
     /**
-     * Visit a LogicalCorrelate node.
+     * Visit a LogicalCorrelate node. Will convert all join types to left join. <br>
+     * Format: {correlate: [{left}, {right}]}
      *
      * @param correlate The given RelNode instance.
      * @return Null, a placeholder required by interface.
@@ -190,10 +221,11 @@ public class RelJSONShuttle implements RelShuttle {
     public RelNode visit(LogicalCorrelate correlate) {
         if (correlate.getJoinType() != JoinRelType.LEFT) {
             System.err.println("Join type is not LEFT.");
+            System.exit(-1);
         }
+        ArrayNode arguments = relNode.putArray("correlate");
         RelJSONShuttle leftShuttle = visitChild(correlate.getLeft(), environment);
         RelJSONShuttle rightShuttle = visitChild(correlate.getRight(), environment.amend(correlate.getCorrelationId(), leftShuttle.getColumns()));
-        ArrayNode arguments = relNode.putArray("correlate");
         arguments.add(leftShuttle.getRelNode());
         arguments.add(rightShuttle.getRelNode());
         return null;
@@ -201,37 +233,44 @@ public class RelJSONShuttle implements RelShuttle {
 
     @Override
     public RelNode visit(LogicalUnion union) {
-        return visitChildren(union);
+        visitChildren(union);
+        return null;
     }
 
     @Override
     public RelNode visit(LogicalIntersect intersect) {
-        return visitChildren(intersect);
+        visitChildren(intersect);
+        return null;
     }
 
     @Override
     public RelNode visit(LogicalMinus minus) {
-        return visitChildren(minus);
+        visitChildren(minus);
+        return null;
     }
 
     @Override
     public RelNode visit(LogicalSort sort) {
-        return visitChildren(sort);
+        visitChildren(sort);
+        return null;
     }
 
     @Override
     public RelNode visit(LogicalExchange exchange) {
-        return visitChildren(exchange);
+        visitChildren(exchange);
+        return null;
     }
 
     @Override
     public RelNode visit(LogicalTableModify modify) {
-        return visitChildren(modify);
+        visitChildren(modify);
+        return null;
     }
 
     @Override
     public RelNode visit(RelNode other) {
-        return visitChildren(other);
+        visitChildren(other).clear();
+        return null;
     }
 
 }
