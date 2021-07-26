@@ -8,6 +8,8 @@ import org.apache.calcite.plan.RelOptTable;
 import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.RelRoot;
 import org.apache.calcite.rel.type.RelDataTypeField;
+import org.apache.calcite.schema.ColumnStrategy;
+import org.apache.calcite.sql.SqlKind;
 import org.apache.calcite.sql.SqlNode;
 import org.apache.calcite.sql.parser.SqlParseException;
 import org.apache.calcite.tools.ValidationException;
@@ -15,6 +17,7 @@ import org.apache.calcite.tools.ValidationException;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * A SQLParse instance can parse DDL statements and valid DML statements into JSON format.
@@ -37,7 +40,7 @@ public class SQLParse {
      *
      * @param ddl The DDL statement to be applied.
      */
-    public void applyDDL(String ddl) throws SQLException {
+    public void applyDDL(String ddl) throws SQLException, SqlParseException {
         schemaGenerator.applyDDL(ddl);
     }
 
@@ -65,6 +68,8 @@ public class SQLParse {
 
         ArrayNode queryArray = mainObject.putArray("queries");
 
+        ArrayNode helpArray = mainObject.putArray("help");
+
         List<RelOptTable> tableList = new ArrayList<>();
 
         for (RelRoot root : rootList) {
@@ -72,23 +77,38 @@ public class SQLParse {
             RelJSONShuttle relJsonShuttle = new RelJSONShuttle(environment);
             RelNode relNode = root.project();
 
-            // Explanation for debugging.
-            System.out.println(relNode.explain());
+            helpArray.add(relNode.explain());
 
             relNode.accept(relJsonShuttle);
             queryArray.add(relJsonShuttle.getRelNode());
+
             tableList = environment.getRelOptTables();
         }
 
+        Map<String, Map<SqlKind, List<String>>> constraints = schemaGenerator.getConstraints();
+
         for (RelOptTable table : tableList) {
+            List<String> reference = table.getRowType().getFieldNames();
+            Map<SqlKind, List<String>> constraint = constraints.get(table.getQualifiedName().iterator().next());
             ObjectNode tableObject = mapper.createObjectNode();
+
             ArrayNode typeArray = tableObject.putArray("types");
             for (RelDataTypeField field : table.getRowType().getFieldList()) {
                 typeArray.add(field.getType().toString());
             }
-            // TODO: Support referential constraints (e.g. PRIMARY, UNIQUE)
 
-            table.getReferentialConstraints();
+            ArrayNode strategyArray = tableObject.putArray("strategy");
+            for (ColumnStrategy columnStrategy : table.getColumnStrategies()) {
+                strategyArray.add(columnStrategy.toString());
+            }
+
+            for (SqlKind sqlKind : constraint.keySet()) {
+                ArrayNode constraintArray = tableObject.putArray(sqlKind.lowerName);
+                for (String column : constraint.get(sqlKind)) {
+                    constraintArray.add(reference.indexOf(column.substring(1, column.length() - 1)));
+                }
+            }
+
             schemaArray.add(tableObject);
         }
 
