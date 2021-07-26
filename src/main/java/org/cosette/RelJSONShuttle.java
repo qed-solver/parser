@@ -8,6 +8,8 @@ import org.apache.calcite.rel.core.*;
 import org.apache.calcite.rel.logical.*;
 import org.apache.calcite.rex.RexNode;
 
+import java.lang.reflect.Array;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
@@ -75,7 +77,7 @@ public class RelJSONShuttle implements RelShuttle {
 
     /**
      * Visit a LogicalAggregation node. <br>
-     * Format: {aggregate: [[[groups], [types]], {input}]}
+     * Format: {distinct: {correlate: [{project: [[groups], {input}]}, {aggregate: [[functions], {project: [[sources], {filter: [{groups}, {inputCopy}]}]}]}]}}
      *
      * @param aggregate The given RelNode instance.
      * @return Null, a placeholder required by interface.
@@ -83,26 +85,54 @@ public class RelJSONShuttle implements RelShuttle {
     @Override
     public RelNode visit(LogicalAggregate aggregate) {
 
-        ObjectNode childShuttle = visitChild(aggregate.getInput(), environment).getRelNode();
+        RelJSONShuttle childShuttle = visitChild(aggregate.getInput(), environment);
+        columns = aggregate.getAggCallList().size();
+        int groupCount = aggregate.getGroupCount();
+        int level = environment.getLevel();
 
+        ObjectNode inputProject = environment.createNode();
+        ArrayNode inputProjectArguments = inputProject.putArray("project");
+        ArrayNode inputProjectColumns = inputProjectArguments.addArray();
 
-
-        ArrayNode arguments = relNode.putArray("aggregate");
-        ArrayNode parameters = arguments.addArray();
-        ArrayNode groups = parameters.addArray();
-        ArrayNode types = parameters.addArray();
-        for (int group : aggregate.getGroupSet()) {
-            groups.add(group);
+        ObjectNode filter = environment.createNode();
+        ObjectNode condition = environment.createNode();
+        condition.put("type", "BOOLEAN");
+        condition.put("literal", "true");
+        List<Integer> groups = new ArrayList<>(aggregate.getGroupSet().asList());
+        for (int index = 0; index < groups.size(); index++) {
+            inputProjectColumns.add(environment.createNode().put("column", level + groups.get(index)));
+            ObjectNode leftColumn = environment.createNode().put("column", level + index);
+            ObjectNode rightColumn = environment.createNode().put("column", level + groups.get(index) + groupCount);
+            ObjectNode equivalence = environment.createNode();
+            equivalence.put("operator", "=");
+            equivalence.putArray("operands").add(leftColumn).add(rightColumn);
+            ObjectNode and = environment.createNode();
+            and.put("operator", "AND");
+            and.putArray("operands").add(condition).add(equivalence);
+            condition = and;
         }
+        inputProjectArguments.add(childShuttle.getRelNode());
+        RelJSONShuttle filterChildShuttle = visitChild(aggregate.getInput(), environment.amend(null, groupCount));
+        filter.putArray("filter").add(condition).add(filterChildShuttle.getRelNode());
+
+        ObjectNode aggregation = environment.createNode();
+        ArrayNode aggregationArguments = aggregation.putArray("aggregation");
+        ArrayNode aggregationFunctions = aggregationArguments.addArray();
+        ObjectNode projectFilter = environment.createNode();
+        ArrayNode projectFilterArguments = projectFilter.putArray("project");
+        ArrayNode projectFilterColumns = projectFilterArguments.addArray();
         for (AggregateCall call : aggregate.getAggCallList()) {
-            ObjectNode aggregation = environment.createNode().put("type", call.getAggregation().toString());
-            ArrayNode on = aggregation.putArray("on");
-            for (int element : call.getArgList()) {
-                on.add(element);
-            }
-            types.add(aggregation);
+            aggregationFunctions.add(call.getAggregation().toString());
+            projectFilterColumns.add(environment.createNode().put("column", level + groupCount + call.getArgList().iterator().next()));
         }
-        arguments.add(childShuttle);
+        projectFilterArguments.add(filter);
+        aggregationArguments.add(projectFilter);
+
+        ObjectNode correlation = environment.createNode();
+        correlation.putArray("correlate").add(inputProject).add(aggregation);
+        relNode = correlation;
+        distinct();
+
         return null;
     }
 

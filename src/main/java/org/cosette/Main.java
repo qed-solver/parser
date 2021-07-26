@@ -74,7 +74,6 @@ public class Main {
         } catch (Exception e) {
             System.err.println("In file: " + filename);
             e.printStackTrace();
-            System.exit(-1);
         }
     }
 
