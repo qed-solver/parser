@@ -6,7 +6,6 @@ import org.apache.commons.io.FilenameUtils;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileWriter;
-import java.io.IOException;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Scanner;
@@ -20,9 +19,6 @@ import java.util.regex.Pattern;
 public class Main {
 
     public static void main(String[] args) {
-        args = new String[2];
-        args[0] = "../examples/example.sql";
-        args[1] = "../examples/conditional";
         for (String filename : args) {
             parseFile(filename);
         }
@@ -126,15 +122,12 @@ public class Main {
                 }
             }
             scanner.close();
-            String intermediate = FilenameUtils.getPath(filename) + FilenameUtils.getBaseName(filename) + ".tmp";
-            File tmp = new File(intermediate);
-            BufferedWriter bufferedWriter = new BufferedWriter(new FileWriter(tmp));
+            String intermediate = FilenameUtils.getPath(filename) + FilenameUtils.getBaseName(filename) + ".sql";
+            File sql = new File(intermediate);
+            BufferedWriter bufferedWriter = new BufferedWriter(new FileWriter(sql));
             bufferedWriter.write(sqlBuilder.toString());
             bufferedWriter.close();
             parseSQLFile(intermediate);
-            if (!tmp.delete()) {
-                throw new IOException("Failure to delete temporary file: " + intermediate);
-            }
         } catch (Exception e) {
             System.err.println("In file: " + filename);
             e.printStackTrace();

@@ -8,7 +8,6 @@ import org.apache.calcite.rel.core.*;
 import org.apache.calcite.rel.logical.*;
 import org.apache.calcite.rex.RexNode;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
@@ -18,7 +17,7 @@ import java.util.Set;
 public class RelJSONShuttle implements RelShuttle {
 
     private final Environment environment;
-    private final ObjectNode relNode;
+    private ObjectNode relNode;
     private int columns;
 
     /**
@@ -74,14 +73,6 @@ public class RelJSONShuttle implements RelShuttle {
         return childShuttle;
     }
 
-    private List<RelJSONShuttle> visitChildren(RelNode rel) {
-        List<RelJSONShuttle> childrenShuttles = new ArrayList<>();
-        for (RelNode child : rel.getInputs()) {
-            childrenShuttles.add(visitChild(child, environment));
-        }
-        return childrenShuttles;
-    }
-
     /**
      * Visit a LogicalAggregation node. <br>
      * Format: {aggregate: [[[groups], [types]], {input}]}
@@ -91,7 +82,11 @@ public class RelJSONShuttle implements RelShuttle {
      */
     @Override
     public RelNode visit(LogicalAggregate aggregate) {
+
         ObjectNode childShuttle = visitChild(aggregate.getInput(), environment).getRelNode();
+
+
+
         ArrayNode arguments = relNode.putArray("aggregate");
         ArrayNode parameters = arguments.addArray();
         ArrayNode groups = parameters.addArray();
@@ -111,9 +106,22 @@ public class RelJSONShuttle implements RelShuttle {
         return null;
     }
 
+    /**
+     * Wrap the current ObjectNode with "distinct" keyword.
+     */
+    private void distinct() {
+        ObjectNode distinct = environment.createNode();
+        distinct.set("distinct", relNode);
+        relNode = distinct;
+    }
+
+    private void notImplemented(RelNode node) {
+        relNode.put("error", "Not implemented: " + node.getRelTypeName());
+    }
+
     @Override
     public RelNode visit(LogicalMatch match) {
-        visitChild(match.getInput(), environment);
+        notImplemented(match);
         return null;
     }
 
@@ -133,7 +141,7 @@ public class RelJSONShuttle implements RelShuttle {
 
     @Override
     public RelNode visit(TableFunctionScan scan) {
-        visitChildren(scan);
+        notImplemented(scan);
         return null;
     }
 
@@ -162,7 +170,7 @@ public class RelJSONShuttle implements RelShuttle {
 
     @Override
     public RelNode visit(LogicalCalc calc) {
-        visitChildren(calc);
+        notImplemented(calc);
         return null;
     }
 
@@ -211,7 +219,7 @@ public class RelJSONShuttle implements RelShuttle {
     }
 
     /**
-     * Visit a LogicalCorrelate node. Will convert all join types to left join. <br>
+     * Visit a LogicalCorrelate node. <br>
      * Format: {correlate: [{left}, {right}]}
      *
      * @param correlate The given RelNode instance.
@@ -219,10 +227,6 @@ public class RelJSONShuttle implements RelShuttle {
      */
     @Override
     public RelNode visit(LogicalCorrelate correlate) {
-        if (correlate.getJoinType() != JoinRelType.LEFT) {
-            System.err.println("Join type is not LEFT.");
-            System.exit(-1);
-        }
         ArrayNode arguments = relNode.putArray("correlate");
         RelJSONShuttle leftShuttle = visitChild(correlate.getLeft(), environment);
         RelJSONShuttle rightShuttle = visitChild(correlate.getRight(), environment.amend(correlate.getCorrelationId(), leftShuttle.getColumns()));
@@ -231,45 +235,73 @@ public class RelJSONShuttle implements RelShuttle {
         return null;
     }
 
+    /**
+     * Visit a LogicalUnion node. Will wrap with "distinct" if necessary. <br>
+     * Format: {union: [inputs]}
+     *
+     * @param union The given RelNode instance.
+     * @return Null, a placeholder required by interface.
+     */
     @Override
     public RelNode visit(LogicalUnion union) {
-        visitChildren(union);
+        ArrayNode arguments = relNode.putArray("union");
+        for (RelNode input : union.getInputs()) {
+            columns = 0;
+            arguments.add(visitChild(input, environment).getRelNode());
+        }
+        if (!union.all) {
+            distinct();
+        }
         return null;
     }
 
     @Override
     public RelNode visit(LogicalIntersect intersect) {
-        visitChildren(intersect);
+        notImplemented(intersect);
         return null;
     }
 
+    /**
+     * Visit a LogicalUnion node. Will wrap with "distinct" if necessary. <br>
+     * Format: {except: [inputs]}
+     *
+     * @param minus The given RelNode instance.
+     * @return Null, a placeholder required by interface.
+     */
     @Override
     public RelNode visit(LogicalMinus minus) {
-        visitChildren(minus);
+        ArrayNode arguments = relNode.putArray("except");
+        for (RelNode input : minus.getInputs()) {
+            columns = 0;
+            arguments.add(visitChild(input, environment).getRelNode());
+        }
+        if (!minus.all) {
+            distinct();
+        }
         return null;
     }
 
     @Override
     public RelNode visit(LogicalSort sort) {
-        visitChildren(sort);
+        notImplemented(sort);
         return null;
     }
 
     @Override
     public RelNode visit(LogicalExchange exchange) {
-        visitChildren(exchange);
+        notImplemented(exchange);
         return null;
     }
 
     @Override
     public RelNode visit(LogicalTableModify modify) {
-        visitChildren(modify);
+        notImplemented(modify);
         return null;
     }
 
     @Override
     public RelNode visit(RelNode other) {
-        visitChildren(other).clear();
+        notImplemented(other);
         return null;
     }
 
