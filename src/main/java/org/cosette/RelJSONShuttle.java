@@ -4,11 +4,13 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.RelShuttle;
-import org.apache.calcite.rel.core.*;
+import org.apache.calcite.rel.core.AggregateCall;
+import org.apache.calcite.rel.core.CorrelationId;
+import org.apache.calcite.rel.core.TableFunctionScan;
+import org.apache.calcite.rel.core.TableScan;
 import org.apache.calcite.rel.logical.*;
 import org.apache.calcite.rex.RexNode;
 
-import java.lang.reflect.Array;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -77,7 +79,8 @@ public class RelJSONShuttle implements RelShuttle {
 
     /**
      * Visit a LogicalAggregation node. <br>
-     * Format: {distinct: {correlate: [{project: [[groups], {input}]}, {aggregate: [[functions], {project: [[sources], {filter: [{groups}, {inputCopy}]}]}]}]}}
+     * Format: {distinct: {correlate: [{project: {column: [groups], source: {input}}},
+     * {aggregate: {function: [functions], source: {filter: {condition: {groups}, source: {inputCopy}}}}}]}}
      *
      * @param aggregate The given RelNode instance.
      * @return Null, a placeholder required by interface.
@@ -91,10 +94,11 @@ public class RelJSONShuttle implements RelShuttle {
         int level = environment.getLevel();
 
         ObjectNode inputProject = environment.createNode();
-        ArrayNode inputProjectArguments = inputProject.putArray("project");
-        ArrayNode inputProjectColumns = inputProjectArguments.addArray();
+        ObjectNode inputProjectArguments = environment.createNode();
+        ArrayNode inputProjectColumns = inputProjectArguments.putArray("column");
 
         ObjectNode filter = environment.createNode();
+        ObjectNode filterArguments = environment.createNode();
         ObjectNode condition = environment.createNode();
         condition.put("type", "BOOLEAN");
         condition.put("literal", "true");
@@ -105,32 +109,35 @@ public class RelJSONShuttle implements RelShuttle {
             ObjectNode rightColumn = environment.createNode().put("column", level + groups.get(index) + groupCount);
             ObjectNode equivalence = environment.createNode();
             equivalence.put("operator", "=");
-            equivalence.putArray("operands").add(leftColumn).add(rightColumn);
+            equivalence.putArray("operand").add(leftColumn).add(rightColumn);
             ObjectNode and = environment.createNode();
             and.put("operator", "AND");
-            and.putArray("operands").add(condition).add(equivalence);
+            and.putArray("operand").add(condition).add(equivalence);
             condition = and;
         }
-        inputProjectArguments.add(childShuttle.getRelNode());
+        inputProjectArguments.set("source", childShuttle.getRelNode());
+        inputProject.set("project", inputProjectArguments);
         RelJSONShuttle filterChildShuttle = visitChild(aggregate.getInput(), environment.amend(null, groupCount));
-        filter.putArray("filter").add(condition).add(filterChildShuttle.getRelNode());
+        filterArguments.set("condition", condition);
+        filterArguments.set("source", filterChildShuttle.getRelNode());
+        filter.set("filter", filterArguments);
 
         ObjectNode aggregation = environment.createNode();
-        ArrayNode aggregationArguments = aggregation.putArray("aggregation");
-        ArrayNode aggregationFunctions = aggregationArguments.addArray();
-        ObjectNode projectFilter = environment.createNode();
-        ArrayNode projectFilterArguments = projectFilter.putArray("project");
-        ArrayNode projectFilterColumns = projectFilterArguments.addArray();
+        ObjectNode aggregationArguments = environment.createNode();
+        ArrayNode aggregationFunctions = aggregationArguments.putArray("function");
         for (AggregateCall call : aggregate.getAggCallList()) {
-            aggregationFunctions.add(call.getAggregation().toString());
-            projectFilterColumns.add(environment.createNode().put("column", level + groupCount + call.getArgList().iterator().next()));
+            ObjectNode function = environment.createNode();
+            function.put("operator", call.getAggregation().toString());
+            ArrayNode operands = function.putArray("operand");
+            for (int target : call.getArgList()) {
+                operands.add(environment.createNode().put("column", level + groupCount + target));
+            }
+            aggregationFunctions.add(function);
         }
-        projectFilterArguments.add(filter);
-        aggregationArguments.add(projectFilter);
+        aggregationArguments.set("source", filter);
+        aggregation.set("aggregate", aggregationArguments);
 
-        ObjectNode correlation = environment.createNode();
-        correlation.putArray("correlate").add(inputProject).add(aggregation);
-        relNode = correlation;
+        relNode.putArray("correlate").add(inputProject).add(aggregation);
         distinct();
 
         return null;
@@ -145,6 +152,11 @@ public class RelJSONShuttle implements RelShuttle {
         relNode = distinct;
     }
 
+    /**
+     * A placeholder indicating that the translation rules have not been implemented yet.
+     *
+     * @param node The given RelNode instance.
+     */
     private void notImplemented(RelNode node) {
         relNode.put("error", "Not implemented: " + node.getRelTypeName());
     }
@@ -182,19 +194,21 @@ public class RelJSONShuttle implements RelShuttle {
 
     /**
      * Visit a LogicalFilter node. <br>
-     * Format: {filter: [{condition}, {input}]}
+     * Format: {filter: {condition: {condition}, source: {input}}}
      *
      * @param filter The given RelNode instance.
      * @return Null, a placeholder required by interface.
      */
     @Override
     public RelNode visit(LogicalFilter filter) {
+        ObjectNode arguments = environment.createNode();
         RelJSONShuttle childShuttle = visitChild(filter.getInput(), environment);
-        ArrayNode arguments = relNode.putArray("filter");
         Set<CorrelationId> variableSet = filter.getVariablesSet();
         CorrelationId correlationId = environment.delta(variableSet);
-        arguments.add(visitRexNode(filter.getCondition(), environment.amend(correlationId, 0), childShuttle.getColumns()).getRexNode());
-        arguments.add(childShuttle.getRelNode());
+        Environment inputEnvironment = environment.amend(correlationId, 0);
+        arguments.set("condition", visitRexNode(filter.getCondition(), inputEnvironment, childShuttle.getColumns()).getRexNode());
+        arguments.set("source", childShuttle.getRelNode());
+        relNode.set("filter", arguments);
         return null;
     }
 
@@ -206,28 +220,29 @@ public class RelJSONShuttle implements RelShuttle {
 
     /**
      * Visit a LogicalProject node. <br>
-     * Format: {project: [[projects], {input}]}
+     * Format: {project: {column: [columns], source: {input}}}
      *
      * @param project The given RelNode instance.
      * @return Null, a placeholder required by interface.
      */
     @Override
     public RelNode visit(LogicalProject project) {
+        ObjectNode arguments = environment.createNode();
+        ArrayNode parameters = arguments.putArray("column");
         RelJSONShuttle childShuttle = visitChild(project.getInput(), environment);
-        ArrayNode arguments = relNode.putArray("project");
-        ArrayNode parameters = arguments.addArray();
         List<RexNode> projects = project.getProjects();
         columns = projects.size();
         for (RexNode target : projects) {
             parameters.add(visitRexNode(target, environment, childShuttle.getColumns()).getRexNode());
         }
-        arguments.add(childShuttle.getRelNode());
+        arguments.set("source", childShuttle.getRelNode());
+        relNode.set("project", arguments);
         return null;
     }
 
     /**
      * Visit a LogicalJoin node. <br>
-     * Format: {join: [[type, {condition}], {left}, {right}]}
+     * Format: {join: {type: {type}, condition: {condition}, left: {left}, right: {right}}}
      *
      * @param join The given RelNode instance.
      * @return Null, a placeholder required by interface.
@@ -235,16 +250,12 @@ public class RelJSONShuttle implements RelShuttle {
 
     @Override
     public RelNode visit(LogicalJoin join) {
-        ArrayNode arguments = relNode.putArray("join");
-        ArrayNode parameters = arguments.addArray();
-        ObjectNode type = environment.createNode().put("type", join.getJoinType().toString());
-        ObjectNode condition = visitRexNode(join.getCondition(), environment, 0).getRexNode();
-        RelJSONShuttle leftShuttle = visitChild(join.getLeft(), environment);
-        RelJSONShuttle rightShuttle = visitChild(join.getRight(), environment);
-        parameters.add(type);
-        parameters.add(condition);
-        arguments.add(leftShuttle.getRelNode());
-        arguments.add(rightShuttle.getRelNode());
+        ObjectNode arguments = environment.createNode();
+        arguments.put("type", join.getJoinType().toString());
+        arguments.set("condition", visitRexNode(join.getCondition(), environment, 0).getRexNode());
+        arguments.set("left", visitChild(join.getLeft(), environment).getRelNode());
+        arguments.set("right", visitChild(join.getRight(), environment).getRelNode());
+        relNode.set("join", arguments);
         return null;
     }
 
@@ -259,7 +270,8 @@ public class RelJSONShuttle implements RelShuttle {
     public RelNode visit(LogicalCorrelate correlate) {
         ArrayNode arguments = relNode.putArray("correlate");
         RelJSONShuttle leftShuttle = visitChild(correlate.getLeft(), environment);
-        RelJSONShuttle rightShuttle = visitChild(correlate.getRight(), environment.amend(correlate.getCorrelationId(), leftShuttle.getColumns()));
+        Environment correlateEnvironment = environment.amend(correlate.getCorrelationId(), leftShuttle.getColumns());
+        RelJSONShuttle rightShuttle = visitChild(correlate.getRight(), correlateEnvironment);
         arguments.add(leftShuttle.getRelNode());
         arguments.add(rightShuttle.getRelNode());
         return null;

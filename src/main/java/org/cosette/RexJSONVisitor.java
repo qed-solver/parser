@@ -76,7 +76,7 @@ public class RexJSONVisitor implements RexVisitor<ObjectNode> {
 
     /**
      * Visit a RexCall node. <br>
-     * Format: {operator: operator, operands: [operands]}
+     * Format: {operator: operator, operand: [operands]}
      *
      * @param call The given RexNode instance.
      * @return The ObjectNode corresponding to the given RexNode instance.
@@ -84,7 +84,7 @@ public class RexJSONVisitor implements RexVisitor<ObjectNode> {
     @Override
     public ObjectNode visitCall(RexCall call) {
         rexNode.put("operator", call.getOperator().toString());
-        ArrayNode arguments = rexNode.putArray("operands");
+        ArrayNode arguments = rexNode.putArray("operand");
         for (RexNode operand : call.getOperands()) {
             arguments.add(visitChild(operand));
         }
@@ -126,7 +126,7 @@ public class RexJSONVisitor implements RexVisitor<ObjectNode> {
 
     /**
      * Visit a RexSubQuery node. <br>
-     * Format: {operator: operator, operands: {query}}
+     * Format: {operator: operator, operand: {query}}
      *
      * @param subQuery The given RexNode instance.
      * @return The ObjectNode corresponding to the given RexNode instance.
@@ -134,7 +134,7 @@ public class RexJSONVisitor implements RexVisitor<ObjectNode> {
     @Override
     public ObjectNode visitSubQuery(RexSubQuery subQuery) {
         rexNode.put("operator", subQuery.getOperator().toString());
-        ArrayNode arguments = rexNode.putArray("operands");
+        ArrayNode arguments = rexNode.putArray("operand");
         RelJSONShuttle relJsonShuttle = new RelJSONShuttle(environment.amend(null, input));
         subQuery.rel.accept(relJsonShuttle);
         arguments.add(relJsonShuttle.getRelNode());
