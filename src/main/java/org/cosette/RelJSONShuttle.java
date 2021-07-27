@@ -9,6 +9,7 @@ import org.apache.calcite.rel.core.CorrelationId;
 import org.apache.calcite.rel.core.TableFunctionScan;
 import org.apache.calcite.rel.core.TableScan;
 import org.apache.calcite.rel.logical.*;
+import org.apache.calcite.rel.type.RelDataTypeField;
 import org.apache.calcite.rex.RexNode;
 
 import java.util.ArrayList;
@@ -95,7 +96,8 @@ public class RelJSONShuttle implements RelShuttle {
 
         ObjectNode inputProject = environment.createNode();
         ObjectNode inputProjectArguments = environment.createNode();
-        ArrayNode inputProjectColumns = inputProjectArguments.putArray("column");
+        ArrayNode inputProjectTargets = inputProjectArguments.putArray("target");
+        List<RelDataTypeField> inputTypes = aggregate.getInput().getRowType().getFieldList();
 
         ObjectNode filter = environment.createNode();
         ObjectNode filterArguments = environment.createNode();
@@ -104,7 +106,9 @@ public class RelJSONShuttle implements RelShuttle {
         condition.put("literal", "true");
         List<Integer> groups = new ArrayList<>(aggregate.getGroupSet().asList());
         for (int index = 0; index < groups.size(); index++) {
-            inputProjectColumns.add(environment.createNode().put("column", level + groups.get(index)));
+            ArrayNode target = inputProjectTargets.addArray();
+            target.add(environment.createNode().put("column", level + groups.get(index)));
+            target.add(inputTypes.get(groups.get(index)).getType().toString());
             ObjectNode leftColumn = environment.createNode().put("column", level + index);
             ObjectNode rightColumn = environment.createNode().put("column", level + groups.get(index) + groupCount);
             ObjectNode equivalence = environment.createNode();
@@ -228,12 +232,15 @@ public class RelJSONShuttle implements RelShuttle {
     @Override
     public RelNode visit(LogicalProject project) {
         ObjectNode arguments = environment.createNode();
-        ArrayNode parameters = arguments.putArray("column");
+        ArrayNode parameters = arguments.putArray("target");
         RelJSONShuttle childShuttle = visitChild(project.getInput(), environment);
         List<RexNode> projects = project.getProjects();
+        List<RelDataTypeField> types = project.getRowType().getFieldList();
         columns = projects.size();
-        for (RexNode target : projects) {
-            parameters.add(visitRexNode(target, environment, childShuttle.getColumns()).getRexNode());
+        for (int index = 0; index < columns; index++) {
+            ArrayNode field = parameters.addArray();
+            field.add(visitRexNode(projects.get(index), environment, childShuttle.getColumns()).getRexNode());
+            field.add(types.get(index).getType().toString());
         }
         arguments.set("source", childShuttle.getRelNode());
         relNode.set("project", arguments);

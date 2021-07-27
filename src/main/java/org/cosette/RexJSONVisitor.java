@@ -4,6 +4,8 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.apache.calcite.rex.*;
 
+import java.util.Locale;
+
 /**
  * A implementation of RexVisitor interface that could convert a RelNode instance to a ObjectNode instance.
  */
@@ -70,8 +72,9 @@ public class RexJSONVisitor implements RexVisitor<ObjectNode> {
      */
     @Override
     public ObjectNode visitLiteral(RexLiteral literal) {
-        rexNode.put("type", literal.getType().toString());
-        return rexNode.put("literal", literal.toString());
+        rexNode.put("operator", literal.toString().toUpperCase(Locale.ROOT));
+        rexNode.putArray("operand");
+        return rexNode;
     }
 
     /**
@@ -83,7 +86,7 @@ public class RexJSONVisitor implements RexVisitor<ObjectNode> {
      */
     @Override
     public ObjectNode visitCall(RexCall call) {
-        rexNode.put("operator", call.getOperator().toString());
+        rexNode.put("operator", call.getOperator().toString().toUpperCase(Locale.ROOT));
         ArrayNode arguments = rexNode.putArray("operand");
         for (RexNode operand : call.getOperands()) {
             arguments.add(visitChild(operand));
@@ -133,7 +136,7 @@ public class RexJSONVisitor implements RexVisitor<ObjectNode> {
      */
     @Override
     public ObjectNode visitSubQuery(RexSubQuery subQuery) {
-        rexNode.put("operator", subQuery.getOperator().toString());
+        rexNode.put("operator", subQuery.getOperator().toString().toUpperCase(Locale.ROOT));
         ArrayNode arguments = rexNode.putArray("operand");
         RelJSONShuttle relJsonShuttle = new RelJSONShuttle(environment.amend(null, input));
         subQuery.rel.accept(relJsonShuttle);
