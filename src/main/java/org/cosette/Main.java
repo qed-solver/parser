@@ -71,7 +71,7 @@ public class Main {
             scanner.close();
         } catch (Exception e) {
             System.err.println("In file: " + filename);
-            e.printStackTrace();
+            System.err.println(e.getMessage());
         }
     }
 
