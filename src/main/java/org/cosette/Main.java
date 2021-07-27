@@ -45,7 +45,7 @@ public class Main {
     }
 
     /**
-     * Parse a .sql file or a .tmp file translated from a .cos file.
+     * Parse a .sql file.
      *
      * @param filename The input filename.
      */
@@ -54,13 +54,15 @@ public class Main {
         try {
             Scanner scanner = new Scanner(new File(filename));
             SQLParse sqlParse = new SQLParse();
-            scanner.useDelimiter(Pattern.compile("\n{2}"));
+            scanner.useDelimiter(Pattern.compile(";"));
             while (scanner.hasNext()) {
                 String statement = scanner.next();
-                try {
-                    sqlParse.parseDML(statement);
-                } catch (SqlParseException e) {
-                    sqlParse.applyDDL(statement);
+                if (!statement.isBlank()) {
+                    try {
+                        sqlParse.parseDML(statement);
+                    } catch (SqlParseException ignore) {
+                        sqlParse.applyDDL(statement);
+                    }
                 }
             }
             String outputPath = FilenameUtils.getPath(filename) + FilenameUtils.getBaseName(filename) + ".json";
@@ -105,16 +107,16 @@ public class Main {
                     Matcher declarationMatcher = declarationPattern.matcher(schemaMatcher.group(2));
                     schema.append(" (");
                     while (declarationMatcher.find()) {
-
                         schema.append("\n\t");
                         schema.append(declarationMatcher.group(1).toUpperCase(Locale.ROOT));
                         schema.append(" INTEGER,");
                     }
                     if (declarationMatcher.reset().find()) {
                         schema.deleteCharAt(schema.length() - 1);
-                        schema.append("\n");
+                    } else {
+                        schema.append("\n\tCOL INTEGER");
                     }
-                    schema.append(")\n\n");
+                    schema.append("\n);\n");
                     schemas.put(schemaMatcher.group(1).toUpperCase(Locale.ROOT), schema.toString());
                 } else if (tableMatcher.find()) {
                     sqlBuilder.append("CREATE TABLE ");
@@ -122,7 +124,7 @@ public class Main {
                     sqlBuilder.append(schemas.get(tableMatcher.group(2).toUpperCase(Locale.ROOT)));
                 } else if (queryMatcher.find()) {
                     sqlBuilder.append(queryMatcher.group().toUpperCase(Locale.ROOT));
-                    sqlBuilder.append("\n\n");
+                    sqlBuilder.append(";\n");
                 }
             }
             scanner.close();
@@ -134,8 +136,7 @@ public class Main {
             parseSQLFile(intermediate);
         } catch (Exception e) {
             System.err.println("In file: " + filename);
-            e.printStackTrace();
-            System.exit(-1);
+            System.err.println(e.getMessage());
         }
     }
 
