@@ -80,7 +80,7 @@ public class RelJSONShuttle implements RelShuttle {
 
     /**
      * Visit a LogicalAggregation node. <br>
-     * Format: {distinct: {correlate: [{project: {column: [groups], source: {input}}},
+     * Format: {distinct: {correlate: [{project: {target: [[group, type]], source: {input}}},
      * {aggregate: {function: [functions], source: {filter: {condition: {groups}, source: {inputCopy}}}}}]}}
      *
      * @param aggregate The given RelNode instance.
@@ -224,7 +224,7 @@ public class RelJSONShuttle implements RelShuttle {
 
     /**
      * Visit a LogicalProject node. <br>
-     * Format: {project: {column: [columns], source: {input}}}
+     * Format: {project: {target: [[column, type]], source: {input}}}
      *
      * @param project The given RelNode instance.
      * @return Null, a placeholder required by interface.

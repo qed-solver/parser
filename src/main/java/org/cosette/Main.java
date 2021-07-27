@@ -6,9 +6,7 @@ import org.apache.commons.io.FilenameUtils;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileWriter;
-import java.util.Locale;
-import java.util.Objects;
-import java.util.Scanner;
+import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -79,8 +77,8 @@ public class Main {
 
     /**
      * Assuming that the .cos file is always in the following format:<br>
-     * schema table_name(column:int, ...);<br>
-     * table table_name(table);<br>
+     * schema schema_name(column:int, ...);<br>
+     * table table_name(schema_name);<br>
      * query _ `query_body`; <br>
      * Then the .cos file will be translated to a .tmp file, which contains the translated SQL statement.
      * The .tmp file will be passed to parseSQLFile(...) and will be deleted after it is used.
@@ -91,31 +89,38 @@ public class Main {
         try {
             Scanner scanner = new Scanner(new File(filename));
             Pattern schemaPattern = Pattern.compile("(?<=schema\\s)(\\w+)\\((.*)\\)$");
+            Pattern tablePattern = Pattern.compile("(?<=table\\s)(\\w+)\\((\\w+)\\)$");
             Pattern declarationPattern = Pattern.compile("(\\w+):\\w+,?\\s?");
             Pattern queryPattern = Pattern.compile("(?<=`)[\\s\\S]*(?=`)");
             StringBuilder sqlBuilder = new StringBuilder();
+            Map<String, String> schemas = new HashMap<>();
             scanner.useDelimiter(Pattern.compile(";"));
             while (scanner.hasNext()) {
                 String line = scanner.next();
                 Matcher schemaMatcher = schemaPattern.matcher(line);
+                Matcher tableMatcher = tablePattern.matcher(line);
                 Matcher queryMatcher = queryPattern.matcher(line);
                 if (schemaMatcher.find()) {
+                    StringBuilder schema = new StringBuilder();
                     Matcher declarationMatcher = declarationPattern.matcher(schemaMatcher.group(2));
-                    sqlBuilder.append("CREATE TABLE ");
-                    sqlBuilder.append(schemaMatcher.group(1).toUpperCase(Locale.ROOT));
-                    sqlBuilder.append(" (");
+                    schema.append(" (");
                     while (declarationMatcher.find()) {
-                        sqlBuilder.append("\n\t");
-                        sqlBuilder.append(declarationMatcher.group(1).toUpperCase(Locale.ROOT));
-                        sqlBuilder.append(" INTEGER,");
+
+                        schema.append("\n\t");
+                        schema.append(declarationMatcher.group(1).toUpperCase(Locale.ROOT));
+                        schema.append(" INTEGER,");
                     }
                     if (declarationMatcher.reset().find()) {
-                        sqlBuilder.deleteCharAt(sqlBuilder.length() - 1);
-                        sqlBuilder.append("\n");
+                        schema.deleteCharAt(schema.length() - 1);
+                        schema.append("\n");
                     }
-                    sqlBuilder.append(")\n\n");
-                }
-                if (queryMatcher.find()) {
+                    schema.append(")\n\n");
+                    schemas.put(schemaMatcher.group(1).toUpperCase(Locale.ROOT), schema.toString());
+                } else if (tableMatcher.find()) {
+                    sqlBuilder.append("CREATE TABLE ");
+                    sqlBuilder.append(tableMatcher.group(1).toUpperCase(Locale.ROOT));
+                    sqlBuilder.append(schemas.get(tableMatcher.group(2).toUpperCase(Locale.ROOT)));
+                } else if (queryMatcher.find()) {
                     sqlBuilder.append(queryMatcher.group().toUpperCase(Locale.ROOT));
                     sqlBuilder.append("\n\n");
                 }
