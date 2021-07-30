@@ -10,10 +10,12 @@ import org.apache.calcite.rel.core.TableFunctionScan;
 import org.apache.calcite.rel.core.TableScan;
 import org.apache.calcite.rel.logical.*;
 import org.apache.calcite.rel.type.RelDataTypeField;
+import org.apache.calcite.rex.RexLiteral;
 import org.apache.calcite.rex.RexNode;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 
 /**
@@ -23,7 +25,6 @@ public class RelJSONShuttle implements RelShuttle {
 
     private final Environment environment;
     private ObjectNode relNode;
-    private int columns;
 
     /**
      * Initialize the shuttle with a given environment.
@@ -33,7 +34,6 @@ public class RelJSONShuttle implements RelShuttle {
     public RelJSONShuttle(Environment existing) {
         environment = existing;
         relNode = environment.createNode();
-        columns = 0;
     }
 
     /**
@@ -41,13 +41,6 @@ public class RelJSONShuttle implements RelShuttle {
      */
     public ObjectNode getRelNode() {
         return relNode;
-    }
-
-    /**
-     * @return The number of columns corresponding to the RelNode instance.
-     */
-    public int getColumns() {
-        return columns;
     }
 
     /**
@@ -74,7 +67,6 @@ public class RelJSONShuttle implements RelShuttle {
     private RelJSONShuttle visitChild(RelNode child, Environment context) {
         RelJSONShuttle childShuttle = new RelJSONShuttle(context);
         child.accept(childShuttle);
-        columns += childShuttle.getColumns();
         return childShuttle;
     }
 
@@ -90,7 +82,6 @@ public class RelJSONShuttle implements RelShuttle {
     public RelNode visit(LogicalAggregate aggregate) {
 
         RelJSONShuttle childShuttle = visitChild(aggregate.getInput(), environment);
-        columns = aggregate.getAggCallList().size();
         int groupCount = aggregate.getGroupCount();
         int level = environment.getLevel();
 
@@ -180,7 +171,6 @@ public class RelJSONShuttle implements RelShuttle {
      */
     @Override
     public RelNode visit(TableScan scan) {
-        columns = scan.getTable().getRowType().getFieldCount();
         relNode.put("scan", environment.identifyTable(scan.getTable()));
         return null;
     }
@@ -191,9 +181,29 @@ public class RelJSONShuttle implements RelShuttle {
         return null;
     }
 
+    /**
+     * Visit a LogicalValues node. <br>
+     * Format: {value: {schema: [types], content: [[element]]}}
+     *
+     * @param values The given RelNode instance.
+     * @return Null, a placeholder required by interface.
+     */
     @Override
     public RelNode visit(LogicalValues values) {
-        return values;
+        ObjectNode value = environment.createNode();
+        ArrayNode schema = value.putArray("schema");
+        ArrayNode content = value.putArray("content");
+        for (RelDataTypeField relDataTypeField : values.getRowType().getFieldList()) {
+            schema.add(relDataTypeField.getType().toString());
+        }
+        for (List<RexLiteral> tuple : values.getTuples()) {
+            ArrayNode record = content.addArray();
+            for (RexLiteral rexLiteral : tuple) {
+                record.add(rexLiteral.toString().toUpperCase(Locale.ROOT));
+            }
+        }
+        relNode.set("value", value);
+        return null;
     }
 
     /**
@@ -210,7 +220,7 @@ public class RelJSONShuttle implements RelShuttle {
         Set<CorrelationId> variableSet = filter.getVariablesSet();
         CorrelationId correlationId = environment.delta(variableSet);
         Environment inputEnvironment = environment.amend(correlationId, 0);
-        arguments.set("condition", visitRexNode(filter.getCondition(), inputEnvironment, childShuttle.getColumns()).getRexNode());
+        arguments.set("condition", visitRexNode(filter.getCondition(), inputEnvironment, filter.getInput().getRowType().getFieldCount()).getRexNode());
         arguments.set("source", childShuttle.getRelNode());
         relNode.set("filter", arguments);
         return null;
@@ -236,10 +246,9 @@ public class RelJSONShuttle implements RelShuttle {
         RelJSONShuttle childShuttle = visitChild(project.getInput(), environment);
         List<RexNode> projects = project.getProjects();
         List<RelDataTypeField> types = project.getRowType().getFieldList();
-        columns = projects.size();
-        for (int index = 0; index < columns; index++) {
+        for (int index = 0; index < types.size(); index++) {
             ArrayNode field = parameters.addArray();
-            field.add(visitRexNode(projects.get(index), environment, childShuttle.getColumns()).getRexNode());
+            field.add(visitRexNode(projects.get(index), environment, types.size()).getRexNode());
             field.add(types.get(index).getType().toString());
         }
         arguments.set("source", childShuttle.getRelNode());
@@ -277,7 +286,7 @@ public class RelJSONShuttle implements RelShuttle {
     public RelNode visit(LogicalCorrelate correlate) {
         ArrayNode arguments = relNode.putArray("correlate");
         RelJSONShuttle leftShuttle = visitChild(correlate.getLeft(), environment);
-        Environment correlateEnvironment = environment.amend(correlate.getCorrelationId(), leftShuttle.getColumns());
+        Environment correlateEnvironment = environment.amend(correlate.getCorrelationId(), correlate.getLeft().getRowType().getFieldCount());
         RelJSONShuttle rightShuttle = visitChild(correlate.getRight(), correlateEnvironment);
         arguments.add(leftShuttle.getRelNode());
         arguments.add(rightShuttle.getRelNode());
@@ -295,7 +304,6 @@ public class RelJSONShuttle implements RelShuttle {
     public RelNode visit(LogicalUnion union) {
         ArrayNode arguments = relNode.putArray("union");
         for (RelNode input : union.getInputs()) {
-            columns = 0;
             arguments.add(visitChild(input, environment).getRelNode());
         }
         if (!union.all) {
@@ -321,7 +329,6 @@ public class RelJSONShuttle implements RelShuttle {
     public RelNode visit(LogicalMinus minus) {
         ArrayNode arguments = relNode.putArray("except");
         for (RelNode input : minus.getInputs()) {
-            columns = 0;
             arguments.add(visitChild(input, environment).getRelNode());
         }
         if (!minus.all) {
