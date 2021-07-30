@@ -199,7 +199,10 @@ public class RelJSONShuttle implements RelShuttle {
         for (List<RexLiteral> tuple : values.getTuples()) {
             ArrayNode record = content.addArray();
             for (RexLiteral rexLiteral : tuple) {
-                record.add(rexLiteral.toString().toUpperCase(Locale.ROOT));
+                ObjectNode literal = environment.createNode();
+                literal.put("operator", rexLiteral.toString().toUpperCase(Locale.ROOT));
+                literal.putArray("operand");
+                record.add(literal);
             }
         }
         relNode.set("value", value);

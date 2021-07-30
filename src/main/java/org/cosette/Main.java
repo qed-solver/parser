@@ -82,8 +82,8 @@ public class Main {
      * schema schema_name(column:int, ...);<br>
      * table table_name(schema_name);<br>
      * query _ `query_body`; <br>
-     * Then the .cos file will be translated to a .tmp file, which contains the translated SQL statement.
-     * The .tmp file will be passed to parseSQLFile(...) and will be deleted after it is used.
+     * The .cos file will be translated to a .sql file, which contains the translated SQL statement.
+     * Then the .sql file will be passed to parseSQLFile(...) and will not be deleted after it is used.
      *
      * @param filename The input .cos filename
      */

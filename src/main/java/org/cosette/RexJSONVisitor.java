@@ -65,7 +65,7 @@ public class RexJSONVisitor implements RexVisitor<ObjectNode> {
 
     /**
      * Visit a RexLiteral node. <br>
-     * Format: {type: type, literal: value}
+     * Format: {operator: value, operand: []}
      *
      * @param literal The given RexNode instance.
      * @return The ObjectNode corresponding to the given RexNode instance.
