@@ -56,12 +56,16 @@ public class Main {
             SQLParse sqlParse = new SQLParse();
             scanner.useDelimiter(Pattern.compile(";"));
             while (scanner.hasNext()) {
-                String statement = scanner.next();
+                String statement = scanner.next().trim();
                 if (!statement.isBlank()) {
                     try {
-                        sqlParse.parseDML(statement);
-                    } catch (SqlParseException ignore) {
-                        sqlParse.applyDDL(statement);
+                        try {
+                            sqlParse.parseDML(statement);
+                        } catch (SqlParseException ignore) {
+                            sqlParse.applyDDL(statement);
+                        }
+                    } catch (Exception e) {
+                        throw new Exception("In statement:\n" + statement.replaceAll("(?m)^", "\t") + "\n" + e.getMessage());
                     }
                 }
             }
@@ -72,8 +76,8 @@ public class Main {
             sqlParse.done();
             scanner.close();
         } catch (Exception e) {
-            System.err.println("In file: " + filename);
-            System.err.println(e.getMessage());
+            System.err.println("In file:\n\t" + filename);
+            System.err.println(e.getMessage().trim() + "\n");
         }
     }
 
@@ -135,8 +139,8 @@ public class Main {
             bufferedWriter.close();
             parseSQLFile(intermediate);
         } catch (Exception e) {
-            System.err.println("In file: " + filename);
-            System.err.println(e.getMessage());
+            System.err.println("In file:\n\t" + filename);
+            System.err.println(e.getMessage().trim() + "\n");
         }
     }
 

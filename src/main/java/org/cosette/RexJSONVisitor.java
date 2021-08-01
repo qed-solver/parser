@@ -45,6 +45,15 @@ public class RexJSONVisitor implements RexVisitor<ObjectNode> {
         return rex.accept(childVisitor);
     }
 
+    /**
+     * A placeholder indicating that the translation rules have not been implemented yet.
+     *
+     * @param node The given RexNode instance.
+     */
+    private ObjectNode notImplemented(RexNode node) {
+        return rexNode.put("error", "Not implemented: " + node.getKind());
+    }
+
 
     /**
      * Visit a RexInputRef node. <br>
@@ -60,7 +69,7 @@ public class RexJSONVisitor implements RexVisitor<ObjectNode> {
 
     @Override
     public ObjectNode visitLocalRef(RexLocalRef localRef) {
-        return null;
+        return notImplemented(localRef);
     }
 
     /**
@@ -96,22 +105,22 @@ public class RexJSONVisitor implements RexVisitor<ObjectNode> {
 
     @Override
     public ObjectNode visitOver(RexOver over) {
-        return null;
+        return notImplemented(over);
     }
 
     @Override
     public ObjectNode visitCorrelVariable(RexCorrelVariable correlVariable) {
-        return null;
+        return notImplemented(correlVariable);
     }
 
     @Override
     public ObjectNode visitDynamicParam(RexDynamicParam dynamicParam) {
-        return null;
+        return notImplemented(dynamicParam);
     }
 
     @Override
     public ObjectNode visitRangeRef(RexRangeRef rangeRef) {
-        return null;
+        return notImplemented(rangeRef);
     }
 
     /**
@@ -146,11 +155,11 @@ public class RexJSONVisitor implements RexVisitor<ObjectNode> {
 
     @Override
     public ObjectNode visitTableInputRef(RexTableInputRef fieldRef) {
-        return null;
+        return notImplemented(fieldRef);
     }
 
     @Override
     public ObjectNode visitPatternFieldRef(RexPatternFieldRef fieldRef) {
-        return null;
+        return notImplemented(fieldRef);
     }
 }

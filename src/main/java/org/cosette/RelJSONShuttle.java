@@ -15,7 +15,6 @@ import org.apache.calcite.rex.RexNode;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import java.util.Set;
 
 /**
@@ -93,8 +92,8 @@ public class RelJSONShuttle implements RelShuttle {
         ObjectNode filter = environment.createNode();
         ObjectNode filterArguments = environment.createNode();
         ObjectNode condition = environment.createNode();
-        condition.put("type", "BOOLEAN");
-        condition.put("literal", "true");
+        condition.put("operator", "TRUE");
+        condition.putArray("operand");
         List<Integer> groups = new ArrayList<>(aggregate.getGroupSet().asList());
         for (int index = 0; index < groups.size(); index++) {
             ArrayNode target = inputProjectTargets.addArray();
@@ -127,7 +126,7 @@ public class RelJSONShuttle implements RelShuttle {
             for (int target : call.getArgList()) {
                 operands.add(environment.createNode().put("column", level + groupCount + target));
             }
-            aggregationFunctions.add(function);
+            aggregationFunctions.addArray().add(function).add(call.type.toString());
         }
         aggregationArguments.set("source", filter);
         aggregation.set("aggregate", aggregationArguments);
@@ -199,10 +198,7 @@ public class RelJSONShuttle implements RelShuttle {
         for (List<RexLiteral> tuple : values.getTuples()) {
             ArrayNode record = content.addArray();
             for (RexLiteral rexLiteral : tuple) {
-                ObjectNode literal = environment.createNode();
-                literal.put("operator", rexLiteral.toString().toUpperCase(Locale.ROOT));
-                literal.putArray("operand");
-                record.add(literal);
+                record.add(visitRexNode(rexLiteral, environment, 0).getRexNode());
             }
         }
         relNode.set("value", value);
