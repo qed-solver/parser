@@ -11,7 +11,7 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * A Environment instance keeps track of the environment when a RelJSONShuttle instance is travelling through a RelNode
+ * AN Environment instance keeps track of the environment when a RelJSONShuttle instance is travelling through a RelNode
  * or when a RexJSONVisitor is visiting a RexNode. It can record all RelOptTable instances it has seen, and can provide
  * all level information for correlation variables.
  */

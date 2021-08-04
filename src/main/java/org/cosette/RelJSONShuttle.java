@@ -1,8 +1,11 @@
 package org.cosette;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import org.apache.calcite.plan.RelOptTable;
 import org.apache.calcite.rel.RelNode;
+import org.apache.calcite.rel.RelReferentialConstraint;
 import org.apache.calcite.rel.RelShuttle;
 import org.apache.calcite.rel.core.AggregateCall;
 import org.apache.calcite.rel.core.CorrelationId;
@@ -12,13 +15,18 @@ import org.apache.calcite.rel.logical.*;
 import org.apache.calcite.rel.type.RelDataTypeField;
 import org.apache.calcite.rex.RexLiteral;
 import org.apache.calcite.rex.RexNode;
+import org.apache.calcite.schema.ColumnStrategy;
+import org.apache.calcite.util.ImmutableBitSet;
+import org.apache.calcite.util.mapping.IntPair;
 
+import java.io.IOException;
+import java.io.Writer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
 /**
- * A implementation of RelShuttle interface that could convert a RelNode instance to a ObjectNode instance.
+ * AN implementation of RelShuttle interface that could convert a RelNode instance to a ObjectNode instance.
  */
 public class RelJSONShuttle implements RelShuttle {
 
@@ -33,6 +41,91 @@ public class RelJSONShuttle implements RelShuttle {
     public RelJSONShuttle(Environment existing) {
         environment = existing;
         relNode = environment.createNode();
+    }
+
+    /**
+     * Dump a list of RelRoot to a writer in JSON format .
+     *
+     * @param relNodes The given list of RelRoot.
+     * @param writer   The given writer.
+     */
+    public static void dumpToJSON(List<RelNode> relNodes, Writer writer) throws IOException {
+
+        ObjectMapper mapper = new ObjectMapper();
+
+        ObjectNode mainObject = mapper.createObjectNode();
+
+        ArrayNode schemaArray = mainObject.putArray("schemas");
+
+        ArrayNode queryArray = mainObject.putArray("queries");
+
+        ArrayNode helpArray = mainObject.putArray("help");
+
+        List<RelOptTable> tableList = new ArrayList<>();
+
+        for (RelNode relNode : relNodes) {
+            Environment environment = new Environment(mapper, tableList);
+            RelJSONShuttle relJsonShuttle = new RelJSONShuttle(environment);
+
+            helpArray.add(relNode.explain());
+
+            relNode.accept(relJsonShuttle);
+            queryArray.add(relJsonShuttle.getRelNode());
+
+            tableList = environment.getRelOptTables();
+        }
+
+        List<List<String>> tableNames = new ArrayList<>();
+        for (RelOptTable table : tableList) {
+            tableNames.add(table.getQualifiedName());
+        }
+
+        for (RelOptTable table : tableList) {
+            ObjectNode tableObject = mapper.createObjectNode();
+
+            ArrayNode typeArray = tableObject.putArray("types");
+            for (RelDataTypeField field : table.getRowType().getFieldList()) {
+                typeArray.add(field.getType().toString());
+            }
+
+            ArrayNode strategyArray = tableObject.putArray("strategy");
+            for (ColumnStrategy columnStrategy : table.getColumnStrategies()) {
+                strategyArray.add(columnStrategy.toString());
+            }
+
+            ArrayNode keyArray = tableObject.putArray("key");
+            List<ImmutableBitSet> keys = table.getKeys();
+            if (keys != null) {
+                for (ImmutableBitSet key : keys) {
+                    ArrayNode components = keyArray.addArray();
+                    for (int unique : key) {
+                        components.add(unique);
+                    }
+                }
+            }
+
+            ArrayNode foreignArray = tableObject.putArray("foreign");
+            List<RelReferentialConstraint> constraints = table.getReferentialConstraints();
+            if (constraints != null) {
+                for (RelReferentialConstraint constraint : constraints) {
+                    ArrayNode foreignMap = foreignArray.addArray();
+                    int source = tableNames.indexOf(constraint.getSourceQualifiedName());
+                    int target = tableNames.indexOf(constraint.getTargetQualifiedName());
+                    ArrayNode sourceArray = foreignMap.addArray();
+                    ArrayNode targetArray = foreignMap.addArray();
+                    foreignMap.addArray().add(source).add(target);
+                    for (IntPair intPair : constraint.getColumnPairs()) {
+                        sourceArray.add(intPair.source);
+                        targetArray.add(intPair.target);
+                    }
+                }
+            }
+
+            schemaArray.add(tableObject);
+        }
+
+        mapper.writerWithDefaultPrettyPrinter().writeValue(writer, mainObject);
+
     }
 
     /**

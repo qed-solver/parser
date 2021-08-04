@@ -7,7 +7,7 @@ import org.apache.calcite.rex.*;
 import java.util.Locale;
 
 /**
- * A implementation of RexVisitor interface that could convert a RelNode instance to a ObjectNode instance.
+ * AN implementation of RexVisitor interface that could convert a RelNode instance to a ObjectNode instance.
  */
 public class RexJSONVisitor implements RexVisitor<ObjectNode> {
 
@@ -109,8 +109,8 @@ public class RexJSONVisitor implements RexVisitor<ObjectNode> {
     }
 
     @Override
-    public ObjectNode visitCorrelVariable(RexCorrelVariable correlVariable) {
-        return notImplemented(correlVariable);
+    public ObjectNode visitCorrelVariable(RexCorrelVariable variable) {
+        return notImplemented(variable);
     }
 
     @Override

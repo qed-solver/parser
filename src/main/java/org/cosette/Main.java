@@ -71,7 +71,7 @@ public class Main {
             }
             String outputPath = FilenameUtils.getPath(filename) + FilenameUtils.getBaseName(filename) + ".json";
             BufferedWriter bufferedWriter = new BufferedWriter(new FileWriter(outputPath));
-            bufferedWriter.write(sqlParse.dumpToJSON());
+            sqlParse.dumpToJSON(bufferedWriter);
             bufferedWriter.close();
             sqlParse.done();
             scanner.close();

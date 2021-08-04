@@ -2,6 +2,7 @@ package org.cosette;
 
 import com.google.common.collect.ImmutableList;
 import org.apache.calcite.adapter.java.JavaTypeFactory;
+import org.apache.calcite.avatica.util.Quoting;
 import org.apache.calcite.config.CalciteConnectionConfig;
 import org.apache.calcite.config.CalciteConnectionConfigImpl;
 import org.apache.calcite.config.CalciteConnectionProperty;
@@ -85,6 +86,7 @@ public class RawPlanner implements RelOptTable.ViewExpander {
                 .withTrimUnusedFields(false);
         FrameworkConfig config = Frameworks.newConfigBuilder()
                 .defaultSchema(schema)
+                .parserConfig(SqlParser.Config.DEFAULT.withQuoting(Quoting.BACK_TICK))
                 .sqlToRelConverterConfig(converterConfig)
                 .build();
         this.costFactory = config.getCostFactory();
