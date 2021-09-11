@@ -1,5 +1,6 @@
 package org.cosette;
 
+import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.RelRoot;
 import org.apache.calcite.sql.SqlNode;
 import org.apache.calcite.sql.parser.SqlParseException;
@@ -50,10 +51,15 @@ public class SQLParse {
 
     /**
      * Dump the parsed statements to a writer.
+     *
      * @param writer The given writer.
      */
     public void dumpToJSON(Writer writer) throws IOException {
-        RelJSONShuttle.dumpToJSON(rootList.stream().map(RelRoot::project).toList(), writer);
+        ArrayList<RelNode> nodeList = new ArrayList<>();
+        for (RelRoot root : rootList) {
+            nodeList.add(root.project());
+        }
+        RelJSONShuttle.dumpToJSON(nodeList, writer);
     }
 
     /**

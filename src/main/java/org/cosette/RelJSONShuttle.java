@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.apache.calcite.plan.RelOptTable;
+import org.apache.calcite.rel.RelFieldCollation;
 import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.RelReferentialConstraint;
 import org.apache.calcite.rel.RelShuttle;
@@ -23,6 +24,7 @@ import java.io.IOException;
 import java.io.Writer;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -333,6 +335,7 @@ public class RelJSONShuttle implements RelShuttle {
      */
     @Override
     public RelNode visit(LogicalProject project) {
+        // TODO: Correlation in targets?
         ObjectNode arguments = environment.createNode();
         ArrayNode parameters = arguments.putArray("target");
         RelJSONShuttle childShuttle = visitChild(project.getInput(), environment);
@@ -358,6 +361,7 @@ public class RelJSONShuttle implements RelShuttle {
 
     @Override
     public RelNode visit(LogicalJoin join) {
+        // TODO: Correlation in condition?
         ObjectNode arguments = environment.createNode();
         arguments.put("type", join.getJoinType().toString());
         arguments.set("condition", visitRexNode(join.getCondition(), environment, 0).getRexNode());
@@ -429,9 +433,37 @@ public class RelJSONShuttle implements RelShuttle {
         return null;
     }
 
+    /**
+     * Visit a LogicalSort node. <br>
+     * Format: {sort: {collation: [[column, type, order]], offset: count, limit: count, source: {input}}}
+     *
+     * @param sort The given RelNode instance.
+     * @return Null, a placeholder required by interface.
+     */
     @Override
     public RelNode visit(LogicalSort sort) {
-        notImplemented(sort);
+        // TODO: Correlations everywhere?
+        ObjectNode arguments = environment.createNode();
+        RelJSONShuttle childShuttle = visitChild(sort.getInput(), environment);
+        List<RelDataTypeField> types = sort.getRowType().getFieldList();
+        ArrayNode collations = arguments.putArray("collation");
+        for (RelFieldCollation collation : sort.collation.getFieldCollations()) {
+            ArrayNode column = collations.addArray();
+            int index = collation.getFieldIndex();
+            column.add(index + environment.getLevel()).add(types.get(index).getType().toString()).add(collation.shortString());
+        }
+        if (sort.offset != null) {
+            arguments.set("offset", visitRexNode(sort.offset, environment, 0).getRexNode());
+        } else {
+            arguments.put("offset", "null");
+        }
+        if (sort.fetch != null) {
+            arguments.set("limit", visitRexNode(sort.fetch, environment, 0).getRexNode());
+        } else {
+            arguments.put("limit", "null");
+        }
+        arguments.set("source", childShuttle.getRelNode());
+        relNode.set("sort", arguments);
         return null;
     }
 
