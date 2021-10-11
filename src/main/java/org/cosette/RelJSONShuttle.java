@@ -165,6 +165,26 @@ public class RelJSONShuttle implements RelShuttle {
     }
 
     /**
+     * A placeholder indicating that the translation rules have not been implemented yet.
+     *
+     * @param node The given RelNode instance.
+     */
+    private void notImplemented(RelNode node) {
+        relNode.put("error", "Not implemented: " + node.getRelTypeName());
+    }
+
+    /**
+     * Visit a RelVariable node. <br>
+     * Format: {relNode: id}
+     * @param variable The given RelNode instance.
+     * @return Null, a placeholder required by interface.
+     */
+    public RelNode visit(RelVariable variable) {
+        relNode.put("relNode", variable.getId());
+        return null;
+    }
+
+    /**
      * Visit a LogicalAggregation node. <br>
      * Format: {distinct: {correlate: [{project: {target: [[group, type]], source: {input}}},
      * {aggregate: {function: [functions], source: {filter: {condition: {groups}, source: {inputCopy}}}}}]}}
@@ -239,15 +259,6 @@ public class RelJSONShuttle implements RelShuttle {
         ObjectNode distinct = environment.createNode();
         distinct.set("distinct", relNode);
         relNode = distinct;
-    }
-
-    /**
-     * A placeholder indicating that the translation rules have not been implemented yet.
-     *
-     * @param node The given RelNode instance.
-     */
-    private void notImplemented(RelNode node) {
-        relNode.put("error", "Not implemented: " + node.getRelTypeName());
     }
 
     @Override

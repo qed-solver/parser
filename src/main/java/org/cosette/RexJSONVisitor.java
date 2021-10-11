@@ -2,6 +2,7 @@ package org.cosette;
 
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rex.*;
 
 import java.util.Locale;
@@ -54,6 +55,15 @@ public class RexJSONVisitor implements RexVisitor<ObjectNode> {
         return rexNode.put("error", "Not implemented: " + node.getKind());
     }
 
+    /**
+     * Visit a RexVariable node. <br>
+     * Format: {rexNode: id}
+     * @param variable The given RexNode instance.
+     * @return The ObjectNode corresponding to the given RexNode instance.
+     */
+    public ObjectNode visit(RexVariable variable) {
+        return rexNode.put("rexNode", variable.getId());
+    }
 
     /**
      * Visit a RexInputRef node. <br>
