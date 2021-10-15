@@ -1,65 +1,101 @@
 package org.cosette;
 
-import org.apache.calcite.plan.Context;
-import org.apache.calcite.plan.RelOptCluster;
-import org.apache.calcite.plan.RelOptSchema;
+import org.apache.calcite.plan.RelOptRule;
+import org.apache.calcite.plan.RelOptRuleOperand;
 import org.apache.calcite.plan.RelTraitDef;
 import org.apache.calcite.plan.hep.HepPlanner;
 import org.apache.calcite.plan.hep.HepProgram;
 import org.apache.calcite.rel.RelNode;
+import org.apache.calcite.rel.core.*;
 import org.apache.calcite.rel.rules.CoreRules;
 import org.apache.calcite.schema.SchemaPlus;
 import org.apache.calcite.sql.parser.SqlParser;
 import org.apache.calcite.tools.FrameworkConfig;
 import org.apache.calcite.tools.Frameworks;
 import org.apache.calcite.tools.Programs;
-import org.apache.calcite.tools.RelBuilder;
-import org.apache.commons.io.output.StringBuilderWriter;
-import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.IOException;
+import java.lang.reflect.Field;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 
 public class RuleExtractor {
 
+    private static final SchemaPlus rootSchema = Frameworks.createRootSchema(true);
+    private static final FrameworkConfig config = Frameworks.newConfigBuilder()
+            .parserConfig(SqlParser.Config.DEFAULT)
+            .defaultSchema(rootSchema)
+            .traitDefs((List<RelTraitDef>) null)
+            .programs(Programs.heuristicJoinOrder(Programs.RULE_SET, true, 2)).build();
+    private static final RelConstructor relBuilder = RelConstructor.create(config);
+
     public static void main(String[] args) throws IOException {
-        HepProgram hepProgram = HepProgram.builder().addRuleInstance(CoreRules.FILTER_MERGE).build();
+        for (RelOptRule rule : ruleList()) {
+            extractRule(rule);
+        }
+    }
+
+    public static List<RelOptRule> ruleList() {
+        List<RelOptRule> list = new ArrayList<>();
+        Field[] fields = CoreRules.class.getDeclaredFields();
+        for (Field field : fields) {
+            try {
+                list.add((RelOptRule) field.get(RelOptRule.class));
+            } catch (IllegalAccessException ignore) {
+
+            }
+        }
+        return list;
+    }
+
+    public static void extractRule(RelOptRule rule) {
+        buildPattern(rule.getOperand());
+        RelNode original = relBuilder.build();
+        HepProgram hepProgram = HepProgram.builder().addRuleInstance(rule).build();
         HepPlanner hepPlanner = new HepPlanner(hepProgram);
-        final SchemaPlus rootSchema = Frameworks.createRootSchema(true);
-        FrameworkConfig config = Frameworks.newConfigBuilder()
-                .parserConfig(SqlParser.Config.DEFAULT)
-                .defaultSchema(rootSchema)
-                .traitDefs((List<RelTraitDef>) null)
-                .programs(Programs.heuristicJoinOrder(Programs.RULE_SET, true, 2)).build();
-        RelConstructor relBuilder = RelConstructor.create(config);
-        RelNode original = relBuilder.var().filter(new RexVariable()).filter(new RexVariable()).build();
-        System.out.println(original.explain());
         hepPlanner.setRoot(original);
         RelNode optimized = hepPlanner.findBestExp();
-        List<RelNode> pair = new ArrayList<>(Arrays.asList(original, optimized));
-        StringBuilderWriter display = new StringBuilderWriter();
-        RelJSONShuttle.dumpToJSON(pair, display);
-        System.out.println(display);
+        if (!original.explain().equals(optimized.explain())) {
+            System.out.println(rule);
+        } else {
+            System.out.println(rule.getOperand());
+        }
+//        List<RelNode> pair = new ArrayList<>(Arrays.asList(original, optimized));
+//        StringBuilderWriter display = new StringBuilderWriter();
+//        RelJSONShuttle.dumpToJSON(pair, display);
+//        System.out.println(display);
     }
 
-}
+    public static void buildPattern(RelOptRuleOperand operand) {
+        if (operand.getChildOperands().size() == 0) {
+            relBuilder.var();
+        } else {
+            for (RelOptRuleOperand child : operand.getChildOperands()) {
+                buildPattern(child);
+            }
+        }
+        Class<? extends RelNode> type = operand.getMatchedClass();
+        if (type.isAssignableFrom(Aggregate.class)) {
 
-class RelConstructor extends RelBuilder {
-    protected RelConstructor(@Nullable Context context, RelOptCluster cluster,
-                             @Nullable RelOptSchema relOptSchema) {
-        super(context, cluster, relOptSchema);
+        } else if (type.isAssignableFrom(Values.class)) {
+
+        } else if (type.isAssignableFrom(Filter.class)) {
+            relBuilder.filter(new RexVariable());
+        } else if (type.isAssignableFrom(Project.class)) {
+
+        } else if (type.isAssignableFrom(Join.class)) {
+
+        } else if (type.isAssignableFrom(Correlate.class)) {
+
+        } else if (type.isAssignableFrom(Union.class)) {
+
+        } else if (type.isAssignableFrom(Minus.class)) {
+
+        } else if (type.isAssignableFrom(Sort.class)) {
+
+        } else if (type.isAssignableFrom(RelNode.class)) {
+            relBuilder.var();
+        }
     }
 
-    public static RelConstructor create(FrameworkConfig config) {
-        return Frameworks.withPrepare(config,
-                (cluster, relOptSchema, rootSchema, statement) ->
-                        new RelConstructor(config.getContext(), cluster, relOptSchema));
-    }
-
-    public RelBuilder var() {
-        push(new RelVariable(this.getCluster()));
-        return this;
-    }
 }

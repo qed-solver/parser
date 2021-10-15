@@ -55,6 +55,6 @@ public class RexVariable extends RexNode {
 
     @Override
     public String toString() {
-        return String.valueOf(id);
+        return "RexVar" + id;
     }
 }

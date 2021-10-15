@@ -307,7 +307,7 @@ public class RelJSONShuttle implements RelShuttle {
                 record.add(visitRexNode(rexLiteral, environment, 0).getRexNode());
             }
         }
-        relNode.set("value", value);
+        relNode.set("values", value);
         return null;
     }
 
