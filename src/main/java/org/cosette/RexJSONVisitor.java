@@ -62,7 +62,7 @@ public class RexJSONVisitor implements RexVisitor<ObjectNode> {
      * @return The ObjectNode corresponding to the given RexNode instance.
      */
     public ObjectNode visit(RexVariable variable) {
-        return rexNode.put("rexNode", variable.getId());
+        return rexNode.put("rexNode", variable.getId()).put("type", "ANY");
     }
 
     /**
@@ -74,7 +74,9 @@ public class RexJSONVisitor implements RexVisitor<ObjectNode> {
      */
     @Override
     public ObjectNode visitInputRef(RexInputRef inputRef) {
-        return rexNode.put("column", inputRef.getIndex() + environment.getLevel());
+        rexNode.put("column", inputRef.getIndex() + environment.getLevel());
+        rexNode.put("type", inputRef.getType().toString());
+        return rexNode;
     }
 
     @Override
@@ -93,6 +95,7 @@ public class RexJSONVisitor implements RexVisitor<ObjectNode> {
     public ObjectNode visitLiteral(RexLiteral literal) {
         rexNode.put("operator", literal.toString().toUpperCase(Locale.ROOT));
         rexNode.putArray("operand");
+        rexNode.put("type", literal.getType().toString());
         return rexNode;
     }
 
@@ -110,6 +113,7 @@ public class RexJSONVisitor implements RexVisitor<ObjectNode> {
         for (RexNode operand : call.getOperands()) {
             arguments.add(visitChild(operand));
         }
+        rexNode.put("type", call.getType().toString());
         return rexNode;
     }
 
@@ -143,6 +147,7 @@ public class RexJSONVisitor implements RexVisitor<ObjectNode> {
     @Override
     public ObjectNode visitFieldAccess(RexFieldAccess fieldAccess) {
         rexNode.put("column", fieldAccess.getField().getIndex() + environment.findLevel(((RexCorrelVariable) fieldAccess.getReferenceExpr()).id));
+        rexNode.put("type", fieldAccess.getType().toString());
         return rexNode;
     }
 
@@ -160,6 +165,7 @@ public class RexJSONVisitor implements RexVisitor<ObjectNode> {
         RelJSONShuttle relJsonShuttle = new RelJSONShuttle(environment.amend(null, input));
         subQuery.rel.accept(relJsonShuttle);
         arguments.add(relJsonShuttle.getRelNode());
+        rexNode.put("type", subQuery.getType().toString());
         return rexNode;
     }
 

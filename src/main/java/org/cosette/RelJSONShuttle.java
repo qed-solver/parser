@@ -17,6 +17,10 @@ import org.apache.calcite.rel.type.RelDataTypeField;
 import org.apache.calcite.rex.RexLiteral;
 import org.apache.calcite.rex.RexNode;
 import org.apache.calcite.schema.ColumnStrategy;
+import org.apache.calcite.schema.SchemaPlus;
+import org.apache.calcite.tools.FrameworkConfig;
+import org.apache.calcite.tools.Frameworks;
+import org.apache.calcite.tools.RelBuilder;
 import org.apache.calcite.util.ImmutableBitSet;
 import org.apache.calcite.util.mapping.IntPair;
 
@@ -186,7 +190,7 @@ public class RelJSONShuttle implements RelShuttle {
 
     /**
      * Visit a LogicalAggregation node. <br>
-     * Format: {distinct: {correlate: [{project: {target: [[group, type]], source: {input}}},
+     * Format: {distinct: {correlate: [{project: {target: [group], source: {input}}},
      * {aggregate: {function: [functions], source: {filter: {condition: {groups}, source: {inputCopy}}}}}]}}
      *
      * @param aggregate The given RelNode instance.
@@ -202,26 +206,27 @@ public class RelJSONShuttle implements RelShuttle {
         ObjectNode inputProject = environment.createNode();
         ObjectNode inputProjectArguments = environment.createNode();
         ArrayNode inputProjectTargets = inputProjectArguments.putArray("target");
-        List<RelDataTypeField> inputTypes = aggregate.getInput().getRowType().getFieldList();
 
         ObjectNode filter = environment.createNode();
         ObjectNode filterArguments = environment.createNode();
         ObjectNode condition = environment.createNode();
         condition.put("operator", "TRUE");
         condition.putArray("operand");
+        condition.put("type", "BOOLEAN");
         List<Integer> groups = new ArrayList<>(aggregate.getGroupSet().asList());
+        List<RelDataTypeField> types = aggregate.getInput().getRowType().getFieldList();
         for (int index = 0; index < groups.size(); index++) {
-            ArrayNode target = inputProjectTargets.addArray();
-            target.add(environment.createNode().put("column", level + groups.get(index)));
-            target.add(inputTypes.get(groups.get(index)).getType().toString());
-            ObjectNode leftColumn = environment.createNode().put("column", level + index);
-            ObjectNode rightColumn = environment.createNode().put("column", level + groups.get(index) + groupCount);
+            inputProjectTargets.add(environment.createNode().put("column", level + groups.get(index)).put("type", types.get(index).getType().toString()));
+            ObjectNode leftColumn = environment.createNode().put("column", level + index).put("type", types.get(index).getType().toString());
+            ObjectNode rightColumn = environment.createNode().put("column", level + groups.get(index) + groupCount).put("type", types.get(groups.get(index)).getType().toString());
             ObjectNode equivalence = environment.createNode();
             equivalence.put("operator", "=");
             equivalence.putArray("operand").add(leftColumn).add(rightColumn);
+            equivalence.put("type", "BOOLEAN");
             ObjectNode and = environment.createNode();
             and.put("operator", "AND");
             and.putArray("operand").add(condition).add(equivalence);
+            and.put("type", "BOOLEAN");
             condition = and;
         }
         inputProjectArguments.set("source", childShuttle.getRelNode());
@@ -239,9 +244,13 @@ public class RelJSONShuttle implements RelShuttle {
             function.put("operator", call.getAggregation().toString());
             ArrayNode operands = function.putArray("operand");
             for (int target : call.getArgList()) {
-                operands.add(environment.createNode().put("column", level + groupCount + target));
+                ObjectNode column = environment.createNode();
+                column.put("column", level + groupCount + target);
+                column.put("type", types.get(target).getType().toString());
+                operands.add(column);
             }
-            aggregationFunctions.addArray().add(function).add(call.type.toString());
+            function.put("type", call.getType().toString());
+            aggregationFunctions.add(function);
         }
         aggregationArguments.set("source", filter);
         aggregation.set("aggregate", aggregationArguments);
@@ -339,7 +348,7 @@ public class RelJSONShuttle implements RelShuttle {
 
     /**
      * Visit a LogicalProject node. <br>
-     * Format: {project: {target: [[column, type]], source: {input}}}
+     * Format: {project: {target: [column], source: {input}}}
      *
      * @param project The given RelNode instance.
      * @return Null, a placeholder required by interface.
@@ -351,11 +360,8 @@ public class RelJSONShuttle implements RelShuttle {
         ArrayNode parameters = arguments.putArray("target");
         RelJSONShuttle childShuttle = visitChild(project.getInput(), environment);
         List<RexNode> projects = project.getProjects();
-        List<RelDataTypeField> types = project.getRowType().getFieldList();
-        for (int index = 0; index < types.size(); index++) {
-            ArrayNode field = parameters.addArray();
-            field.add(visitRexNode(projects.get(index), environment, types.size()).getRexNode());
-            field.add(types.get(index).getType().toString());
+        for (int index = 0; index < projects.size(); index++) {
+            parameters.add(visitRexNode(projects.get(index), environment, projects.size()).getRexNode());
         }
         arguments.set("source", childShuttle.getRelNode());
         relNode.set("project", arguments);
@@ -364,7 +370,7 @@ public class RelJSONShuttle implements RelShuttle {
 
     /**
      * Visit a LogicalJoin node. <br>
-     * Format: {join: {type: {type}, condition: {condition}, left: {left}, right: {right}}}
+     * Format: {join: {kind: kind, condition: {condition}, left: {left}, right: {right}}}
      *
      * @param join The given RelNode instance.
      * @return Null, a placeholder required by interface.
@@ -374,7 +380,7 @@ public class RelJSONShuttle implements RelShuttle {
     public RelNode visit(LogicalJoin join) {
         // TODO: Correlation in condition?
         ObjectNode arguments = environment.createNode();
-        arguments.put("type", join.getJoinType().toString());
+        arguments.put("kind", join.getJoinType().toString());
         arguments.set("condition", visitRexNode(join.getCondition(), environment, 0).getRexNode());
         arguments.set("left", visitChild(join.getLeft(), environment).getRelNode());
         arguments.set("right", visitChild(join.getRight(), environment).getRelNode());
