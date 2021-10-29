@@ -3,6 +3,7 @@ package org.cosette;
 import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.RelRoot;
 import org.apache.calcite.sql.SqlNode;
+import org.apache.calcite.sql.SqlNodeList;
 import org.apache.calcite.sql.parser.SqlParseException;
 import org.apache.calcite.tools.ValidationException;
 
@@ -19,6 +20,7 @@ public class SQLParse {
 
     private final SchemaGenerator schemaGenerator;
     private final List<RelRoot> rootList;
+    private SqlNode sqlNode;
 
     /**
      * Create a new instance by setting up the SchemaGenerator instance and the list of RelRoot within.
@@ -26,6 +28,8 @@ public class SQLParse {
     public SQLParse() throws SQLException {
         schemaGenerator = new SchemaGenerator();
         rootList = new ArrayList<>();
+        // There's no constructor to instantiate a SQLNode.
+        sqlNode = null;
     }
 
     /**
@@ -44,9 +48,10 @@ public class SQLParse {
      */
     public void parseDML(String dml) throws SqlParseException, ValidationException {
         RawPlanner planner = schemaGenerator.createPlanner();
-        SqlNode sqlNode = planner.parse(dml);
+        SqlNode sNode = planner.parse(dml);
         RelRoot relRoot = planner.rel(sqlNode);
         rootList.add(relRoot);
+        sqlNode = sNode;
     }
 
     /**
@@ -60,6 +65,15 @@ public class SQLParse {
             nodeList.add(root.project());
         }
         RelJSONShuttle.dumpToJSON(nodeList, writer);
+    }
+
+    /**
+     * Dump the parsed statements to a writer.
+     *
+     * @param writer The given writer.
+     */
+    public void dumpToRacket(Writer writer) throws IOException {
+        SQLRacketShuttle.dumpToRacket(sqlNode, writer);
     }
 
     /**

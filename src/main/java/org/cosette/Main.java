@@ -69,10 +69,14 @@ public class Main {
                     }
                 }
             }
-            String outputPath = FilenameUtils.getPath(filename) + FilenameUtils.getBaseName(filename) + ".json";
-            BufferedWriter bufferedWriter = new BufferedWriter(new FileWriter(outputPath));
-            sqlParse.dumpToJSON(bufferedWriter);
-            bufferedWriter.close();
+            String jsonOutputPath = FilenameUtils.getPath(filename) + FilenameUtils.getBaseName(filename) + ".json";
+            String racketOutputPath = FilenameUtils.getPath(filename) + FilenameUtils.getBaseName(filename) + ".rkt";
+            BufferedWriter jsonBufferedWriter = new BufferedWriter(new FileWriter(jsonOutputPath));
+            BufferedWriter racketBufferedWriter = new BufferedWriter(new FileWriter(racketOutputPath));
+            sqlParse.dumpToJSON(jsonBufferedWriter);
+            jsonBufferedWriter.close();
+            sqlParse.dumpToRacket(racketBufferedWriter);
+            racketBufferedWriter.close();
             sqlParse.done();
             scanner.close();
         } catch (Exception e) {
