@@ -91,7 +91,7 @@ public class RelJSONShuttle implements RelShuttle {
 
             ArrayNode typeArray = tableObject.putArray("types");
             for (RelDataTypeField field : table.getRowType().getFieldList()) {
-                typeArray.add(field.getType().toString());
+                typeArray.add(field.getType().getSqlTypeName().name());
             }
 
             ArrayNode strategyArray = tableObject.putArray("strategy");
@@ -216,9 +216,9 @@ public class RelJSONShuttle implements RelShuttle {
         List<Integer> groups = new ArrayList<>(aggregate.getGroupSet().asList());
         List<RelDataTypeField> types = aggregate.getInput().getRowType().getFieldList();
         for (int index = 0; index < groups.size(); index++) {
-            inputProjectTargets.add(environment.createNode().put("column", level + groups.get(index)).put("type", types.get(index).getType().toString()));
-            ObjectNode leftColumn = environment.createNode().put("column", level + index).put("type", types.get(index).getType().toString());
-            ObjectNode rightColumn = environment.createNode().put("column", level + groups.get(index) + groupCount).put("type", types.get(groups.get(index)).getType().toString());
+            inputProjectTargets.add(environment.createNode().put("column", level + groups.get(index)).put("type", types.get(index).getType().getSqlTypeName().name()));
+            ObjectNode leftColumn = environment.createNode().put("column", level + index).put("type", types.get(index).getType().getSqlTypeName().name());
+            ObjectNode rightColumn = environment.createNode().put("column", level + groups.get(index) + groupCount).put("type", types.get(groups.get(index)).getType().getSqlTypeName().name());
             ObjectNode equivalence = environment.createNode();
             equivalence.put("operator", "=");
             equivalence.putArray("operand").add(leftColumn).add(rightColumn);
@@ -246,10 +246,10 @@ public class RelJSONShuttle implements RelShuttle {
             for (int target : call.getArgList()) {
                 ObjectNode column = environment.createNode();
                 column.put("column", level + groupCount + target);
-                column.put("type", types.get(target).getType().toString());
+                column.put("type", types.get(target).getType().getSqlTypeName().name());
                 operands.add(column);
             }
-            function.put("type", call.getType().toString());
+            function.put("type", call.getType().getSqlTypeName().name());
             aggregationFunctions.add(function);
         }
         aggregationArguments.set("source", filter);
@@ -308,7 +308,7 @@ public class RelJSONShuttle implements RelShuttle {
         ArrayNode schema = value.putArray("schema");
         ArrayNode content = value.putArray("content");
         for (RelDataTypeField relDataTypeField : values.getRowType().getFieldList()) {
-            schema.add(relDataTypeField.getType().toString());
+            schema.add(relDataTypeField.getType().getSqlTypeName().name());
         }
         for (List<RexLiteral> tuple : values.getTuples()) {
             ArrayNode record = content.addArray();
@@ -467,7 +467,7 @@ public class RelJSONShuttle implements RelShuttle {
         for (RelFieldCollation collation : sort.collation.getFieldCollations()) {
             ArrayNode column = collations.addArray();
             int index = collation.getFieldIndex();
-            column.add(index + environment.getLevel()).add(types.get(index).getType().toString()).add(collation.shortString());
+            column.add(index + environment.getLevel()).add(types.get(index).getType().getSqlTypeName().name()).add(collation.shortString());
         }
         if (sort.offset != null) {
             arguments.set("offset", visitRexNode(sort.offset, environment, 0).getRexNode());

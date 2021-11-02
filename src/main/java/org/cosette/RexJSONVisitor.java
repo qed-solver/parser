@@ -6,6 +6,7 @@ import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rex.*;
 
 import java.util.Locale;
+import java.util.Objects;
 
 /**
  * AN implementation of RexVisitor interface that could convert a RelNode instance to a ObjectNode instance.
@@ -75,7 +76,7 @@ public class RexJSONVisitor implements RexVisitor<ObjectNode> {
     @Override
     public ObjectNode visitInputRef(RexInputRef inputRef) {
         rexNode.put("column", inputRef.getIndex() + environment.getLevel());
-        rexNode.put("type", inputRef.getType().toString());
+        rexNode.put("type", inputRef.getType().getSqlTypeName().name());
         return rexNode;
     }
 
@@ -93,9 +94,9 @@ public class RexJSONVisitor implements RexVisitor<ObjectNode> {
      */
     @Override
     public ObjectNode visitLiteral(RexLiteral literal) {
-        rexNode.put("operator", literal.toString().toUpperCase(Locale.ROOT));
+        rexNode.put("operator", Objects.requireNonNull(literal.getValue()).toString().toUpperCase(Locale.ROOT));
         rexNode.putArray("operand");
-        rexNode.put("type", literal.getType().toString());
+        rexNode.put("type", literal.getType().getSqlTypeName().name());
         return rexNode;
     }
 
@@ -113,7 +114,7 @@ public class RexJSONVisitor implements RexVisitor<ObjectNode> {
         for (RexNode operand : call.getOperands()) {
             arguments.add(visitChild(operand));
         }
-        rexNode.put("type", call.getType().toString());
+        rexNode.put("type", call.getType().getSqlTypeName().name());
         return rexNode;
     }
 
@@ -147,7 +148,7 @@ public class RexJSONVisitor implements RexVisitor<ObjectNode> {
     @Override
     public ObjectNode visitFieldAccess(RexFieldAccess fieldAccess) {
         rexNode.put("column", fieldAccess.getField().getIndex() + environment.findLevel(((RexCorrelVariable) fieldAccess.getReferenceExpr()).id));
-        rexNode.put("type", fieldAccess.getType().toString());
+        rexNode.put("type", fieldAccess.getType().getSqlTypeName().name());
         return rexNode;
     }
 
@@ -165,7 +166,7 @@ public class RexJSONVisitor implements RexVisitor<ObjectNode> {
         RelJSONShuttle relJsonShuttle = new RelJSONShuttle(environment.amend(null, input));
         subQuery.rel.accept(relJsonShuttle);
         arguments.add(relJsonShuttle.getRelNode());
-        rexNode.put("type", subQuery.getType().toString());
+        rexNode.put("type", subQuery.getType().getSqlTypeName().name());
         return rexNode;
     }
 
