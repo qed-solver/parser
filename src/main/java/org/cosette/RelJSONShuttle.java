@@ -216,9 +216,10 @@ public class RelJSONShuttle implements RelShuttle {
         List<Integer> groups = new ArrayList<>(aggregate.getGroupSet().asList());
         List<RelDataTypeField> types = aggregate.getInput().getRowType().getFieldList();
         for (int index = 0; index < groups.size(); index++) {
-            inputProjectTargets.add(environment.createNode().put("column", level + groups.get(index)).put("type", types.get(index).getType().getSqlTypeName().name()));
-            ObjectNode leftColumn = environment.createNode().put("column", level + index).put("type", types.get(index).getType().getSqlTypeName().name());
-            ObjectNode rightColumn = environment.createNode().put("column", level + groups.get(index) + groupCount).put("type", types.get(groups.get(index)).getType().getSqlTypeName().name());
+            String type = types.get(groups.get(index)).getType().getSqlTypeName().name();
+            inputProjectTargets.add(environment.createNode().put("column", level + groups.get(index)).put("type", type));
+            ObjectNode leftColumn = environment.createNode().put("column", level + index).put("type", type);
+            ObjectNode rightColumn = environment.createNode().put("column", level + groupCount + groups.get(index)).put("type", type);
             ObjectNode equivalence = environment.createNode();
             equivalence.put("operator", "=");
             equivalence.putArray("operand").add(leftColumn).add(rightColumn);
