@@ -35,7 +35,7 @@ import java.util.Set;
 public class SQLRacketShuttle extends SqlShuttle {
 
 //    private final Environment environment;
-    private ArrayList<String> racketInput;
+    private static ArrayList<String> racketInput;
 
     /**
      * Initialize the shuttle with a given environment.
@@ -71,6 +71,8 @@ public class SQLRacketShuttle extends SqlShuttle {
 
         // extra
         // FETCH, LIMIT, ORDER BY (all part of SELECT)
+
+        writer.write(String.join("", racketInput));
     }
 
     /**
@@ -95,7 +97,6 @@ public class SQLRacketShuttle extends SqlShuttle {
             if (word.equals("AS")) {
                 break;
             }
-            System.out.println(word);
             word = word.replaceAll("`", "");
             toReturn = toReturn + word;
         }
@@ -158,6 +159,7 @@ public class SQLRacketShuttle extends SqlShuttle {
 
         racketInput.add(")");
 
+        System.out.println("racket input");
         System.out.println(String.join("", racketInput));
         return null;
     }
@@ -188,7 +190,7 @@ public class SQLRacketShuttle extends SqlShuttle {
      * @return Null, a placeholder required by interface.
      */
     public SqlNode visit(SqlIdentifier id) {
-        System.out.println("id");
+        System.out.println("ID\n");
 
         racketInput.add(" \"" + id.toString() + "\"");
 
