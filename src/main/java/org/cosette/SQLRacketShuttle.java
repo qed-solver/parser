@@ -82,6 +82,27 @@ public class SQLRacketShuttle extends SqlShuttle {
     }
 
 
+    /**
+     * Formats a string for the aliased table extracted from a SQL FROM clause.
+     * @param from
+     * @return String, racket formatted from clause.
+     */
+    private String helpFormatFrom(String from) {
+        String[] fromWords = from.split(" ");
+        String toReturn = " ";
+
+        for (String word : fromWords) {
+            if (word.equals("AS")) {
+                break;
+            }
+            System.out.println(word);
+            word = word.replaceAll("`", "");
+            toReturn = toReturn + word;
+        }
+        return toReturn;
+    }
+
+
     // REQUIRED TO IMPLEMENT INTERFACE
 
     /**
@@ -93,24 +114,41 @@ public class SQLRacketShuttle extends SqlShuttle {
         System.out.println("SQL CALL");
 
         SqlKind sqlKind = call.getKind();
+        racketInput.add("(");
 
         switch (sqlKind) {
             case SELECT:
-                System.out.println("\tSQL SELECT");
+                System.out.println("\tSQL SELECT\n");
+                racketInput.add("SELECT");
 
                 // if there's a group by, string should have SELECT-GROUP
                 // otherwise just SELECT
                 SqlSelect sqlSelect = (SqlSelect) call;
-//                racketInput
 
-                System.out.println(((SqlSelect) call).getFrom());
+                List<SqlNode> selectList = sqlSelect.getSelectList();
+                if (!selectList.isEmpty()) {
+                    racketInput.add(" (VALS");
+                }
 
+                for (SqlNode select : selectList) {
+                    select.accept(this);
+                }
+                racketInput.add(")");
+
+
+                SqlNode from = sqlSelect.getFrom();
+                if (!from.toString().isEmpty()) {
+                    racketInput.add(" FROM");
+
+                    racketInput.add((" (NAMED"));
+                    racketInput.add(helpFormatFrom(from.toString()));
+                    racketInput.add(")");
+                }
 
 
 
 //                call.accept(this);
                 break;
-
 
             case JOIN:
                 System.out.println("\tSQL JOIN");
@@ -118,6 +156,9 @@ public class SQLRacketShuttle extends SqlShuttle {
         }
 
 
+        racketInput.add(")");
+
+        System.out.println(String.join("", racketInput));
         return null;
     }
 
@@ -148,6 +189,9 @@ public class SQLRacketShuttle extends SqlShuttle {
      */
     public SqlNode visit(SqlIdentifier id) {
         System.out.println("id");
+
+        racketInput.add(" \"" + id.toString() + "\"");
+
         return null;
     }
 

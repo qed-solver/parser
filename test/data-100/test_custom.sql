@@ -4,17 +4,4 @@ CREATE TABLE indiv_sample_nyc(
     name VARCHAR(10)
     );
 
-SELECT
-    cmte_id,
-    transaction_amt,
-    name
-FROM indiv_sample_nyc
-WHERE  (name LIKE '%TRUMP%') AND  (name LIKE '%DONALD%') 
-GROUP BY cmte_id, transaction_amt, name
-
-
-
-
-
-
-
+SELECT * FROM indiv_sample_nyc
