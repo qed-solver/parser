@@ -57,7 +57,7 @@ public class SQLRacketShuttle extends SqlShuttle {
         SQLRacketShuttle sqlRacketShuttle = new SQLRacketShuttle();
 
         // Add required headers & modules.
-        racketInput.add("#lang rosette\n");
+        racketInput.add("#lang rosette\n\n");
         racketInput.add("(require \"../util.rkt\" \"../sql.rkt\" \"../table.rkt\"  \"../evaluator.rkt\" \"../equal.rkt\")\n\n");
 
         sqlNode.accept(sqlRacketShuttle);
@@ -143,7 +143,7 @@ public class SQLRacketShuttle extends SqlShuttle {
 
 
                 SqlNode from = sqlSelect.getFrom();
-                if (from == null) {
+                if (from != null) {
                     racketInput.add(" FROM");
 
                     racketInput.add((" (NAMED"));
