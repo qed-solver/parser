@@ -55,6 +55,11 @@ public class SQLRacketShuttle extends SqlShuttle {
         // writer.write(String);
 
         SQLRacketShuttle sqlRacketShuttle = new SQLRacketShuttle();
+
+        // Add required headers & modules.
+        racketInput.add("#lang rosette\n");
+        racketInput.add("(require \"../util.rkt\" \"../sql.rkt\" \"../table.rkt\"  \"../evaluator.rkt\" \"../equal.rkt\")\n\n");
+
         sqlNode.accept(sqlRacketShuttle);
 
 //        System.out.println(sqlNode.toString());
@@ -138,7 +143,7 @@ public class SQLRacketShuttle extends SqlShuttle {
 
 
                 SqlNode from = sqlSelect.getFrom();
-                if (!from.toString().isEmpty()) {
+                if (from == null) {
                     racketInput.add(" FROM");
 
                     racketInput.add((" (NAMED"));
@@ -146,9 +151,13 @@ public class SQLRacketShuttle extends SqlShuttle {
                     racketInput.add(")");
                 }
 
-
-
-//                call.accept(this);
+                SqlNode where = sqlSelect.getWhere();
+                if (where == null) {
+                    racketInput.add(" WHERE (TRUE)");
+                } else {
+                    racketInput.add(" WHERE");
+                    racketInput.add(where.toString());
+                }
                 break;
 
             case JOIN:
