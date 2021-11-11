@@ -36,6 +36,8 @@ public class SQLRacketShuttle extends SqlShuttle {
 
 //    private final Environment environment;
     private static ArrayList<String> racketInput;
+    private static boolean isFirstTable;
+    private static int numTablesDefined;
 
     /**
      * Initialize the shuttle with a given environment.
@@ -43,30 +45,35 @@ public class SQLRacketShuttle extends SqlShuttle {
      */
     public SQLRacketShuttle() {
         racketInput = new ArrayList<>();
+        isFirstTable = true;
+        numTablesDefined = 0;
     }
 
     /**
      * Dump a SqlNode to a writer in JSON format .
      *
-     * @param sqlNode The given SQLNode.
+     * @param sqlNodeList The given list of SQLNodes.
      * @param writer   The given writer.
      */
-    public static void dumpToRacket(SqlNode sqlNode, Writer writer) throws IOException {
+    public static void dumpToRacket(List<SqlNode> sqlNodeList, String ddl, Writer writer) throws IOException {
         // writer.write(String);
 
         SQLRacketShuttle sqlRacketShuttle = new SQLRacketShuttle();
 
         // Add required headers & modules.
         racketInput.add("#lang rosette\n\n");
-        racketInput.add("(require \"../util.rkt\" \"../sql.rkt\" \"../table.rkt\"  \"../evaluator.rkt\" \"../equal.rkt\")\n\n");
+        racketInput.add("(require \"../util.rkt\" \"../sql.rkt\" \"../table.rkt\"  \"../evaluator.rkt\" \"../equal.rkt\" \"../cosette.rkt\")\n\n");
 
-        sqlNode.accept(sqlRacketShuttle);
+        racketInput.add(helpFormatDDL(ddl));
 
-//        System.out.println(sqlNode.toString());
-//        System.out.println();
-//
-//        SqlSelect select = (SqlSelect) sqlNode;
-//        System.out.println(select.getGroup());
+        for (SqlNode sqlNode : sqlNodeList) {
+            sqlNode.accept(sqlRacketShuttle);
+
+            // Add line spacing for next statement.
+            racketInput.add("\n\n");
+
+            isFirstTable = false;
+        }
 
         // basic implementation
         // need to support SELECT (FROM, WHERE, GROUP BY, HAVING, WHERE), JOIN
@@ -77,6 +84,13 @@ public class SQLRacketShuttle extends SqlShuttle {
         // extra
         // FETCH, LIMIT, ORDER BY (all part of SELECT)
 
+        // add code to run Rosette counterexample engine
+        // THIS DEPENDS ON THE NUMBER OF TABLES BEING REFERENCED!!!
+        racketInput.add(helpFormatRun(numTablesDefined));
+
+        System.out.println("racket input");
+        System.out.println(String.join("", racketInput));
+
         writer.write(String.join("", racketInput));
     }
 
@@ -86,6 +100,72 @@ public class SQLRacketShuttle extends SqlShuttle {
     public String getRacketInput() {
 //        return racketInput;
         return "";
+    }
+
+    /**
+     * Formats Rosette run call for given racket file.
+     * @param numTables
+     * @return String, racket formatted from clause.
+     */
+    private static String helpFormatRun(int numTables) {
+        String runCall = "\n(let* ([model (verify (same q1s q2s))]\n";
+
+        for (int i = 0; i < numTables; i++) {
+            runCall = runCall + "\t   [concrete-t" + (i + 1) + " (clean-ret-table (evaluate t1 model))]\n";
+        }
+
+        for (int i = 0; i < numTables; i++) {
+            runCall = runCall + "\t(println concrete-t" + (i + 1) + "\n";
+        }
+        runCall = runCall + ")";
+
+        return runCall;
+    }
+
+    /**
+     * Formats CREATE_TABLE for the aliased table extracted from using DDL.
+     * @param ddl
+     * @return String, racket formatted from clause.
+     */
+    private static String helpFormatDDL(String ddl) {
+        String[] ddlWords = ddl.toUpperCase().split(" ");
+        ArrayList<String> toReturnArr = new ArrayList<>();
+        String toReturn = "";
+        String tableName = "";
+        int numCols = 0;
+
+        for (int i = 1; i < ddlWords.length; i++) {
+            String word = ddlWords[i - 1];
+            String word2 = ddlWords[i];
+
+            if (word.equals("CREATE")) {
+                numTablesDefined++;
+                toReturnArr.add("(define ");
+            }
+            if (word.equals("TABLE")) {
+                tableName = word2.replace("(", "");
+                toReturnArr.add(tableName);
+                toReturnArr.add(" (Table ");
+                toReturnArr.add("\"" + tableName + "\"");
+                toReturnArr.add(" (list");
+            }
+
+            // NEED TO CLEAN THIS UP TO ADD COLUMN NAMES
+            System.out.println(word2);
+            System.out.println("hello");
+            if (word2.equals("INT,\n")) {
+                System.out.println("FOUND INT");
+                numCols++;
+                toReturnArr.add(" " + tableName + "." + word);
+            }
+        }
+        toReturnArr.add("\n");
+
+        for (String r: toReturnArr) {
+            toReturn = toReturn + r;
+        }
+
+        return toReturn;
     }
 
 
@@ -121,6 +201,12 @@ public class SQLRacketShuttle extends SqlShuttle {
 
         SqlKind sqlKind = call.getKind();
         racketInput.add("(");
+
+        if (isFirstTable) {
+            racketInput.add("define q1s (");
+        } else {
+            racketInput.add("define q2s (");
+        }
 
         switch (sqlKind) {
             case SELECT:
@@ -166,10 +252,7 @@ public class SQLRacketShuttle extends SqlShuttle {
         }
 
 
-        racketInput.add(")");
-
-        System.out.println("racket input");
-        System.out.println(String.join("", racketInput));
+        racketInput.add("))");
         return null;
     }
 

@@ -5,7 +5,7 @@ based on that of [Apache Calcite](https://calcite.apache.org/).
 
 ## Requirements
 
-Java version 11.
+Java version 16 or higher.
 
 ## Get Cosette Parser
 
