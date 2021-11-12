@@ -3,7 +3,6 @@ package org.cosette;
 import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.RelRoot;
 import org.apache.calcite.sql.SqlNode;
-import org.apache.calcite.sql.SqlNodeList;
 import org.apache.calcite.sql.parser.SqlParseException;
 import org.apache.calcite.tools.ValidationException;
 
@@ -20,7 +19,8 @@ public class SQLParse {
 
     private final SchemaGenerator schemaGenerator;
     private final List<RelRoot> rootList;
-    private SqlNode sqlNode;
+    private List<SqlNode> sqlNodeList;
+    private String ddlString;
 
     /**
      * Create a new instance by setting up the SchemaGenerator instance and the list of RelRoot within.
@@ -29,7 +29,8 @@ public class SQLParse {
         schemaGenerator = new SchemaGenerator();
         rootList = new ArrayList<>();
         // There's no constructor to instantiate a SQLNode.
-        sqlNode = null;
+        sqlNodeList = new ArrayList<>();
+        ddlString = "";
     }
 
     /**
@@ -39,6 +40,7 @@ public class SQLParse {
      */
     public void applyDDL(String ddl) throws SQLException, SqlParseException {
         schemaGenerator.applyDDL(ddl);
+        ddlString = ddl;
     }
 
     /**
@@ -48,10 +50,10 @@ public class SQLParse {
      */
     public void parseDML(String dml) throws SqlParseException, ValidationException {
         RawPlanner planner = schemaGenerator.createPlanner();
-        SqlNode sNode = planner.parse(dml);
+        SqlNode sqlNode = planner.parse(dml);
         RelRoot relRoot = planner.rel(sqlNode);
         rootList.add(relRoot);
-        sqlNode = sNode;
+        sqlNodeList.add(sqlNode);
     }
 
     /**
@@ -73,7 +75,7 @@ public class SQLParse {
      * @param writer The given writer.
      */
     public void dumpToRacket(Writer writer) throws IOException {
-        SQLRacketShuttle.dumpToRacket(sqlNode, writer);
+        SQLRacketShuttle.dumpToRacket(sqlNodeList, ddlString, writer);
     }
 
     /**

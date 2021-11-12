@@ -4,4 +4,6 @@ CREATE TABLE indiv_sample_nyc(
     name VARCHAR(10)
     );
 
-SELECT * FROM indiv_sample_nyc
+SELECT * FROM indiv_sample_nyc;
+
+SELECT cmte_id, name FROM indiv_sample_nyc;
