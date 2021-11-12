@@ -151,12 +151,10 @@ public class SQLRacketShuttle extends SqlShuttle {
             }
 
             // NEED TO CLEAN THIS UP TO ADD COLUMN NAMES
-            System.out.println(word2);
-            System.out.println("hello");
             if (word2.equals("INT,\n")) {
                 System.out.println("FOUND INT");
                 numCols++;
-                toReturnArr.add(" " + tableName + "." + word);
+                toReturnArr.add(" " + tableName + "." + word.trim());
             }
         }
         toReturnArr.add("\n");
