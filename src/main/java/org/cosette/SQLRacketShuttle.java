@@ -26,6 +26,7 @@ import org.apache.calcite.util.mapping.IntPair;
 import java.io.IOException;
 import java.io.Writer;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
 
@@ -108,6 +109,52 @@ public class SQLRacketShuttle extends SqlShuttle {
         return toReturn;
     }
 
+    private String helpFormatWhereClause(String operand) {
+        if (operand.charAt(0) == '`') {
+            // `INDIV_SAMPLE_NYC`.`CMTE_ID` => "INDIV_SAMPLE_NYC.CMTE_ID"
+            operand = operand.replaceAll("`", "");
+            return "\"" + operand + "\"";
+        } else return operand;
+    }
+
+    private void helpFormatWhere(SqlNode where) {
+        SqlKind comparisonType = where.getKind();
+        switch (comparisonType) {
+            case LESS_THAN:
+            case GREATER_THAN:
+            case LESS_THAN_OR_EQUAL:
+            case GREATER_THAN_OR_EQUAL:
+            case EQUALS: {
+                String[] whereTokens = where.toString().split(" ");
+                whereTokens[0] = helpFormatWhereClause(whereTokens[0]);
+                whereTokens[2] = helpFormatWhereClause(whereTokens[2]);
+                racketInput.add(" (BINOP " + String.join(" ", whereTokens) + ")");
+                break;
+            }
+            case OR:
+            case AND: {
+                // For OR and AND Operand, (sqlNode)where consists of "(BINOP WHERE) + (OR || AND) + (BINOP WHERE)"
+                // Thus, we need to recursively parse where clause
+                List<SqlNode> whereOperands = ((SqlBasicCall) where).getOperandList();
+                racketInput.add(" (" + comparisonType);
+                helpFormatWhere(whereOperands.get(0));
+                helpFormatWhere(whereOperands.get(1));
+                racketInput.add(" )");
+                break;
+            }
+            case NOT_EQUALS: {
+                // For queries like "WHERE id <> 3",  (Calcite library hasn't support "!=" yet)
+                // tranform it to racket format as "WHERE (NOT (BINOP id = 3))"
+                String[] whereTokens = where.toString().split(" ");
+                whereTokens[0] = helpFormatWhereClause(whereTokens[0]);
+                whereTokens[1] = "=";
+                whereTokens[2] = helpFormatWhereClause(whereTokens[2]);
+                racketInput.add(" (NOT (BINOP " + String.join(" ", whereTokens) + ") )");
+                break;
+            }
+        }
+    }
+
 
     // REQUIRED TO IMPLEMENT INTERFACE
 
@@ -156,7 +203,7 @@ public class SQLRacketShuttle extends SqlShuttle {
                     racketInput.add(" WHERE (TRUE)");
                 } else {
                     racketInput.add(" WHERE");
-                    racketInput.add(where.toString());
+                    helpFormatWhere(where);
                 }
                 break;
 
