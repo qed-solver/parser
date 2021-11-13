@@ -38,6 +38,7 @@ public class SQLRacketShuttle extends SqlShuttle {
     private static ArrayList<String> racketInput;
     private static boolean isFirstTable;
     private static int numTablesDefined;
+    private static ArrayList<String> tableNames;
 
     /**
      * Initialize the shuttle with a given environment.
@@ -47,6 +48,7 @@ public class SQLRacketShuttle extends SqlShuttle {
         racketInput = new ArrayList<>();
         isFirstTable = true;
         numTablesDefined = 0;
+        tableNames = new ArrayList<>();
     }
 
     /**
@@ -111,11 +113,15 @@ public class SQLRacketShuttle extends SqlShuttle {
         String runCall = "\n(let* ([model (verify (same q1s q2s))]\n";
 
         for (int i = 0; i < numTables; i++) {
-            runCall = runCall + "\t   [concrete-t" + (i + 1) + " (clean-ret-table (evaluate t1 model))]\n";
+            runCall = runCall + "\t   [concrete-t" + (i + 1) + " (clean-ret-table (evaluate " + tableNames.get(i) + " model))]";
+            if (i != numTables - 1) {
+                runCall = runCall + "\n";
+            }
         }
+        runCall = runCall + ")\n";
 
         for (int i = 0; i < numTables; i++) {
-            runCall = runCall + "\t(println concrete-t" + (i + 1) + "\n";
+            runCall = runCall + "\t(println concrete-t" + (i + 1) + ")\n";
         }
         runCall = runCall + ")";
 
@@ -128,13 +134,20 @@ public class SQLRacketShuttle extends SqlShuttle {
      * @return String, racket formatted from clause.
      */
     private static String helpFormatDDL(String ddl) {
-        String[] ddlWords = ddl.toUpperCase().split(" ");
+        // strip newlines, tabs, 4 spaces used for indentation
+        // change to uppercase then get array
+        String[] ddlWords = ddl.replaceAll("\t", "")
+                .replaceAll("\n", "")
+                .replaceAll("    ", " ")
+                .toUpperCase().split(" ");
         ArrayList<String> toReturnArr = new ArrayList<>();
+        boolean addedCreateTable = false;
         String toReturn = "";
         String tableName = "";
         int numCols = 0;
 
         for (int i = 1; i < ddlWords.length; i++) {
+//            System.out.println(ddlWords[i - 1]);
             String word = ddlWords[i - 1];
             String word2 = ddlWords[i];
 
@@ -144,20 +157,27 @@ public class SQLRacketShuttle extends SqlShuttle {
             }
             if (word.equals("TABLE")) {
                 tableName = word2.replace("(", "");
+                tableNames.add(tableName);
                 toReturnArr.add(tableName);
                 toReturnArr.add(" (Table ");
                 toReturnArr.add("\"" + tableName + "\"");
                 toReturnArr.add(" (list");
+                addedCreateTable = true;
+                continue;
             }
 
-            // NEED TO CLEAN THIS UP TO ADD COLUMN NAMES
-            if (word2.equals("INT,\n")) {
-                System.out.println("FOUND INT");
+            if (word2.equals(")")) {
+                toReturnArr.add(") (gen-sym-schema " + numCols + " 1)))");
+                break;
+            }
+
+            if (addedCreateTable) {
                 numCols++;
-                toReturnArr.add(" " + tableName + "." + word.trim());
+                i++;
+                toReturnArr.add(" \"" + word2.trim() + "\"");
             }
         }
-        toReturnArr.add("\n");
+        toReturnArr.add("\n\n");
 
         for (String r: toReturnArr) {
             toReturn = toReturn + r;
