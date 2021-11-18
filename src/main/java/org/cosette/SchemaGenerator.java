@@ -1,5 +1,6 @@
 package org.cosette;
 
+import org.apache.calcite.config.CalciteConnectionConfig;
 import org.apache.calcite.config.CalciteConnectionProperty;
 import org.apache.calcite.jdbc.CalciteConnection;
 import org.apache.calcite.schema.SchemaPlus;
@@ -9,9 +10,11 @@ import org.apache.calcite.sql.ddl.SqlCreateTable;
 import org.apache.calcite.sql.ddl.SqlKeyConstraint;
 import org.apache.calcite.sql.parser.SqlParseException;
 import org.apache.calcite.sql.parser.SqlParser;
+import org.apache.calcite.sql.parser.SqlParserPos;
 import org.apache.calcite.sql.parser.ddl.SqlDdlParserImpl;
 import org.apache.calcite.sql.util.SqlShuttle;
 import org.checkerframework.checker.nullness.qual.Nullable;
+import org.apache.calcite.sql.validate.SqlConformanceEnum;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -40,9 +43,10 @@ public class SchemaGenerator {
         info.setProperty(CalciteConnectionProperty.MATERIALIZATIONS_ENABLED.camelName(), "false");
         info.setProperty(CalciteConnectionProperty.QUOTING.camelName(), "back_tick");
         info.setProperty(CalciteConnectionProperty.PARSER_FACTORY.camelName(), ServerDdlExecutor.class.getName() + "#PARSER_FACTORY");
+        info.setProperty(CalciteConnectionProperty.CONFORMANCE.camelName(), SqlConformanceEnum.BABEL.name());
         Connection connection = DriverManager.getConnection("jdbc:calcite:", info);
         calciteConnection = connection.unwrap(CalciteConnection.class);
-        parserConfig = SqlParser.Config.DEFAULT.withParserFactory(SqlDdlParserImpl.FACTORY);
+        parserConfig = SqlParser.Config.DEFAULT.withParserFactory(SqlDdlParserImpl.FACTORY).withConformance(SqlConformanceEnum.BABEL);
         constraints = new HashMap<>();
     }
 
@@ -116,7 +120,7 @@ class ConstraintExtractor extends SqlShuttle {
      */
     public ConstraintExtractor() {
         super();
-        name = null;
+        name = new SqlIdentifier("", new SqlParserPos(0, 0));
         constraints = new HashMap<>();
         constraints.put(SqlKind.PRIMARY_KEY, new ArrayList<>());
         constraints.put(SqlKind.FOREIGN_KEY, new ArrayList<>());

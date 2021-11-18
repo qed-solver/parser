@@ -101,8 +101,7 @@ public class SQLRacketShuttle extends SqlShuttle {
      * @return The String corresponding to the Racket input for the SqlNode instance.
      */
     public String getRacketInput() {
-//        return racketInput;
-        return "";
+        return String.join("", racketInput);
     }
 
     /**
@@ -242,7 +241,7 @@ public class SQLRacketShuttle extends SqlShuttle {
             }
             case NOT_EQUALS: {
                 // For queries like "WHERE id <> 3",  (Calcite library hasn't support "!=" yet)
-                // tranform it to racket format as "WHERE (NOT (BINOP id = 3))"
+                // transform it to racket format as "WHERE (NOT (BINOP id = 3))"
                 String[] whereTokens = where.toString().split(" ");
                 whereTokens[0] = helpFormatWhereClause(whereTokens[0]);
                 whereTokens[1] = "=";
@@ -301,7 +300,6 @@ public class SQLRacketShuttle extends SqlShuttle {
                     racketInput.add(helpFormatFrom(from.toString()));
                     racketInput.add(")");
                 }
-
                 SqlNode where = sqlSelect.getWhere();
                 if (where == null) {
                     racketInput.add(" WHERE (TRUE)");

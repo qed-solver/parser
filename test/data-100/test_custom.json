@@ -10,19 +10,6 @@
       "target" : [ [ {
         "column" : 0
       }, "INTEGER" ], [ {
-        "column" : 1
-      }, "INTEGER" ], [ {
-        "column" : 2
-      }, "VARCHAR(10)" ] ],
-      "source" : {
-        "scan" : 0
-      }
-    }
-  }, {
-    "project" : {
-      "target" : [ [ {
-        "column" : 0
-      }, "INTEGER" ], [ {
         "column" : 2
       }, "VARCHAR(10)" ] ],
       "source" : {
@@ -30,5 +17,5 @@
       }
     }
   } ],
-  "help" : [ "LogicalProject(CMTE_ID=[$0], TRANSACTION_AMT=[$1], NAME=[$2])\n  LogicalTableScan(table=[[INDIV_SAMPLE_NYC]])\n", "LogicalProject(CMTE_ID=[$0], NAME=[$2])\n  LogicalTableScan(table=[[INDIV_SAMPLE_NYC]])\n" ]
+  "help" : [ "LogicalProject(CMTE_ID=[$0], NAME=[$2])\n  LogicalTableScan(table=[[INDIV_SAMPLE_NYC]])\n" ]
 }

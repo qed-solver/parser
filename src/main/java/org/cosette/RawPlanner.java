@@ -26,6 +26,7 @@ import org.apache.calcite.sql.SqlOperatorTable;
 import org.apache.calcite.sql.parser.SqlParseException;
 import org.apache.calcite.sql.parser.SqlParser;
 import org.apache.calcite.sql.util.SqlOperatorTables;
+import org.apache.calcite.sql.validate.SqlConformanceEnum;
 import org.apache.calcite.sql.validate.SqlValidator;
 import org.apache.calcite.sql.validate.SqlValidatorImpl;
 import org.apache.calcite.sql2rel.RelDecorrelator;
@@ -86,7 +87,7 @@ public class RawPlanner implements RelOptTable.ViewExpander {
                 .withTrimUnusedFields(false);
         FrameworkConfig config = Frameworks.newConfigBuilder()
                 .defaultSchema(schema)
-                .parserConfig(SqlParser.Config.DEFAULT.withQuoting(Quoting.BACK_TICK))
+                .parserConfig(SqlParser.Config.DEFAULT.withQuoting(Quoting.BACK_TICK).withConformance(SqlConformanceEnum.BABEL))
                 .sqlToRelConverterConfig(converterConfig)
                 .build();
         this.costFactory = config.getCostFactory();
