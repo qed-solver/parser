@@ -41,6 +41,11 @@ public class SQLRacketShuttle extends SqlShuttle {
     private static int numTablesDefined;
     private static ArrayList<String> tableNames;
 
+    // variable for one query
+    // should re-initialize value after finishing performing one query.
+    private static ArrayList<String> tableCols;
+    private static boolean hasJoin;
+    private static String newJoinedTableName;
     /**
      * Initialize the shuttle with a given environment.
      *
@@ -50,6 +55,11 @@ public class SQLRacketShuttle extends SqlShuttle {
         isFirstTable = true;
         numTablesDefined = 0;
         tableNames = new ArrayList<>();
+
+
+        tableCols = new ArrayList<>();
+        hasJoin = false;
+        newJoinedTableName = "";
     }
 
     /**
@@ -76,6 +86,9 @@ public class SQLRacketShuttle extends SqlShuttle {
             racketInput.add("\n\n");
 
             isFirstTable = false;
+            tableCols = new ArrayList<>();
+            hasJoin = false;
+            newJoinedTableName = "";
         }
 
         // basic implementation
@@ -252,9 +265,15 @@ public class SQLRacketShuttle extends SqlShuttle {
         }
     }
 
+    private String[] helperGetJoinTables(SqlJoin join) {
+        // idx 0 -> Left Table Name, idx 1 -> Right Table Name
+        String[] output = new String[2];
+        output[0] = join.getLeft().toString().split(" ")[0].replaceAll("`", "");
+        output[1] = join.getRight().toString().split(" ")[0].replaceAll("`", "");
+        return output;
+    }
 
     // REQUIRED TO IMPLEMENT INTERFACE
-
     /**
      * Visits a call to a SqlOperator.
      * @param call
@@ -264,22 +283,75 @@ public class SQLRacketShuttle extends SqlShuttle {
         System.out.println("SQL CALL");
 
         SqlKind sqlKind = call.getKind();
-        racketInput.add("(");
-
-        if (isFirstTable) {
-            racketInput.add("define q1s (");
-        } else {
-            racketInput.add("define q2s (");
-        }
 
         switch (sqlKind) {
+            case AS:
+                // FIXME: If two tables share some of same column names, Calcite will perform renaming. We should process these renaming here or we cannot catch "SELECT cols".
+                System.out.println("\tSQL AS\n");
+                System.out.println(call.toString());
+                break;
+            case JOIN:
+                System.out.println("\tSQL JOIN\n");
+                SqlJoin sqlJoin = (SqlJoin) call;
+                String joinType = sqlJoin.getJoinType().toString();
+                racketInput.add(" FROM (AS ");
+                switch (joinType) {
+                    case "LEFT": {
+                        racketInput.add("(LEFT-OUTER-JOIN ");
+                        // TODO: Handle table renamed issue: FROM table_a TA JOIN table_b TB => TA & TB renaming part
+                        String[] tableNames = helperGetJoinTables(sqlJoin);
+                        racketInput.add("(NAMED " + tableNames[0] + ") (NAMED " + tableNames[1] + ")");
+                        helpFormatWhere(sqlJoin.getCondition());
+                        racketInput.add(") ");
+
+                        // Process "AS (JOINED_PART) "NEW_TABLE""
+                        // ["table" (list "x_uid" "x_uname" "x_city" "y_uid" "y_size")]
+                        racketInput.add("[ \"" + newJoinedTableName + "\"");
+                        racketInput.add(" (list");
+                        for (String tableCol: tableCols) {
+                            racketInput.add(" \"" + tableCol + "\"");
+                        }
+                        racketInput.add(") ])");
+                        break;
+                    }
+                    case "INNER":
+                        // TODO: Need Implement
+                        racketInput.add("(JOIN ");
+                        break;
+                    case "FULL":
+                        // TODO: Need Implement
+                        break;
+                    case "RIGHT":
+                        // TODO: Need Implement
+                        break;
+                }
+
+                break;
             case SELECT:
                 System.out.println("\tSQL SELECT\n");
+                racketInput.add("(");
+
+                if (isFirstTable) {
+                    racketInput.add("define q1s (");
+                } else {
+                    racketInput.add("define q2s (");
+                }
+
                 racketInput.add("SELECT");
 
                 // if there's a group by, string should have SELECT-GROUP
                 // otherwise just SELECT
                 SqlSelect sqlSelect = (SqlSelect) call;
+
+                // Check whether statement involves "JOIN"
+                // If involved, we should transform table name to new joined table name
+                // We should check here because we need change the table name of selected cols to new joined table name
+                SqlNode from = sqlSelect.getFrom();
+                if (from.getKind().equals(sqlKind.JOIN)) {
+                    hasJoin = true;
+                    String[] tableNames = helperGetJoinTables((SqlJoin) from);
+                    newJoinedTableName = tableNames[0] + "_JOIN_" + tableNames[1];
+                }
 
                 List<SqlNode> selectList = sqlSelect.getSelectList();
                 if (!selectList.isEmpty()) {
@@ -291,15 +363,15 @@ public class SQLRacketShuttle extends SqlShuttle {
                 }
                 racketInput.add(")");
 
-
-                SqlNode from = sqlSelect.getFrom();
-                if (from != null) {
+                if (hasJoin) from.accept(this);
+                else if (from != null) {
                     racketInput.add(" FROM");
 
                     racketInput.add((" (NAMED"));
                     racketInput.add(helpFormatFrom(from.toString()));
                     racketInput.add(")");
                 }
+
                 SqlNode where = sqlSelect.getWhere();
                 if (where == null) {
                     racketInput.add(" WHERE (TRUE)");
@@ -307,15 +379,11 @@ public class SQLRacketShuttle extends SqlShuttle {
                     racketInput.add(" WHERE");
                     helpFormatWhere(where);
                 }
-                break;
 
-            case JOIN:
-                System.out.println("\tSQL JOIN");
+                racketInput.add("))");
                 break;
         }
 
-
-        racketInput.add("))");
         return null;
     }
 
@@ -346,8 +414,15 @@ public class SQLRacketShuttle extends SqlShuttle {
      */
     public SqlNode visit(SqlIdentifier id) {
         System.out.println("ID\n");
+        // e.g. "INDIV_SAMPLE_NYC.CMTE_ID"
 
-        racketInput.add(" \"" + id.toString() + "\"");
+        if (!hasJoin) {
+            racketInput.add(" \"" + id.toString() + "\"");
+        } else {
+            String[] splitColName = id.toString().split("\\.");
+            racketInput.add(" \"" + newJoinedTableName + "." + splitColName[1] + "\"");
+            tableCols.add(splitColName[1]);
+        }
 
         return null;
     }
