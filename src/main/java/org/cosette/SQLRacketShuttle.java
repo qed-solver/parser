@@ -296,11 +296,22 @@ public class SQLRacketShuttle extends SqlShuttle {
                 String joinType = sqlJoin.getJoinType().toString();
                 racketInput.add(" FROM (AS ");
                 switch (joinType) {
+                    case "RIGHT":
                     case "LEFT": {
                         racketInput.add("(LEFT-OUTER-JOIN ");
                         // TODO: Handle table renamed issue: FROM table_a TA JOIN table_b TB => TA & TB renaming part
                         String[] tableNames = helperGetJoinTables(sqlJoin);
-                        racketInput.add("(NAMED " + tableNames[0] + ") (NAMED " + tableNames[1] + ")");
+
+                        String firstTable = "", secondTable = "";
+                        if (joinType == "LEFT") {
+                            firstTable = tableNames[0];
+                            secondTable = tableNames[1];
+                        } else {
+                            firstTable = tableNames[1];
+                            secondTable = tableNames[0];
+                        }
+
+                        racketInput.add("(NAMED " + firstTable + ") (NAMED " + secondTable + ")");
                         helpFormatWhere(sqlJoin.getCondition());
                         racketInput.add(") ");
 
@@ -319,9 +330,6 @@ public class SQLRacketShuttle extends SqlShuttle {
                         racketInput.add("(JOIN ");
                         break;
                     case "FULL":
-                        // TODO: Need Implement
-                        break;
-                    case "RIGHT":
                         // TODO: Need Implement
                         break;
                 }
