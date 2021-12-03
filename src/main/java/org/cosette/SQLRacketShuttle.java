@@ -134,52 +134,61 @@ public class SQLRacketShuttle extends SqlShuttle {
      * @return String, racket formatted from clause.
      */
     private static String helpFormatDDL(String ddl) {
-        // strip newlines, tabs, 4 spaces used for indentation
-        // change to uppercase then get array
-        String[] ddlWords = ddl.replaceAll("\t", "")
-                .replaceAll("\n", "")
-                .replaceAll("    ", " ")
-                .toUpperCase().split(" ");
+        // separate unique DDL statements
+        String[] ddlStatements = ddl.split("<END_TOKEN>");
+
         ArrayList<String> toReturnArr = new ArrayList<>();
-        boolean addedCreateTable = false;
         String toReturn = "";
-        String tableName = "";
-        int numCols = 0;
 
-        for (int i = 1; i < ddlWords.length; i++) {
+        for (String d : ddlStatements) {
+            // strip newlines, tabs, 4 spaces used for indentation
+            // change to uppercase then get array
+            String[] ddlWords = d.replaceAll("\t", "")
+                    .replaceAll("\n", "")
+                    .replaceAll("    ", " ")
+                    .toUpperCase().split(" ");
+
+            boolean addedCreateTable = false;
+            String tableName = "";
+            int numCols = 0;
+
+            for (int i = 1; i < ddlWords.length; i++) {
 //            System.out.println(ddlWords[i - 1]);
-            String word = ddlWords[i - 1];
-            String word2 = ddlWords[i];
+                String word = ddlWords[i - 1];
+                String word2 = ddlWords[i];
 
-            if (word.equals("CREATE")) {
-                numTablesDefined++;
-                toReturnArr.add("(define ");
-            }
-            if (word.equals("TABLE")) {
-                tableName = word2.replace("(", "");
-                tableNames.add(tableName);
-                toReturnArr.add(tableName);
-                toReturnArr.add(" (Table ");
-                toReturnArr.add("\"" + tableName + "\"");
-                toReturnArr.add(" (list");
-                addedCreateTable = true;
-                continue;
-            }
+                if (word.equals("CREATE")) {
+                    numTablesDefined++;
+                    toReturnArr.add("(define ");
+                }
+                if (word.equals("TABLE")) {
+                    tableName = word2.replace("(", "");
+                    tableNames.add(tableName);
+                    toReturnArr.add(tableName);
+                    toReturnArr.add(" (Table ");
+                    toReturnArr.add("\"" + tableName + "\"");
+                    toReturnArr.add(" (list");
+                    addedCreateTable = true;
+                    continue;
+                }
 
-            if (word2.equals(")")) {
-                toReturnArr.add(") (gen-sym-schema " + numCols + " 1)))");
-                break;
-            }
+                if (word2.equals(")")) {
+                    toReturnArr.add(") (gen-sym-schema " + numCols + " 1)))");
+                    toReturnArr.add("\n");
+                    break;
+                }
 
-            if (addedCreateTable) {
-                numCols++;
-                i++;
-                toReturnArr.add(" \"" + word2.trim() + "\"");
+                if (addedCreateTable) {
+                    numCols++;
+                    i++;
+                    toReturnArr.add(" \"" + word2.trim() + "\"");
+                }
             }
         }
+
         toReturnArr.add("\n\n");
 
-        for (String r: toReturnArr) {
+        for (String r : toReturnArr) {
             toReturn = toReturn + r;
         }
 
@@ -261,7 +270,7 @@ public class SQLRacketShuttle extends SqlShuttle {
      * @return Null, a placeholder required by interface.
      */
     public SqlNode visit(SqlCall call) {
-        System.out.println("SQL CALL");
+//        System.out.println("SQL CALL");
 
         SqlKind sqlKind = call.getKind();
         racketInput.add("(");
@@ -274,7 +283,7 @@ public class SQLRacketShuttle extends SqlShuttle {
 
         switch (sqlKind) {
             case SELECT:
-                System.out.println("\tSQL SELECT\n");
+//                System.out.println("\tSQL SELECT\n");
                 racketInput.add("SELECT");
 
                 // if there's a group by, string should have SELECT-GROUP
@@ -292,14 +301,15 @@ public class SQLRacketShuttle extends SqlShuttle {
                 racketInput.add(")");
 
 
-                SqlNode from = sqlSelect.getFrom();
-                if (from != null) {
-                    racketInput.add(" FROM");
+//                SqlNode from = sqlSelect.getFrom();
+//                if (from != null) {
+//                    racketInput.add(" FROM");
+//
+//                    racketInput.add((" (NAMED"));
+//                    racketInput.add(helpFormatFrom(from.toString()));
+//                    racketInput.add(")");
+//                }
 
-                    racketInput.add((" (NAMED"));
-                    racketInput.add(helpFormatFrom(from.toString()));
-                    racketInput.add(")");
-                }
                 SqlNode where = sqlSelect.getWhere();
                 if (where == null) {
                     racketInput.add(" WHERE (TRUE)");
@@ -345,7 +355,7 @@ public class SQLRacketShuttle extends SqlShuttle {
      * @return Null, a placeholder required by interface.
      */
     public SqlNode visit(SqlIdentifier id) {
-        System.out.println("ID\n");
+//        System.out.println("ID\n");
 
         racketInput.add(" \"" + id.toString() + "\"");
 
@@ -369,6 +379,7 @@ public class SQLRacketShuttle extends SqlShuttle {
      */
     public SqlNode visit(SqlLiteral literal) {
         System.out.println("literal");
+        
         return null;
     }
 
