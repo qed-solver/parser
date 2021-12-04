@@ -40,7 +40,7 @@ public class SQLParse {
      */
     public void applyDDL(String ddl) throws SQLException, SqlParseException {
         schemaGenerator.applyDDL(ddl);
-        ddlString = ddl;
+        ddlString = ddlString + ddl + "<END_TOKEN>";
     }
 
     /**
