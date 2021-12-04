@@ -1,15 +1,15 @@
-CREATE TABLE indiv_sample_nyc(    
+CREATE TABLE nyc(    
 	cmte_id INT,
     transaction_amt INT,
     name VARCHAR(10)
     );
 
-CREATE TABLE indiv_sample_sf(    
+CREATE TABLE sf(    
 	id INT,
     tx_amt INT,
     description VARCHAR(10)
     );
 
-SELECT * FROM indiv_sample_nyc JOIN indiv_sample_sf ON indiv_sample_nyc.cmte_id = indiv_sample_sf.id WHERE indiv_sample_nyc.cmte_id = 1;
+SELECT * FROM nyc JOIN sf ON nyc.cmte_id = sf.id WHERE nyc.cmte_id = 1;
 
-SELECT cmte_id, name FROM indiv_sample_nyc;
+SELECT cmte_id, name FROM nyc;
