@@ -45,6 +45,7 @@ public class SQLRacketShuttle extends SqlShuttle {
     // should re-initialize value after finishing performing one query.
     private static ArrayList<String> tableCols;
     private static boolean hasJoin;
+    private static SqlNode whereForInnerJoin;
     private static String newJoinedTableName;
     /**
      * Initialize the shuttle with a given environment.
@@ -60,6 +61,7 @@ public class SQLRacketShuttle extends SqlShuttle {
         tableCols = new ArrayList<>();
         hasJoin = false;
         newJoinedTableName = "";
+        whereForInnerJoin = null;
     }
 
     /**
@@ -89,6 +91,7 @@ public class SQLRacketShuttle extends SqlShuttle {
             tableCols = new ArrayList<>();
             hasJoin = false;
             newJoinedTableName = "";
+            whereForInnerJoin = null;
         }
 
         // basic implementation
@@ -223,6 +226,11 @@ public class SQLRacketShuttle extends SqlShuttle {
         if (operand.charAt(0) == '`') {
             // `INDIV_SAMPLE_NYC`.`CMTE_ID` => "INDIV_SAMPLE_NYC.CMTE_ID"
             operand = operand.replaceAll("`", "");
+            if (newJoinedTableName != "") {
+                // We have generated new joined table, so we need to change all table names to new joined table name
+                String[] operandTokens = operand.split("\\.");
+                return String.format("\"%s.%s\"", newJoinedTableName, operandTokens[1]);
+            }
             return "\"" + operand + "\"";
         } else return operand;
     }
@@ -290,17 +298,19 @@ public class SQLRacketShuttle extends SqlShuttle {
                 System.out.println("\tSQL AS\n");
                 System.out.println(call.toString());
                 break;
-            case JOIN:
+            case JOIN: {
                 System.out.println("\tSQL JOIN\n");
                 SqlJoin sqlJoin = (SqlJoin) call;
                 String joinType = sqlJoin.getJoinType().toString();
                 racketInput.add(" FROM (AS ");
+
+                // TODO: Handle table renamed issue: FROM table_a TA JOIN table_b TB => TA & TB renaming part
+                String[] tableNames = helperGetJoinTables(sqlJoin);
+
                 switch (joinType) {
                     case "RIGHT":
                     case "LEFT": {
                         racketInput.add("(LEFT-OUTER-JOIN ");
-                        // TODO: Handle table renamed issue: FROM table_a TA JOIN table_b TB => TA & TB renaming part
-                        String[] tableNames = helperGetJoinTables(sqlJoin);
 
                         String firstTable = "", secondTable = "";
                         if (joinType == "LEFT") {
@@ -326,8 +336,20 @@ public class SQLRacketShuttle extends SqlShuttle {
                         break;
                     }
                     case "INNER":
-                        // TODO: Need Implement
+                        // 1. Join two tables
                         racketInput.add("(JOIN ");
+                        String firstTable = tableNames[0], secondTable = tableNames[1];
+                        racketInput.add("(NAMED " + firstTable + ") (NAMED " + secondTable + ")) ");
+
+                        // 2. Name combined table and cols
+                        racketInput.add("[ \"" + newJoinedTableName + "\"");
+                        racketInput.add(" (list");
+                        for (String tableCol : tableCols) {
+                            racketInput.add(" \"" + tableCol + "\"");
+                        }
+                        racketInput.add(") ])");
+
+                        whereForInnerJoin = sqlJoin.getCondition();
                         break;
                     case "FULL":
                         // TODO: Need Implement
@@ -335,6 +357,7 @@ public class SQLRacketShuttle extends SqlShuttle {
                 }
 
                 break;
+            }
             case SELECT:
                 System.out.println("\tSQL SELECT\n");
                 racketInput.add("(");
@@ -381,11 +404,18 @@ public class SQLRacketShuttle extends SqlShuttle {
                 }
 
                 SqlNode where = sqlSelect.getWhere();
-                if (where == null) {
+                if (where == null && whereForInnerJoin == null) {
                     racketInput.add(" WHERE (TRUE)");
-                } else {
-                    racketInput.add(" WHERE");
+                } else if (where != null && whereForInnerJoin != null) {
+                    racketInput.add(" WHERE (AND");
+                    helpFormatWhere(whereForInnerJoin);
                     helpFormatWhere(where);
+                    racketInput.add(") ");
+                } else {
+                    // Either "where" is null or "whereForInnerJoin" is null
+                    racketInput.add(" WHERE");
+                    if (where != null) helpFormatWhere(where);
+                    else helpFormatWhere(whereForInnerJoin);
                 }
 
                 racketInput.add("))");

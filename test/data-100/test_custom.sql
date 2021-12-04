@@ -10,6 +10,6 @@ CREATE TABLE indiv_sample_sf(
     description VARCHAR(10)
     );
 
-SELECT * FROM indiv_sample_nyc RIGHT JOIN indiv_sample_sf ON indiv_sample_nyc.cmte_id = indiv_sample_sf.id;
+SELECT * FROM indiv_sample_nyc JOIN indiv_sample_sf ON indiv_sample_nyc.cmte_id = indiv_sample_sf.id WHERE indiv_sample_nyc.cmte_id = 1;
 
 SELECT cmte_id, name FROM indiv_sample_nyc;
