@@ -31,7 +31,11 @@ public class RuleExtractor {
 
     public static void main(String[] args) throws IOException {
         for (RelOptRule rule : ruleList()) {
-            extractRule(rule);
+            try {
+                extractRule(rule);
+            } catch (Exception ignore) {
+
+            }
         }
     }
 
@@ -84,13 +88,13 @@ public class RuleExtractor {
         } else if (type.isAssignableFrom(Project.class)) {
 
         } else if (type.isAssignableFrom(Join.class)) {
-
+//            relBuilder.join(JoinRelType.FULL, new RexVariable());
         } else if (type.isAssignableFrom(Correlate.class)) {
 
         } else if (type.isAssignableFrom(Union.class)) {
-
+            relBuilder.union(true);
         } else if (type.isAssignableFrom(Minus.class)) {
-
+            relBuilder.minus(true);
         } else if (type.isAssignableFrom(Sort.class)) {
 
         } else if (type.isAssignableFrom(RelNode.class)) {

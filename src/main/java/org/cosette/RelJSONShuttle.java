@@ -349,7 +349,7 @@ public class RelJSONShuttle implements RelShuttle {
 
     /**
      * Visit a LogicalProject node. <br>
-     * Format: {project: {target: [column], source: {input}}}
+     * Format: {project: {target: [columns], source: {input}}}
      *
      * @param project The given RelNode instance.
      * @return Null, a placeholder required by interface.
@@ -361,8 +361,8 @@ public class RelJSONShuttle implements RelShuttle {
         ArrayNode parameters = arguments.putArray("target");
         RelJSONShuttle childShuttle = visitChild(project.getInput(), environment);
         List<RexNode> projects = project.getProjects();
-        for (int index = 0; index < projects.size(); index++) {
-            parameters.add(visitRexNode(projects.get(index), environment, projects.size()).getRexNode());
+        for (RexNode projection: projects) {
+            parameters.add(visitRexNode(projection, environment, projects.size()).getRexNode());
         }
         arguments.set("source", childShuttle.getRelNode());
         relNode.set("project", arguments);
