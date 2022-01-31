@@ -70,5 +70,5 @@
       }
     }
   } ],
-  "help" : [ "LogicalProject(CMTE_ID=[$0], TRANSACTION_AMT=[$1], NAME=[$2], ID=[$3], TX_AMT=[$4], DESCRIPTION=[$5])\n  LogicalFilter(condition=[=($0, 1)])\n    LogicalJoin(condition=[=($0, $3)], joinType=[inner])\n      LogicalTableScan(table=[[NYC]])\n      LogicalTableScan(table=[[SF]])\n", "LogicalProject(CMTE_ID=[$0], NAME=[$2])\n  LogicalTableScan(table=[[NYC]])\n" ]
+  "help" : [ "LogicalProject(CMTE_ID=[$0], TRANSACTION_AMT=[$1], NAME=[$2], CMTE_ID0=[$3], TX_AMT=[$4], DESCRIPTION=[$5])\n  LogicalFilter(condition=[=($0, 1)])\n    LogicalJoin(condition=[=($0, $3)], joinType=[inner])\n      LogicalTableScan(table=[[NYC]])\n      LogicalTableScan(table=[[SF]])\n", "LogicalProject(CMTE_ID=[$0], NAME=[$2])\n  LogicalTableScan(table=[[NYC]])\n" ]
 }

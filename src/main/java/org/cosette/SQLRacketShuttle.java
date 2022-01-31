@@ -29,6 +29,9 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.HashMap;
 
 /**
  * AN implementation of SqlShuttle interface that could convert a SqlNode instance to a ObjectNode instance.
@@ -47,6 +50,8 @@ public class SQLRacketShuttle extends SqlShuttle {
     private static boolean hasJoin;
     private static SqlNode whereForInnerJoin;
     private static String newJoinedTableName;
+    private static Set<String> colNames;
+    private static Map<String, String> colNameCoversion; // "TABLE.COLUMN" = "NEW_COLUMN_NAME"
     /**
      * Initialize the shuttle with a given environment.
      *
@@ -62,6 +67,8 @@ public class SQLRacketShuttle extends SqlShuttle {
         hasJoin = false;
         newJoinedTableName = "";
         whereForInnerJoin = null;
+        colNames = new HashSet<String>();
+        colNameCoversion = new HashMap<String, String>();
     }
 
     /**
@@ -197,7 +204,18 @@ public class SQLRacketShuttle extends SqlShuttle {
                 if (addedCreateTable) {
                     numCols++;
                     i++;
-                    toReturnArr.add(" \"" + word2.trim() + "\"");
+
+                    // Check name duplication for two tables
+                    String colName = word2.trim();
+                    if (colNames.contains(colName)) {
+                        // There's name duplication between two tables
+                        // so we need to rename one of colname
+                        String originalCol = tableNames.get(tableNames.size()-1) + "." + colName;
+                        colName = colName + "0";
+                        colNameCoversion.put(originalCol, colName);
+                    }
+                    colNames.add(colName);
+                    toReturnArr.add(" \"" + colName + "\"");
                 }
             }
         }
@@ -236,9 +254,15 @@ public class SQLRacketShuttle extends SqlShuttle {
             // `INDIV_SAMPLE_NYC`.`CMTE_ID` => "INDIV_SAMPLE_NYC.CMTE_ID"
             operand = operand.replaceAll("`", "");
             if (newJoinedTableName != "") {
-                // We have generated new joined table, so we need to change all table names to new joined table name
                 String[] operandTokens = operand.split("\\.");
-                return String.format("\"%s.%s\"", newJoinedTableName, operandTokens[1]);
+                String colName = operandTokens[1];
+                // Check whether name conversion is required
+                if (colNameCoversion.containsKey(operand)) {
+                    colName = colNameCoversion.get(operand);
+                }
+                // We have generated new joined table, so we need to change all table names to new joined table name
+
+                return String.format("\"%s.%s\"", newJoinedTableName, colName);
             }
             return "\"" + operand + "\"";
         } else return operand;
@@ -303,9 +327,16 @@ public class SQLRacketShuttle extends SqlShuttle {
 
         switch (sqlKind) {
             case AS:
-                // FIXME: If two tables share some of same column names, Calcite will perform renaming. We should process these renaming here or we cannot catch "SELECT cols".
                 System.out.println("\tSQL AS\n");
                 System.out.println(call.toString());
+                // Handle name conversion if there're duplicated column name
+                String identifier = call.toString().split(" ")[0]; // `SF`.`CMTE_ID`
+                identifier = identifier.replaceAll("`", "");
+                if (colNameCoversion.containsKey(identifier)) {
+                    String newColName = colNameCoversion.get(identifier);
+                    racketInput.add(" \"" + newJoinedTableName + "." + newColName + "\"");
+                    tableCols.add(newColName);
+                }
                 break;
             case JOIN: {
                 System.out.println("\tSQL JOIN\n");

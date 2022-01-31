@@ -5,11 +5,11 @@ CREATE TABLE nyc(
     );
 
 CREATE TABLE sf(    
-	id INT,
+	cmte_id INT,
     tx_amt INT,
     description VARCHAR(10)
     );
 
-SELECT * FROM nyc JOIN sf ON nyc.cmte_id = sf.id WHERE nyc.cmte_id = 1;
+SELECT * FROM nyc JOIN sf ON nyc.cmte_id = sf.cmte_id WHERE nyc.cmte_id = 1;
 
 SELECT cmte_id, name FROM nyc;
