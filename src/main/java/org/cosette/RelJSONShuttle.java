@@ -468,17 +468,13 @@ public class RelJSONShuttle implements RelShuttle {
         for (RelFieldCollation collation : sort.collation.getFieldCollations()) {
             ArrayNode column = collations.addArray();
             int index = collation.getFieldIndex();
-            column.add(index + environment.getLevel()).add(types.get(index).getType().getSqlTypeName().name()).add(collation.shortString());
+            column.add(index).add(types.get(index).getType().getSqlTypeName().name()).add(collation.shortString());
         }
         if (sort.offset != null) {
             arguments.set("offset", visitRexNode(sort.offset, environment, 0).getRexNode());
-        } else {
-            arguments.put("offset", "null");
         }
         if (sort.fetch != null) {
             arguments.set("limit", visitRexNode(sort.fetch, environment, 0).getRexNode());
-        } else {
-            arguments.put("limit", "null");
         }
         arguments.set("source", childShuttle.getRelNode());
         relNode.set("sort", arguments);
