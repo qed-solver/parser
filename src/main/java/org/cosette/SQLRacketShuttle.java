@@ -25,10 +25,7 @@ import org.apache.calcite.util.mapping.IntPair;
 
 import java.io.IOException;
 import java.io.Writer;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 
 /**
  * AN implementation of SqlShuttle interface that could convert a SqlNode instance to a ObjectNode instance.
@@ -40,6 +37,11 @@ public class SQLRacketShuttle extends SqlShuttle {
     private static boolean isFirstTable;
     private static int numTablesDefined;
     private static ArrayList<String> tableNames;
+    private static boolean likeRegexMatches;
+    private static ArrayList<ArrayList<List<SqlNode>>> likeRegex;
+    private static int likeRegexTableIdx;
+    private static ArrayList<String> symbolicVals;
+    private static int likeRegexIdx;
 
     /**
      * Initialize the shuttle with a given environment.
@@ -50,6 +52,11 @@ public class SQLRacketShuttle extends SqlShuttle {
         isFirstTable = true;
         numTablesDefined = 0;
         tableNames = new ArrayList<>();
+        likeRegexMatches = true;
+        likeRegex = new ArrayList<>();
+        likeRegexTableIdx = -1;
+        symbolicVals = new ArrayList<>();
+        likeRegexIdx = 0;
     }
 
     /**
@@ -63,13 +70,9 @@ public class SQLRacketShuttle extends SqlShuttle {
 
         SQLRacketShuttle sqlRacketShuttle = new SQLRacketShuttle();
 
-        // Add required headers & modules.
-        racketInput.add("#lang rosette\n\n");
-        racketInput.add("(require \"../util.rkt\" \"../sql.rkt\" \"../table.rkt\"  \"../evaluator.rkt\" \"../equal.rkt\" \"../cosette.rkt\")\n\n");
-
-        racketInput.add(helpFormatDDL(ddl));
-
         for (SqlNode sqlNode : sqlNodeList) {
+            likeRegex.add(new ArrayList<>());
+            likeRegexTableIdx++;
             sqlNode.accept(sqlRacketShuttle);
 
             // Add line spacing for next statement.
@@ -78,18 +81,50 @@ public class SQLRacketShuttle extends SqlShuttle {
             isFirstTable = false;
         }
 
-        // basic implementation
-        // need to support SELECT (FROM, WHERE, GROUP BY, HAVING, WHERE), JOIN
+        // longest chain of LIKE clauses = num of symbolic bools to define
+        int numSymbolicBools = 0;
+        for (ArrayList<List<SqlNode>> s : likeRegex) {
+            numSymbolicBools = Math.max(numSymbolicBools, s.size());
+            if (s.size() != numSymbolicBools) {
+                likeRegexMatches = false;
+            }
+        }
 
-        // more advanced
-        // need to also support MERGE, ORDER BY, DELETE, DISTINCT (part of SELECT)
+        racketInput = new ArrayList<>();
+        likeRegexTableIdx = -1;
+        isFirstTable = true;
 
-        // extra
-        // FETCH, LIMIT, ORDER BY (all part of SELECT)
+        // Add required headers & modules.
+        racketInput.add("#lang rosette\n\n");
+        racketInput.add("(require \"../util.rkt\" \"../sql.rkt\" \"../table.rkt\"  \"../evaluator.rkt\" \"../equal.rkt\" \"../cosette.rkt\" \"../denotation.rkt\" \"../syntax.rkt\")\n\n");
+
+        racketInput.add(helpFormatDDL(ddl));
+
+        char name = 'a';
+        for (int i = 0; i < numSymbolicBools; i++) {
+            // define symbolic values
+            racketInput.add("(define (gen-" + name + ")\n");
+            racketInput.add("\t(define-symbolic* " + name + " boolean?)\n");
+            racketInput.add("  " + name + ")\n");
+            symbolicVals.add(Character.toString(name));
+            name++;
+        }
+        racketInput.add("\n");
+
+        // second pass through nodes, to replace matching pairs with symbolic boolean values
+        for (SqlNode sqlNode : sqlNodeList) {
+            likeRegexTableIdx++;
+            sqlNode.accept(sqlRacketShuttle);
+            likeRegexIdx = 0;
+
+            // Add line spacing for next statement.
+            racketInput.add("\n\n");
+
+            isFirstTable = false;
+        }
 
         // add code to run Rosette counterexample engine
-        // THIS DEPENDS ON THE NUMBER OF TABLES BEING REFERENCED!!!
-        racketInput.add(helpFormatRun(numTablesDefined));
+        racketInput.add(helpFormatRunCond(likeRegexMatches, numTablesDefined));
 
         System.out.println("racket input");
         System.out.println(String.join("", racketInput));
@@ -105,15 +140,28 @@ public class SQLRacketShuttle extends SqlShuttle {
     }
 
     /**
+     * Formats Rosette like condition for run call for given racket file.
+     * @param likeRegexMatches
+     * @return String, racket formatted from clause.
+     */
+    private static String helpFormatRunCond(boolean likeRegexMatches, int numTables) {
+        String bool = likeRegexMatches ? "#t" : "#f";
+        String runCond = "\n(cond\n\t[(eq? #f " + bool +
+                ") println(\"LIKE regex does not match\")]\n\t[(eq? #t " + bool + ")" +
+                helpFormatRun(numTables) + "])";
+        return runCond;
+    }
+
+    /**
      * Formats Rosette run call for given racket file.
      * @param numTables
      * @return String, racket formatted from clause.
      */
     private static String helpFormatRun(int numTables) {
-        String runCall = "\n(let* ([model (verify (same q1s q2s))]\n";
+        String runCall = "\n\t\t(let* ([model (verify (same q1s q2s))]\n";
 
         for (int i = 0; i < numTables; i++) {
-            runCall = runCall + "\t   [concrete-t" + (i + 1) + " (clean-ret-table (evaluate " + tableNames.get(i) + " model))]";
+            runCall = runCall + "\t\t\t   [concrete-t" + (i + 1) + " (clean-ret-table (evaluate " + tableNames.get(i) + " model))]";
             if (i != numTables - 1) {
                 runCall = runCall + "\n";
             }
@@ -121,7 +169,7 @@ public class SQLRacketShuttle extends SqlShuttle {
         runCall = runCall + ")\n";
 
         for (int i = 0; i < numTables; i++) {
-            runCall = runCall + "\t(println concrete-t" + (i + 1) + ")\n";
+            runCall = runCall + "\t\t\t(println concrete-t" + (i + 1) + ")\n";
         }
         runCall = runCall + ")";
 
@@ -153,7 +201,6 @@ public class SQLRacketShuttle extends SqlShuttle {
             int numCols = 0;
 
             for (int i = 1; i < ddlWords.length; i++) {
-//            System.out.println(ddlWords[i - 1]);
                 String word = ddlWords[i - 1];
                 String word2 = ddlWords[i];
 
@@ -186,7 +233,7 @@ public class SQLRacketShuttle extends SqlShuttle {
             }
         }
 
-        toReturnArr.add("\n\n");
+        toReturnArr.add("\n");
 
         for (String r : toReturnArr) {
             toReturn = toReturn + r;
@@ -237,6 +284,18 @@ public class SQLRacketShuttle extends SqlShuttle {
                 racketInput.add(" (BINOP " + String.join(" ", whereTokens) + ")");
                 break;
             }
+            case LIKE:
+                List<SqlNode> likeOperands = ((SqlBasicCall) where).getOperandList();
+                ArrayList<List<SqlNode>> tableLikeOperands = likeRegex.get(likeRegexTableIdx);
+
+                if (symbolicVals.isEmpty()) {
+                    tableLikeOperands.add(likeOperands);
+                    likeRegex.set(likeRegexTableIdx, tableLikeOperands);
+                } else {
+                    racketInput.add(" (filter-sym (gen-" +  symbolicVals.get(likeRegexIdx) + "))");
+                    likeRegexIdx++;
+                }
+                break;
             case OR:
             case AND: {
                 // For OR and AND Operand, (sqlNode)where consists of "(BINOP WHERE) + (OR || AND) + (BINOP WHERE)"
@@ -301,14 +360,14 @@ public class SQLRacketShuttle extends SqlShuttle {
                 racketInput.add(")");
 
 
-//                SqlNode from = sqlSelect.getFrom();
-//                if (from != null) {
-//                    racketInput.add(" FROM");
-//
-//                    racketInput.add((" (NAMED"));
-//                    racketInput.add(helpFormatFrom(from.toString()));
-//                    racketInput.add(")");
-//                }
+                SqlNode from = sqlSelect.getFrom();
+                if (from != null) {
+                    racketInput.add(" FROM");
+
+                    racketInput.add((" (NAMED"));
+                    racketInput.add(helpFormatFrom(from.toString()));
+                    racketInput.add(")");
+                }
 
                 SqlNode where = sqlSelect.getWhere();
                 if (where == null) {

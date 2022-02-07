@@ -4,6 +4,6 @@ CREATE TABLE indiv_sample_nyc(
     name VARCHAR(10)
     );
 
-SELECT * FROM indiv_sample_nyc WHERE cmte_id != transaction_amt;
+SELECT * FROM indiv_sample_nyc WHERE name LIKE '%TRUMP%' AND name LIKE '%DONALD%';
 
-SELECT cmte_id, name FROM indiv_sample_nyc;
+SELECT cmte_id, name FROM indiv_sample_nyc WHERE name LIKE '%DONALD%';
