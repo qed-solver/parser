@@ -17,18 +17,13 @@ import org.apache.calcite.rel.type.RelDataTypeField;
 import org.apache.calcite.rex.RexLiteral;
 import org.apache.calcite.rex.RexNode;
 import org.apache.calcite.schema.ColumnStrategy;
-import org.apache.calcite.schema.SchemaPlus;
-import org.apache.calcite.tools.FrameworkConfig;
-import org.apache.calcite.tools.Frameworks;
-import org.apache.calcite.tools.RelBuilder;
 import org.apache.calcite.util.ImmutableBitSet;
 import org.apache.calcite.util.mapping.IntPair;
 
+import java.io.File;
 import java.io.IOException;
-import java.io.Writer;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -50,12 +45,12 @@ public class RelJSONShuttle implements RelShuttle {
     }
 
     /**
-     * Dump a list of RelRoot to a writer in JSON format .
+     * Dump a list of RelRoot to a file in JSON format .
      *
      * @param relNodes The given list of RelRoot.
-     * @param writer   The given writer.
+     * @param file     The given file.
      */
-    public static void dumpToJSON(List<RelNode> relNodes, Writer writer) throws IOException {
+    public static void dumpToJSON(List<RelNode> relNodes, File file) throws IOException {
 
         ObjectMapper mapper = new ObjectMapper();
 
@@ -130,7 +125,7 @@ public class RelJSONShuttle implements RelShuttle {
             schemaArray.add(tableObject);
         }
 
-        mapper.writerWithDefaultPrettyPrinter().writeValue(writer, mainObject);
+        mapper.writerWithDefaultPrettyPrinter().writeValue(file, mainObject);
 
     }
 
@@ -180,6 +175,7 @@ public class RelJSONShuttle implements RelShuttle {
     /**
      * Visit a RelVariable node. <br>
      * Format: {relNode: id}
+     *
      * @param variable The given RelNode instance.
      * @return Null, a placeholder required by interface.
      */
@@ -361,7 +357,7 @@ public class RelJSONShuttle implements RelShuttle {
         ArrayNode parameters = arguments.putArray("target");
         RelJSONShuttle childShuttle = visitChild(project.getInput(), environment);
         List<RexNode> projects = project.getProjects();
-        for (RexNode projection: projects) {
+        for (RexNode projection : projects) {
             parameters.add(visitRexNode(projection, environment, projects.size()).getRexNode());
         }
         arguments.set("source", childShuttle.getRelNode());

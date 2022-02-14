@@ -2,12 +2,9 @@ package org.cosette;
 
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rex.*;
-import org.apache.calcite.sql.SqlKind;
 
 import java.util.Locale;
-import java.util.Objects;
 
 /**
  * AN implementation of RexVisitor interface that could convert a RelNode instance to a ObjectNode instance.
@@ -60,6 +57,7 @@ public class RexJSONVisitor implements RexVisitor<ObjectNode> {
     /**
      * Visit a RexVariable node. <br>
      * Format: {rexNode: id, type: ANY}
+     *
      * @param variable The given RexNode instance.
      * @return The ObjectNode corresponding to the given RexNode instance.
      */

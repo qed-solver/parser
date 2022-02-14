@@ -9,15 +9,12 @@ import org.apache.calcite.tools.RelBuilder;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 public class RelConstructor extends RelBuilder {
-    protected RelConstructor(@Nullable Context context, RelOptCluster cluster,
-                             @Nullable RelOptSchema relOptSchema) {
+    protected RelConstructor(@Nullable Context context, RelOptCluster cluster, @Nullable RelOptSchema relOptSchema) {
         super(context, cluster, relOptSchema);
     }
 
     public static RelConstructor create(FrameworkConfig config) {
-        return Frameworks.withPrepare(config,
-                (cluster, relOptSchema, rootSchema, statement) ->
-                        new RelConstructor(config.getContext(), cluster, relOptSchema));
+        return Frameworks.withPrepare(config, (cluster, relOptSchema, rootSchema, statement) -> new RelConstructor(config.getContext(), cluster, relOptSchema));
     }
 
     public RelBuilder var() {

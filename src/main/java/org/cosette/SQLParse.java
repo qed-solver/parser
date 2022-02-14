@@ -6,8 +6,8 @@ import org.apache.calcite.sql.SqlNode;
 import org.apache.calcite.sql.parser.SqlParseException;
 import org.apache.calcite.tools.ValidationException;
 
+import java.io.File;
 import java.io.IOException;
-import java.io.Writer;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
@@ -50,23 +50,16 @@ public class SQLParse {
     }
 
     /**
-     * Dump the parsed statements to a writer.
+     * Dump the parsed statements to a file.
      *
-     * @param writer The given writer.
+     * @param file The given file.
      */
-    public void dumpToJSON(Writer writer) throws IOException {
+    public void dumpToJSON(File file) throws IOException {
         ArrayList<RelNode> nodeList = new ArrayList<>();
         for (RelRoot root : rootList) {
             nodeList.add(root.project());
         }
-        RelJSONShuttle.dumpToJSON(nodeList, writer);
-    }
-
-    /**
-     * Close the SchemaGenerator instance within.
-     */
-    public void done() throws SQLException {
-        schemaGenerator.close();
+        RelJSONShuttle.dumpToJSON(nodeList, file);
     }
 
 }

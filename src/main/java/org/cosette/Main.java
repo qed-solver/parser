@@ -6,6 +6,7 @@ import org.apache.commons.io.FilenameUtils;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileWriter;
+import java.io.IOException;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -16,10 +17,12 @@ import java.util.regex.Pattern;
  */
 public class Main {
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws IOException {
+        Process mysql = Runtime.getRuntime().exec("cmd mysqld");
         for (String filename : args) {
             parseFile(filename);
         }
+        mysql.destroy();
     }
 
     /**
@@ -70,10 +73,8 @@ public class Main {
                 }
             }
             String outputPath = FilenameUtils.getPath(filename) + FilenameUtils.getBaseName(filename) + ".json";
-            BufferedWriter bufferedWriter = new BufferedWriter(new FileWriter(outputPath));
-            sqlParse.dumpToJSON(bufferedWriter);
-            bufferedWriter.close();
-            sqlParse.done();
+            File outputFile = new File(outputPath);
+            sqlParse.dumpToJSON(outputFile);
             scanner.close();
         } catch (Exception e) {
             System.err.println("In file:\n\t" + filename);

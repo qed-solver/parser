@@ -86,7 +86,7 @@ public class RawPlanner implements RelOptTable.ViewExpander {
                 .withTrimUnusedFields(false);
         FrameworkConfig config = Frameworks.newConfigBuilder()
                 .defaultSchema(schema)
-                .parserConfig(SqlParser.Config.DEFAULT.withQuoting(Quoting.BACK_TICK))
+                .parserConfig(SqlParser.Config.DEFAULT.withQuoting(Quoting.BACK_TICK).withCaseSensitive(false))
                 .sqlToRelConverterConfig(converterConfig)
                 .build();
         this.costFactory = config.getCostFactory();
