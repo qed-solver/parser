@@ -25,6 +25,7 @@ import org.apache.calcite.util.mapping.IntPair;
 
 import java.io.IOException;
 import java.io.Writer;
+import java.lang.reflect.Array;
 import java.util.*;
 
 /**
@@ -42,6 +43,9 @@ public class SQLRacketShuttle extends SqlShuttle {
     private static int likeRegexTableIdx;
     private static ArrayList<String> symbolicVals;
     private static int likeRegexIdx;
+    private static HashMap<String, String> likeRegexToSymbolicVal;
+    private static boolean orderByMatches;
+    private static ArrayList<SqlNode> table1OrderBy;
 
     /**
      * Initialize the shuttle with a given environment.
@@ -57,6 +61,9 @@ public class SQLRacketShuttle extends SqlShuttle {
         likeRegexTableIdx = -1;
         symbolicVals = new ArrayList<>();
         likeRegexIdx = 0;
+        likeRegexToSymbolicVal = new HashMap<>();
+        orderByMatches = true;
+        table1OrderBy = new ArrayList<>();
     }
 
     /**
@@ -84,7 +91,7 @@ public class SQLRacketShuttle extends SqlShuttle {
         // longest chain of LIKE clauses = num of symbolic bools to define
         int numSymbolicBools = 0;
         for (ArrayList<List<SqlNode>> s : likeRegex) {
-            numSymbolicBools = Math.max(numSymbolicBools, s.size());
+            numSymbolicBools = numSymbolicBools + s.size();
             if (s.size() != numSymbolicBools) {
                 likeRegexMatches = false;
             }
@@ -115,7 +122,6 @@ public class SQLRacketShuttle extends SqlShuttle {
         for (SqlNode sqlNode : sqlNodeList) {
             likeRegexTableIdx++;
             sqlNode.accept(sqlRacketShuttle);
-            likeRegexIdx = 0;
 
             // Add line spacing for next statement.
             racketInput.add("\n\n");
@@ -124,7 +130,7 @@ public class SQLRacketShuttle extends SqlShuttle {
         }
 
         // add code to run Rosette counterexample engine
-        racketInput.add(helpFormatRunCond(likeRegexMatches, numTablesDefined));
+        racketInput.add(helpFormatRunCond(likeRegexMatches, orderByMatches, numTablesDefined));
 
         System.out.println("racket input");
         System.out.println(String.join("", racketInput));
@@ -144,10 +150,13 @@ public class SQLRacketShuttle extends SqlShuttle {
      * @param likeRegexMatches
      * @return String, racket formatted from clause.
      */
-    private static String helpFormatRunCond(boolean likeRegexMatches, int numTables) {
-        String bool = likeRegexMatches ? "#t" : "#f";
-        String runCond = "\n(cond\n\t[(eq? #f " + bool +
-                ") println(\"LIKE regex does not match\")]\n\t[(eq? #t " + bool + ")" +
+    private static String helpFormatRunCond(boolean likeRegexMatches, boolean orderByMatches, int numTables) {
+        String likeBool = likeRegexMatches ? "#t" : "#f";
+        String orderByBool = orderByMatches ? "#t" : "#f";
+        String runCond = "\n(cond\n\t[(eq? #f " + likeBool +
+                ") println(\"LIKE regex does not match\")]\n" +
+                "\t[(eq? #f " + orderByBool + ") println(\"ORDER BY does not match\")]\n" +
+                "\t[(eq? #t " + likeBool + ")" +
                 helpFormatRun(numTables) + "])";
         return runCond;
     }
@@ -291,8 +300,11 @@ public class SQLRacketShuttle extends SqlShuttle {
                 if (symbolicVals.isEmpty()) {
                     tableLikeOperands.add(likeOperands);
                     likeRegex.set(likeRegexTableIdx, tableLikeOperands);
+                } else if (likeRegexToSymbolicVal.containsKey(likeOperands.toString())) {
+                    racketInput.add(" (filter-sym (gen-" +  likeRegexToSymbolicVal.get(likeOperands.toString()) + "))");
                 } else {
                     racketInput.add(" (filter-sym (gen-" +  symbolicVals.get(likeRegexIdx) + "))");
+                    likeRegexToSymbolicVal.put(likeOperands.toString(), symbolicVals.get(likeRegexIdx));
                     likeRegexIdx++;
                 }
                 break;
@@ -376,8 +388,23 @@ public class SQLRacketShuttle extends SqlShuttle {
                     racketInput.add(" WHERE");
                     helpFormatWhere(where);
                 }
-                break;
 
+                if (sqlSelect.hasOrderBy()) {
+                    if (numTablesDefined == 1) {
+                        for (SqlNode s : sqlSelect.getOrderList()) {
+                            table1OrderBy.add(s);
+                        }
+                    } else {
+                        ArrayList<SqlNode> currTableOrderBy = new ArrayList<>();
+                        for (SqlNode s : sqlSelect.getOrderList()) {
+                            currTableOrderBy.add(s);
+                        }
+                        if (!currTableOrderBy.equals(table1OrderBy)) {
+                            orderByMatches = false;
+                        }
+                    }
+                }
+                break;
             case JOIN:
                 System.out.println("\tSQL JOIN");
                 break;

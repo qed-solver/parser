@@ -10,14 +10,18 @@
 (define (gen-b)
 	(define-symbolic* b boolean?)
   b)
+(define (gen-c)
+	(define-symbolic* c boolean?)
+  c)
 
-(define q1s (SELECT (VALS "INDIV_SAMPLE_NYC.CMTE_ID" "INDIV_SAMPLE_NYC.TRANSACTION_AMT" "INDIV_SAMPLE_NYC.NAME") FROM (NAMED INDIV_SAMPLE_NYC) WHERE (AND (filter-sym (gen-a)) (filter-sym (gen-b)) )))
+(define q1s (SELECT (VALS "INDIV_SAMPLE_NYC.CMTE_ID" "INDIV_SAMPLE_NYC.TRANSACTION_AMT" "INDIV_SAMPLE_NYC.NAME") FROM (NAMED INDIV_SAMPLE_NYC) WHERE (AND (filter-sym (gen-a)) (filter-sym (gen-a)) )))
 
-(define q2s (SELECT (VALS "INDIV_SAMPLE_NYC.CMTE_ID" "INDIV_SAMPLE_NYC.NAME") FROM (NAMED INDIV_SAMPLE_NYC) WHERE (filter-sym (gen-a))))
+(define q2s (SELECT (VALS "INDIV_SAMPLE_NYC.CMTE_ID" "INDIV_SAMPLE_NYC.NAME") FROM (NAMED INDIV_SAMPLE_NYC) WHERE (filter-sym (gen-b))))
 
 
 (cond
 	[(eq? #f #f) println("LIKE regex does not match")]
+	[(eq? #f #f) println("ORDER BY does not match")]
 	[(eq? #t #f)
 		(let* ([model (verify (same q1s q2s))]
 			   [concrete-t1 (clean-ret-table (evaluate INDIV_SAMPLE_NYC model))])
