@@ -12,4 +12,4 @@ CREATE TABLE sf(
 
 SELECT * FROM nyc LEFT JOIN sf ON nyc.cmte_id = sf.cmte_id;
 
-SELECT cmte_id, name FROM nyc;
+SELECT * FROM nyc LEFT JOIN sf ON nyc.cmte_id = sf.cmte_id;

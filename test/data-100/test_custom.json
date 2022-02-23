@@ -60,13 +60,44 @@
         "column" : 0,
         "type" : "INTEGER"
       }, {
+        "column" : 1,
+        "type" : "INTEGER"
+      }, {
         "column" : 2,
+        "type" : "VARCHAR"
+      }, {
+        "column" : 3,
+        "type" : "INTEGER"
+      }, {
+        "column" : 4,
+        "type" : "INTEGER"
+      }, {
+        "column" : 5,
         "type" : "VARCHAR"
       } ],
       "source" : {
-        "scan" : 0
+        "join" : {
+          "kind" : "LEFT",
+          "condition" : {
+            "operator" : "=",
+            "operand" : [ {
+              "column" : 0,
+              "type" : "INTEGER"
+            }, {
+              "column" : 3,
+              "type" : "INTEGER"
+            } ],
+            "type" : "BOOLEAN"
+          },
+          "left" : {
+            "scan" : 0
+          },
+          "right" : {
+            "scan" : 1
+          }
+        }
       }
     }
   } ],
-  "help" : [ "LogicalProject(CMTE_ID=[$0], TRANSACTION_AMT=[$1], NAME=[$2], CMTE_ID0=[$3], TX_AMT=[$4], DESCRIPTION=[$5])\n  LogicalJoin(condition=[=($0, $3)], joinType=[left])\n    LogicalTableScan(table=[[NYC]])\n    LogicalTableScan(table=[[SF]])\n", "LogicalProject(CMTE_ID=[$0], NAME=[$2])\n  LogicalTableScan(table=[[NYC]])\n" ]
+  "help" : [ "LogicalProject(CMTE_ID=[$0], TRANSACTION_AMT=[$1], NAME=[$2], CMTE_ID0=[$3], TX_AMT=[$4], DESCRIPTION=[$5])\n  LogicalJoin(condition=[=($0, $3)], joinType=[left])\n    LogicalTableScan(table=[[NYC]])\n    LogicalTableScan(table=[[SF]])\n", "LogicalProject(CMTE_ID=[$0], TRANSACTION_AMT=[$1], NAME=[$2], CMTE_ID0=[$3], TX_AMT=[$4], DESCRIPTION=[$5])\n  LogicalJoin(condition=[=($0, $3)], joinType=[left])\n    LogicalTableScan(table=[[NYC]])\n    LogicalTableScan(table=[[SF]])\n" ]
 }

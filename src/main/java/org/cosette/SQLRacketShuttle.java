@@ -118,6 +118,10 @@ public class SQLRacketShuttle extends SqlShuttle {
             racketInput.add("\n\n");
 
             isFirstTable = false;
+            tableCols = new ArrayList<>();
+            hasJoin = false;
+            newJoinedTableName = "";
+            whereForInnerJoin = null;
         }
 
         // longest chain of LIKE clauses = num of symbolic bools to define
@@ -607,6 +611,13 @@ public class SQLRacketShuttle extends SqlShuttle {
 
                 racketInput.add("SELECT");
 
+                SqlNode from = sqlSelect.getFrom();
+                if (from.getKind().equals(sqlKind.JOIN)) {
+                    hasJoin = true;
+                    String[] tableNames = helperGetJoinTables((SqlJoin) from);
+                    newJoinedTableName = tableNames[0] + "_JOIN_" + tableNames[1];
+                }
+
                 List<SqlNode> selectList = sqlSelect.getSelectList();
                 if (!selectList.isEmpty()) {
                     racketInput.add(" (VALS");
@@ -620,13 +631,6 @@ public class SQLRacketShuttle extends SqlShuttle {
                     select.accept(this);
                 }
                 racketInput.add(")");
-
-                SqlNode from = sqlSelect.getFrom();
-                if (from.getKind().equals(sqlKind.JOIN)) {
-                    hasJoin = true;
-                    String[] tableNames = helperGetJoinTables((SqlJoin) from);
-                    newJoinedTableName = tableNames[0] + "_JOIN_" + tableNames[1];
-                }
 
                 if (hasJoin) from.accept(this);
                 else if (from != null) {
