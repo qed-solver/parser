@@ -29,6 +29,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
+import java.util.Stack;
 
 /**
  * AN implementation of SqlShuttle interface that could convert a SqlNode instance to a ObjectNode instance.
@@ -37,6 +38,9 @@ public class SQLRacketShuttle extends SqlShuttle {
 
 //    private final Environment environment;
     private static ArrayList<String> racketInput;
+    // jarrett
+    private static ArrayList<String> racketInputBuffer;
+    private static Stack<ArrayList<String>> aggrStack;
     private static boolean isFirstTable;
     private static int numTablesDefined;
     private static ArrayList<String> tableNames;
@@ -47,6 +51,10 @@ public class SQLRacketShuttle extends SqlShuttle {
      */
     public SQLRacketShuttle() {
         racketInput = new ArrayList<>();
+        // jarrett
+        racketInputBuffer = new ArrayList<>();
+        aggrStack = new Stack<ArrayList<String>>();
+
         isFirstTable = true;
         numTablesDefined = 0;
         tableNames = new ArrayList<>();
@@ -65,7 +73,7 @@ public class SQLRacketShuttle extends SqlShuttle {
 
         // Add required headers & modules.
         racketInput.add("#lang rosette\n\n");
-        racketInput.add("(require \"../util.rkt\" \"../sql.rkt\" \"../table.rkt\"  \"../evaluator.rkt\" \"../equal.rkt\" \"../cosette.rkt\")\n\n");
+        racketInput.add("(require \"../util.rkt\" \"../sql.rkt\" \"../table.rkt\"  \"../evaluator.rkt\" \"../equal.rkt\" \"../cosette.rkt\" \"../denotation.rkt\" \"../syntax.rkt\" )\n\n");
 
         racketInput.add(helpFormatDDL(ddl));
 
@@ -261,6 +269,107 @@ public class SQLRacketShuttle extends SqlShuttle {
         }
     }
 
+    private void helpFormatAggr(SqlCall aggr, String aggrSymbol, boolean toBuffer, boolean inHaving) {
+        List<SqlNode> operandList;
+        operandList = aggr.getOperandList();
+        if (toBuffer) {
+            ArrayList<String> buffer;
+            buffer = aggrStack.peek();
+            buffer.add(aggrSymbol);
+//            System.out.println(aggr.getOperator());
+            for (SqlNode node : operandList) {
+                buffer.add("\"" + node.toString() + "\"");
+                node.accept(this);
+            }
+        } else {
+            if (inHaving) {
+                racketInput.add("VAL-UNOP ");
+            }
+            racketInput.add(aggrSymbol);
+            for (SqlNode node : operandList) {
+                node.accept(this);
+            }
+        }
+
+    }
+
+    private void helpFormatBinopHaving(SqlNode having, String operator) {
+        racketInput.add("(BINOP (");
+        List<SqlNode> havingOperands = ((SqlCall) having).getOperandList();
+
+        helpFormatHaving(havingOperands.get(0));
+        racketInput.add(operator);
+        helpFormatHaving(havingOperands.get(1));
+        racketInput.add("))");
+    }
+
+    private void helpFormatHaving(SqlNode having) {
+
+        SqlKind havingType = having.getKind();
+        System.out.println(havingType);
+        switch (havingType) {
+            case LESS_THAN: {
+                helpFormatBinopHaving(having, " < ");
+                break;
+            }
+            case GREATER_THAN: {
+                System.out.println(having);
+                helpFormatBinopHaving(having, " > ");
+                break;
+            }
+            case LESS_THAN_OR_EQUAL: {
+                helpFormatBinopHaving(having, " <= ");
+                break;
+            }
+            case GREATER_THAN_OR_EQUAL: {
+                helpFormatBinopHaving(having, " >= ");
+                break;
+            }
+            case EQUALS: {
+                helpFormatBinopHaving(having, " = ");
+                break;
+            }
+            case OR:
+            case AND: {
+                List<SqlNode> havingOperands = ((SqlBasicCall) having).getOperandList();
+                racketInput.add("(" + havingType + " ");
+                helpFormatHaving(havingOperands.get(0));
+                helpFormatHaving(havingOperands.get(1));
+                racketInput.add(")");
+                break;
+            }
+            case NOT_EQUALS: {
+                String[] havingTokens = having.toString().split(" ");
+                havingTokens[0] = helpFormatWhereClause(havingTokens[0]);
+                havingTokens[1] = "=";
+                havingTokens[2] = helpFormatWhereClause(havingTokens[2]);
+                racketInput.add(" (NOT (BINOP " + String.join(" ", havingTokens) + ") )");
+                break;
+            }
+            case SUM: {
+                helpFormatAggr((SqlCall) having, "aggr-sum", false, true);
+                break;
+            }
+            case COUNT: {
+                helpFormatAggr((SqlCall) having, "aggr-count", false, true);
+                break;
+            }
+            case MAX: {
+                helpFormatAggr((SqlCall) having, "aggr-max", false, true);
+                break;
+            }
+            case MIN: {
+                helpFormatAggr((SqlCall) having, "aggr-min", false, true);
+                break;
+            }
+            case LITERAL: {
+                racketInput.add(having.toString());
+            }
+        }
+    }
+
+
+
 
     // REQUIRED TO IMPLEMENT INTERFACE
 
@@ -272,43 +381,53 @@ public class SQLRacketShuttle extends SqlShuttle {
     public SqlNode visit(SqlCall call) {
 //        System.out.println("SQL CALL");
 
-        SqlKind sqlKind = call.getKind();
-        racketInput.add("(");
+        boolean withAggr = false;
 
-        if (isFirstTable) {
-            racketInput.add("define q1s (");
-        } else {
-            racketInput.add("define q2s (");
+        SqlKind sqlKind = call.getKind();
+
+        if (call.isA(SqlKind.QUERY)) {
+            racketInput.add("(");
+            if (isFirstTable) {
+                racketInput.add("define q1s (");
+            } else {
+                racketInput.add("define q2s (");
+            }
         }
+
 
         switch (sqlKind) {
             case SELECT:
 //                System.out.println("\tSQL SELECT\n");
-                racketInput.add("SELECT");
+//                racketInput.add("SELECT");
 
                 // if there's a group by, string should have SELECT-GROUP
                 // otherwise just SELECT
                 SqlSelect sqlSelect = (SqlSelect) call;
 
+                racketInput.add("SELECT");
+
                 List<SqlNode> selectList = sqlSelect.getSelectList();
                 if (!selectList.isEmpty()) {
                     racketInput.add(" (VALS");
                 }
-
                 for (SqlNode select : selectList) {
+                    // if agg func exists in this select query, then push one buffer string to the stack
+                    if (!withAggr && select.isA(SqlKind.AGGREGATE)) {
+                        withAggr = true;
+                        aggrStack.push(new ArrayList<String>());
+                    }
                     select.accept(this);
                 }
                 racketInput.add(")");
 
+                SqlNode from = sqlSelect.getFrom();
+                if (from != null) {
+                    racketInput.add(" FROM");
 
-//                SqlNode from = sqlSelect.getFrom();
-//                if (from != null) {
-//                    racketInput.add(" FROM");
-//
-//                    racketInput.add((" (NAMED"));
-//                    racketInput.add(helpFormatFrom(from.toString()));
-//                    racketInput.add(")");
-//                }
+                    racketInput.add((" (NAMED"));
+                    racketInput.add(helpFormatFrom(from.toString()));
+                    racketInput.add(")");
+                }
 
                 SqlNode where = sqlSelect.getWhere();
                 if (where == null) {
@@ -317,15 +436,60 @@ public class SQLRacketShuttle extends SqlShuttle {
                     racketInput.add(" WHERE");
                     helpFormatWhere(where);
                 }
+
+                // jarrett: add SELECT-GROUP
+                SqlNodeList sqlGroup = sqlSelect.getGroup();
+                //Add group-by statement in racket output
+                if (sqlGroup != null) {
+                    racketInput.add(" GROUP-BY (list");
+                    List<SqlNode> group = sqlGroup.getList();
+                    for (SqlNode col: group) {
+                        col.accept(this);
+                    }
+                    racketInput.add(")");
+                }
+
+                SqlCall sqlHaving = (SqlCall) sqlSelect.getHaving();
+                if (sqlHaving != null) {
+//                    System.out.println(sqlHaving.getKind());
+                    racketInput.add(" HAVING ");
+                    helpFormatHaving(sqlHaving);
+//                    sqlHaving.accept(this);
+                }
+
+
                 break;
 
             case JOIN:
                 System.out.println("\tSQL JOIN");
                 break;
+
+            case SUM:
+                helpFormatAggr(call, " aggr-sum ", false, false);
+                break;
+
+            case COUNT:
+                helpFormatAggr(call, " aggr-count ", false, false);
+                break;
+
+            case MAX:
+                helpFormatAggr(call, " aggr-max ", false, false);
+                break;
+
+            case MIN:
+                helpFormatAggr(call, " aggr-min ", false, false);
+                break;
+
         }
 
+        if (withAggr) {
+            racketInput.addAll(aggrStack.pop());
+        }
 
-        racketInput.add("))");
+        if (!call.isA(SqlKind.AGGREGATE)) {
+            racketInput.add("))");
+        }
+
         return null;
     }
 
