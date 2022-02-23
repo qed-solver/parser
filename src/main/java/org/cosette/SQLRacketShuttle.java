@@ -298,9 +298,10 @@ public class SQLRacketShuttle extends SqlShuttle {
         List<SqlNode> havingOperands = ((SqlCall) having).getOperandList();
 
         helpFormatHaving(havingOperands.get(0));
+        racketInput.add(")");
         racketInput.add(operator);
         helpFormatHaving(havingOperands.get(1));
-        racketInput.add("))");
+        racketInput.add(")");
     }
 
     private void helpFormatHaving(SqlNode having) {
