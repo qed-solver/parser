@@ -8,7 +8,7 @@ SELECT cmte_id, SUM(transaction_amt)
 FROM indiv_sample_nyc
 GROUP BY cmte_id;
 
-SELECT cmte_id
+SELECT cmte_id, SUM(transaction_amt)
 FROM indiv_sample_nyc
 GROUP BY cmte_id
-HAVING SUM(transaction_amt) > 10;
+HAVING SUM(transaction_amt) > 10 AND MIN(transaction_amt) > 2;
