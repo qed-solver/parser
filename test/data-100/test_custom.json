@@ -1,152 +1,72 @@
 {
   "schemas" : [ {
-    "types" : [ "INTEGER", "INTEGER", "VARCHAR(10)" ],
+    "types" : [ "INTEGER", "INTEGER", "VARCHAR" ],
+    "strategy" : [ "NULLABLE", "NULLABLE", "NULLABLE" ],
+    "key" : [ ],
+    "foreign" : [ ]
+  }, {
+    "types" : [ "INTEGER", "INTEGER", "VARCHAR" ],
     "strategy" : [ "NULLABLE", "NULLABLE", "NULLABLE" ],
     "key" : [ ],
     "foreign" : [ ]
   } ],
   "queries" : [ {
-    "distinct" : {
-      "correlate" : [ {
-        "project" : {
-          "target" : [ [ {
-            "column" : 0
-          }, "INTEGER" ] ],
-          "source" : {
-            "project" : {
-              "target" : [ [ {
-                "column" : 0
-              }, "INTEGER" ], [ {
-                "column" : 1
-              }, "INTEGER" ] ],
-              "source" : {
-                "scan" : 0
-              }
-            }
-          }
-        }
-      }, {
-        "aggregate" : {
-          "function" : [ [ {
-            "operator" : "SUM",
-            "operand" : [ {
-              "column" : 2
-            } ]
-          }, "INTEGER" ] ],
-          "source" : {
-            "filter" : {
-              "condition" : {
-                "operator" : "AND",
-                "operand" : [ {
-                  "operator" : "TRUE",
-                  "operand" : [ ]
-                }, {
-                  "operator" : "=",
-                  "operand" : [ {
-                    "column" : 0
-                  }, {
-                    "column" : 1
-                  } ]
-                } ]
-              },
-              "source" : {
-                "project" : {
-                  "target" : [ [ {
-                    "column" : 1
-                  }, "INTEGER" ], [ {
-                    "column" : 2
-                  }, "INTEGER" ] ],
-                  "source" : {
-                    "scan" : 0
-                  }
-                }
-              }
-            }
-          }
-        }
-      } ]
-    }
-  }, {
     "project" : {
-      "target" : [ [ {
-        "column" : 0
-      }, "INTEGER" ] ],
+      "target" : [ {
+        "column" : 0,
+        "type" : "INTEGER"
+      }, {
+        "column" : 1,
+        "type" : "INTEGER"
+      }, {
+        "column" : 2,
+        "type" : "VARCHAR"
+      }, {
+        "column" : 3,
+        "type" : "INTEGER"
+      }, {
+        "column" : 4,
+        "type" : "INTEGER"
+      }, {
+        "column" : 5,
+        "type" : "VARCHAR"
+      } ],
       "source" : {
-        "filter" : {
+        "join" : {
+          "kind" : "LEFT",
           "condition" : {
-            "operator" : ">",
+            "operator" : "=",
             "operand" : [ {
-              "column" : 1
+              "column" : 0,
+              "type" : "INTEGER"
             }, {
-              "operator" : "10",
-              "operand" : [ ]
-            } ]
+              "column" : 3,
+              "type" : "INTEGER"
+            } ],
+            "type" : "BOOLEAN"
           },
-          "source" : {
-            "distinct" : {
-              "correlate" : [ {
-                "project" : {
-                  "target" : [ [ {
-                    "column" : 0
-                  }, "INTEGER" ] ],
-                  "source" : {
-                    "project" : {
-                      "target" : [ [ {
-                        "column" : 0
-                      }, "INTEGER" ], [ {
-                        "column" : 1
-                      }, "INTEGER" ] ],
-                      "source" : {
-                        "scan" : 0
-                      }
-                    }
-                  }
-                }
-              }, {
-                "aggregate" : {
-                  "function" : [ [ {
-                    "operator" : "SUM",
-                    "operand" : [ {
-                      "column" : 2
-                    } ]
-                  }, "INTEGER" ] ],
-                  "source" : {
-                    "filter" : {
-                      "condition" : {
-                        "operator" : "AND",
-                        "operand" : [ {
-                          "operator" : "TRUE",
-                          "operand" : [ ]
-                        }, {
-                          "operator" : "=",
-                          "operand" : [ {
-                            "column" : 0
-                          }, {
-                            "column" : 1
-                          } ]
-                        } ]
-                      },
-                      "source" : {
-                        "project" : {
-                          "target" : [ [ {
-                            "column" : 1
-                          }, "INTEGER" ], [ {
-                            "column" : 2
-                          }, "INTEGER" ] ],
-                          "source" : {
-                            "scan" : 0
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              } ]
-            }
+          "left" : {
+            "scan" : 0
+          },
+          "right" : {
+            "scan" : 1
           }
         }
       }
     }
+  }, {
+    "project" : {
+      "target" : [ {
+        "column" : 0,
+        "type" : "INTEGER"
+      }, {
+        "column" : 2,
+        "type" : "VARCHAR"
+      } ],
+      "source" : {
+        "scan" : 0
+      }
+    }
   } ],
-  "help" : [ "LogicalAggregate(group=[{0}], EXPR$1=[SUM($1)])\n  LogicalProject(CMTE_ID=[$0], TRANSACTION_AMT=[$1])\n    LogicalTableScan(table=[[INDIV_SAMPLE_NYC]])\n", "LogicalProject(CMTE_ID=[$0])\n  LogicalFilter(condition=[>($1, 10)])\n    LogicalAggregate(group=[{0}], agg#0=[SUM($1)])\n      LogicalProject(CMTE_ID=[$0], TRANSACTION_AMT=[$1])\n        LogicalTableScan(table=[[INDIV_SAMPLE_NYC]])\n" ]
+  "help" : [ "LogicalProject(CMTE_ID=[$0], TRANSACTION_AMT=[$1], NAME=[$2], CMTE_ID0=[$3], TX_AMT=[$4], DESCRIPTION=[$5])\n  LogicalJoin(condition=[=($0, $3)], joinType=[left])\n    LogicalTableScan(table=[[NYC]])\n    LogicalTableScan(table=[[SF]])\n", "LogicalProject(CMTE_ID=[$0], NAME=[$2])\n  LogicalTableScan(table=[[NYC]])\n" ]
 }
