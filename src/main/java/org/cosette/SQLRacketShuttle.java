@@ -456,6 +456,8 @@ public class SQLRacketShuttle extends SqlShuttle {
                     racketInput.add(" HAVING ");
                     helpFormatHaving(sqlHaving);
 //                    sqlHaving.accept(this);
+                } else if (sqlGroup != null) {
+                    racketInput.add(" HAVING (TRUE)");
                 }
 
 
