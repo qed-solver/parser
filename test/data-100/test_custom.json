@@ -6,89 +6,6 @@
     "foreign" : [ ]
   } ],
   "queries" : [ {
-    "sort" : {
-      "collation" : [ [ 0, "INTEGER", "DESC" ] ],
-      "offset" : "null",
-      "limit" : "null",
-      "source" : {
-        "project" : {
-          "target" : [ [ {
-            "column" : 0
-          }, "INTEGER" ], [ {
-            "column" : 1
-          }, "INTEGER" ], [ {
-            "column" : 2
-          }, "VARCHAR(10)" ] ],
-          "source" : {
-            "filter" : {
-              "condition" : {
-                "operator" : "AND",
-                "operand" : [ {
-                  "operator" : "LIKE",
-                  "operand" : [ {
-                    "column" : 2
-                  }, {
-                    "operator" : "'%TRUMP%'",
-                    "operand" : [ ]
-                  } ]
-                }, {
-                  "operator" : "LIKE",
-                  "operand" : [ {
-                    "column" : 2
-                  }, {
-                    "operator" : "'%TRUMP%'",
-                    "operand" : [ ]
-                  } ]
-                } ]
-              },
-              "source" : {
-                "scan" : 0
-              }
-            }
-          }
-        }
-      }
-    }
-  }, {
-    "project" : {
-      "target" : [ [ {
-        "column" : 0
-      }, "INTEGER" ], [ {
-        "column" : 2
-      }, "VARCHAR(10)" ] ],
-      "source" : {
-        "filter" : {
-          "condition" : {
-            "operator" : "LIKE",
-            "operand" : [ {
-              "column" : 2
-            }, {
-              "operator" : "'%DONALD%'",
-              "operand" : [ ]
-            } ]
-          },
-          "source" : {
-            "scan" : 0
-          }
-        }
-      }
-    }
-<<<<<<< HEAD
-  } ],
-  "help" : [ "LogicalSort(sort0=[$0], dir0=[DESC])\n  LogicalProject(CMTE_ID=[$0], TRANSACTION_AMT=[$1], NAME=[$2])\n    LogicalFilter(condition=[AND(LIKE($2, '%TRUMP%'), LIKE($2, '%TRUMP%'))])\n      LogicalTableScan(table=[[INDIV_SAMPLE_NYC]])\n", "LogicalProject(CMTE_ID=[$0], NAME=[$2])\n  LogicalFilter(condition=[LIKE($2, '%DONALD%')])\n    LogicalTableScan(table=[[INDIV_SAMPLE_NYC]])\n" ]
-=======
-  }, {
-    "project" : {
-      "target" : [ [ {
-        "column" : 0
-      }, "INTEGER" ], [ {
-        "column" : 2
-      }, "VARCHAR(10)" ] ],
-      "source" : {
-        "scan" : 0
-      }
-    }
-  }, {
     "distinct" : {
       "correlate" : [ {
         "project" : {
@@ -231,6 +148,5 @@
       }
     }
   } ],
-  "help" : [ "LogicalProject(CMTE_ID=[$0], TRANSACTION_AMT=[$1], NAME=[$2])\n  LogicalFilter(condition=[<>($0, $1)])\n    LogicalTableScan(table=[[INDIV_SAMPLE_NYC]])\n", "LogicalProject(CMTE_ID=[$0], NAME=[$2])\n  LogicalTableScan(table=[[INDIV_SAMPLE_NYC]])\n", "LogicalAggregate(group=[{0}], EXPR$1=[SUM($1)])\n  LogicalProject(CMTE_ID=[$0], TRANSACTION_AMT=[$1])\n    LogicalTableScan(table=[[INDIV_SAMPLE_NYC]])\n", "LogicalProject(CMTE_ID=[$0])\n  LogicalFilter(condition=[>($1, 10)])\n    LogicalAggregate(group=[{0}], agg#0=[SUM($1)])\n      LogicalProject(CMTE_ID=[$0], TRANSACTION_AMT=[$1])\n        LogicalTableScan(table=[[INDIV_SAMPLE_NYC]])\n" ]
->>>>>>> group_by
+  "help" : [ "LogicalAggregate(group=[{0}], EXPR$1=[SUM($1)])\n  LogicalProject(CMTE_ID=[$0], TRANSACTION_AMT=[$1])\n    LogicalTableScan(table=[[INDIV_SAMPLE_NYC]])\n", "LogicalProject(CMTE_ID=[$0])\n  LogicalFilter(condition=[>($1, 10)])\n    LogicalAggregate(group=[{0}], agg#0=[SUM($1)])\n      LogicalProject(CMTE_ID=[$0], TRANSACTION_AMT=[$1])\n        LogicalTableScan(table=[[INDIV_SAMPLE_NYC]])\n" ]
 }
