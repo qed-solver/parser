@@ -1,74 +1,72 @@
 {
   "schemas" : [ {
-    "types" : [ "INTEGER", "INTEGER", "VARCHAR(10)" ],
+    "types" : [ "INTEGER", "INTEGER", "VARCHAR" ],
     "strategy" : [ "NULLABLE", "NULLABLE", "NULLABLE" ],
     "key" : [ ],
     "foreign" : [ ]
   }, {
-    "types" : [ "INTEGER", "INTEGER", "VARCHAR(10)" ],
+    "types" : [ "INTEGER", "INTEGER", "VARCHAR" ],
     "strategy" : [ "NULLABLE", "NULLABLE", "NULLABLE" ],
     "key" : [ ],
     "foreign" : [ ]
   } ],
   "queries" : [ {
     "project" : {
-      "target" : [ [ {
-        "column" : 0
-      }, "INTEGER" ], [ {
-        "column" : 1
-      }, "INTEGER" ], [ {
-        "column" : 2
-      }, "VARCHAR(10)" ], [ {
-        "column" : 3
-      }, "INTEGER" ], [ {
-        "column" : 4
-      }, "INTEGER" ], [ {
-        "column" : 5
-      }, "VARCHAR(10)" ] ],
+      "target" : [ {
+        "column" : 0,
+        "type" : "INTEGER"
+      }, {
+        "column" : 1,
+        "type" : "INTEGER"
+      }, {
+        "column" : 2,
+        "type" : "VARCHAR"
+      }, {
+        "column" : 3,
+        "type" : "INTEGER"
+      }, {
+        "column" : 4,
+        "type" : "INTEGER"
+      }, {
+        "column" : 5,
+        "type" : "VARCHAR"
+      } ],
       "source" : {
-        "filter" : {
+        "join" : {
+          "kind" : "LEFT",
           "condition" : {
             "operator" : "=",
             "operand" : [ {
-              "column" : 0
+              "column" : 0,
+              "type" : "INTEGER"
             }, {
-              "operator" : "1",
-              "operand" : [ ]
-            } ]
+              "column" : 3,
+              "type" : "INTEGER"
+            } ],
+            "type" : "BOOLEAN"
           },
-          "source" : {
-            "join" : {
-              "type" : "INNER",
-              "condition" : {
-                "operator" : "=",
-                "operand" : [ {
-                  "column" : 0
-                }, {
-                  "column" : 3
-                } ]
-              },
-              "left" : {
-                "scan" : 0
-              },
-              "right" : {
-                "scan" : 1
-              }
-            }
+          "left" : {
+            "scan" : 0
+          },
+          "right" : {
+            "scan" : 1
           }
         }
       }
     }
   }, {
     "project" : {
-      "target" : [ [ {
-        "column" : 0
-      }, "INTEGER" ], [ {
-        "column" : 2
-      }, "VARCHAR(10)" ] ],
+      "target" : [ {
+        "column" : 0,
+        "type" : "INTEGER"
+      }, {
+        "column" : 2,
+        "type" : "VARCHAR"
+      } ],
       "source" : {
         "scan" : 0
       }
     }
   } ],
-  "help" : [ "LogicalProject(CMTE_ID=[$0], TRANSACTION_AMT=[$1], NAME=[$2], CMTE_ID0=[$3], TX_AMT=[$4], DESCRIPTION=[$5])\n  LogicalFilter(condition=[=($0, 1)])\n    LogicalJoin(condition=[=($0, $3)], joinType=[inner])\n      LogicalTableScan(table=[[NYC]])\n      LogicalTableScan(table=[[SF]])\n", "LogicalProject(CMTE_ID=[$0], NAME=[$2])\n  LogicalTableScan(table=[[NYC]])\n" ]
+  "help" : [ "LogicalProject(CMTE_ID=[$0], TRANSACTION_AMT=[$1], NAME=[$2], CMTE_ID0=[$3], TX_AMT=[$4], DESCRIPTION=[$5])\n  LogicalJoin(condition=[=($0, $3)], joinType=[left])\n    LogicalTableScan(table=[[NYC]])\n    LogicalTableScan(table=[[SF]])\n", "LogicalProject(CMTE_ID=[$0], NAME=[$2])\n  LogicalTableScan(table=[[NYC]])\n" ]
 }

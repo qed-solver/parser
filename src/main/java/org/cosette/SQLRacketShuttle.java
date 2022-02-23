@@ -249,7 +249,7 @@ public class SQLRacketShuttle extends SqlShuttle {
         return toReturn;
     }
 
-    private String helpFormatWhereClause(String operand) {
+    private String helpFormatWhereClause(String operand, Boolean shouldKeepOriginalTableName) {
         if (operand.charAt(0) == '`') {
             // `INDIV_SAMPLE_NYC`.`CMTE_ID` => "INDIV_SAMPLE_NYC.CMTE_ID"
             operand = operand.replaceAll("`", "");
@@ -261,14 +261,16 @@ public class SQLRacketShuttle extends SqlShuttle {
                     colName = colNameCoversion.get(operand);
                 }
                 // We have generated new joined table, so we need to change all table names to new joined table name
-
-                return String.format("\"%s.%s\"", newJoinedTableName, colName);
+                String tblName = shouldKeepOriginalTableName ? operandTokens[0] : newJoinedTableName;
+                return String.format("\"%s.%s\"", tblName, colName);
             }
             return "\"" + operand + "\"";
         } else return operand;
     }
 
-    private void helpFormatWhere(SqlNode where) {
+    private void helpFormatWhere(SqlNode where, boolean... params) {
+        boolean shouldKeepOriginalTableName = params.length > 0 ? params[0] : false;
+
         SqlKind comparisonType = where.getKind();
         switch (comparisonType) {
             case LESS_THAN:
@@ -277,8 +279,8 @@ public class SQLRacketShuttle extends SqlShuttle {
             case GREATER_THAN_OR_EQUAL:
             case EQUALS: {
                 String[] whereTokens = where.toString().split(" ");
-                whereTokens[0] = helpFormatWhereClause(whereTokens[0]);
-                whereTokens[2] = helpFormatWhereClause(whereTokens[2]);
+                whereTokens[0] = helpFormatWhereClause(whereTokens[0], shouldKeepOriginalTableName);
+                whereTokens[2] = helpFormatWhereClause(whereTokens[2], shouldKeepOriginalTableName);
                 racketInput.add(" (BINOP " + String.join(" ", whereTokens) + ")");
                 break;
             }
@@ -297,9 +299,9 @@ public class SQLRacketShuttle extends SqlShuttle {
                 // For queries like "WHERE id <> 3",  (Calcite library hasn't support "!=" yet)
                 // transform it to racket format as "WHERE (NOT (BINOP id = 3))"
                 String[] whereTokens = where.toString().split(" ");
-                whereTokens[0] = helpFormatWhereClause(whereTokens[0]);
+                whereTokens[0] = helpFormatWhereClause(whereTokens[0], shouldKeepOriginalTableName);
                 whereTokens[1] = "=";
-                whereTokens[2] = helpFormatWhereClause(whereTokens[2]);
+                whereTokens[2] = helpFormatWhereClause(whereTokens[2], shouldKeepOriginalTableName);
                 racketInput.add(" (NOT (BINOP " + String.join(" ", whereTokens) + ") )");
                 break;
             }
@@ -362,7 +364,7 @@ public class SQLRacketShuttle extends SqlShuttle {
                         }
 
                         racketInput.add("(NAMED " + firstTable + ") (NAMED " + secondTable + ")");
-                        helpFormatWhere(sqlJoin.getCondition());
+                        helpFormatWhere(sqlJoin.getCondition(), true);
                         racketInput.add(") ");
 
                         // Process "AS (JOINED_PART) "NEW_TABLE""

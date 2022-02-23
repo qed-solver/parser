@@ -10,6 +10,6 @@ CREATE TABLE sf(
     description VARCHAR(10)
     );
 
-SELECT * FROM nyc JOIN sf ON nyc.cmte_id = sf.cmte_id WHERE nyc.cmte_id = 1;
+SELECT * FROM nyc LEFT JOIN sf ON nyc.cmte_id = sf.cmte_id;
 
 SELECT cmte_id, name FROM nyc;
