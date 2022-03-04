@@ -1,5 +1,6 @@
 .DS_Store
 .idea/
-target/
 *.iml
 .mvn/wrapper/maven-wrapper.jar
+constropt/
+target/
