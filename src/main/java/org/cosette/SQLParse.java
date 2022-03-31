@@ -3,8 +3,6 @@ package org.cosette;
 import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.RelRoot;
 import org.apache.calcite.sql.SqlNode;
-import org.apache.calcite.sql.parser.SqlParseException;
-import org.apache.calcite.tools.ValidationException;
 
 import java.io.File;
 import java.io.IOException;
@@ -33,7 +31,7 @@ public class SQLParse {
      *
      * @param ddl The DDL statement to be applied.
      */
-    public void applyDDL(String ddl) throws SQLException, SqlParseException {
+    public void applyDDL(String ddl) throws Exception {
         schemaGenerator.applyDDL(ddl);
     }
 
@@ -42,7 +40,7 @@ public class SQLParse {
      *
      * @param dml The DML statement to be parsed.
      */
-    public void parseDML(String dml) throws SqlParseException, ValidationException {
+    public void parseDML(String dml) throws Exception {
         RawPlanner planner = schemaGenerator.createPlanner();
         SqlNode sqlNode = planner.parse(dml);
         RelRoot relRoot = planner.rel(sqlNode);

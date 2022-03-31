@@ -105,6 +105,7 @@ public class RelJSONShuttle implements RelShuttle {
                 }
             }
 
+            // FOREIGN KEY IS NOT SUPPORTED BY CALCITE YET.
             ArrayNode foreignArray = tableObject.putArray("foreign");
             List<RelReferentialConstraint> constraints = table.getReferentialConstraints();
             if (constraints != null) {

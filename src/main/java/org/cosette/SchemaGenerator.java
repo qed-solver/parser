@@ -1,40 +1,40 @@
 package org.cosette;
 
-import com.mysql.cj.jdbc.MysqlDataSource;
-import org.apache.calcite.DataContext;
-import org.apache.calcite.adapter.jdbc.JdbcConvention;
-import org.apache.calcite.adapter.jdbc.JdbcSchema;
+import org.apache.calcite.config.Lex;
 import org.apache.calcite.jdbc.CalciteSchema;
-import org.apache.calcite.linq4j.tree.Expressions;
-import org.apache.calcite.schema.Schema;
-import org.apache.calcite.schema.SchemaPlus;
-import org.apache.calcite.sql.dialect.MysqlSqlDialect;
-import org.apache.calcite.util.BuiltInMethod;
+import org.apache.calcite.rel.type.RelDataType;
+import org.apache.calcite.rel.type.RelDataTypeFactory;
+import org.apache.calcite.schema.*;
+import org.apache.calcite.schema.impl.AbstractSchema;
+import org.apache.calcite.schema.impl.AbstractTable;
+import org.apache.calcite.sql.SqlKind;
+import org.apache.calcite.sql.SqlNode;
+import org.apache.calcite.sql.SqlNodeList;
+import org.apache.calcite.sql.ddl.SqlColumnDeclaration;
+import org.apache.calcite.sql.ddl.SqlCreateTable;
+import org.apache.calcite.sql.ddl.SqlKeyConstraint;
+import org.apache.calcite.sql.parser.SqlParser;
+import org.apache.calcite.sql.parser.ddl.SqlDdlParserImpl;
+import org.apache.calcite.sql.type.SqlTypeName;
+import org.apache.calcite.util.ImmutableBitSet;
 
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.sql.Statement;
+import java.util.*;
 
 /**
  * A SchemaGenerator instance can execute DDL statements and generate schemas in the process.
  */
 public class SchemaGenerator {
 
-    private final MysqlDataSource dataSource = new MysqlDataSource();
+    private final SqlParser.Config schemaParserConfig = SqlParser.Config.DEFAULT
+            .withParserFactory(SqlDdlParserImpl.FACTORY)
+            .withLex(Lex.MYSQL);
+    private final CosetteSchema schema = new CosetteSchema();
 
     /**
      * Create a SchemaGenerator instance by setting up a connection to JDBC.
      */
-    public SchemaGenerator() throws SQLException {
-        dataSource.setUser("cosette");
-        dataSource.setPassword("cosette");
-        dataSource.setUrl("jdbc:mysql://localhost/cosette");
-        ResultSet rs = dataSource.getConnection().createStatement().executeQuery("SELECT CONCAT('DROP TABLE IF EXISTS `', table_name, '`')\n" +
-                "FROM information_schema.tables\n" +
-                "WHERE table_schema = 'cosette'");
-        while (rs.next()) {
-            dataSource.getConnection().createStatement().executeUpdate(rs.getString(1));
-        }
+    public SchemaGenerator() {
+
     }
 
     /**
@@ -42,20 +42,17 @@ public class SchemaGenerator {
      *
      * @param ddl The given DDL statement.
      */
-    public void applyDDL(String ddl) throws SQLException {
-        Statement statement = dataSource.getConnection().createStatement();
-        statement.executeUpdate(ddl);
-        statement.close();
+    public void applyDDL(String ddl) throws Exception {
+        SqlParser schemaParser = SqlParser.create(ddl, schemaParserConfig);
+        SqlNode schemaNode = schemaParser.parseStmt();
+        schema.addTable((SqlCreateTable) schemaNode);
     }
 
     /**
      * @return The current schema.
      */
     public SchemaPlus extractSchema() {
-        JdbcConvention convention = new JdbcConvention(MysqlSqlDialect.DEFAULT, Expressions.call(DataContext.ROOT, BuiltInMethod.DATA_CONTEXT_GET_ROOT_SCHEMA.method), "cosette-convection");
-        Schema schema = new JdbcSchema(dataSource, MysqlSqlDialect.DEFAULT, convention, null, null);
-        CalciteSchema calciteSchema = CalciteSchema.createRootSchema(false, true, "calcite-schema", schema);
-        return calciteSchema.plus();
+        return CalciteSchema.createRootSchema(true, false, "Cosette", schema).plus();
     }
 
     /**
@@ -67,4 +64,73 @@ public class SchemaGenerator {
 
 }
 
-// TODO: Resolve constraints.
+class CosetteTable extends AbstractTable {
+
+    final List<Boolean> columnNullabilities = new ArrayList<>();
+    final List<String> columnNames = new ArrayList<>();
+    final List<SqlTypeName> columnTypeNames = new ArrayList<>();
+    final Set<ImmutableBitSet> columnKeys = new HashSet<>();
+
+    @Override
+    public RelDataType getRowType(RelDataTypeFactory typeFactory) {
+        List<RelDataType> fields = new ArrayList<>();
+        for (int index = 0; index < columnNames.size(); index += 1) {
+            fields.add(typeFactory.createTypeWithNullability(typeFactory.createSqlType(columnTypeNames.get(index)), columnNullabilities.get(index)));
+        }
+        return typeFactory.createStructType(fields, columnNames);
+    }
+
+    @Override
+    public Statistic getStatistic() {
+        return Statistics.of(0, new ArrayList<>(columnKeys));
+    }
+}
+
+class CosetteSchema extends AbstractSchema {
+
+    final HashMap<String, Table> tables = new HashMap<>();
+
+    public void addTable(SqlCreateTable createTable) throws Exception {
+        if (createTable.columnList == null) {
+            throw new Exception("No column in table " + createTable.name);
+        }
+        CosetteTable cosetteTable = new CosetteTable();
+        for (SqlNode column : createTable.columnList) {
+            switch (column.getKind()) {
+                case CHECK:
+                    System.err.println("Check constraint is not implemented in cosette yet.");
+                    break;
+                case COLUMN_DECL:
+                    SqlColumnDeclaration decl = (SqlColumnDeclaration) column;
+                    cosetteTable.columnNames.add(decl.name.toString());
+                    cosetteTable.columnTypeNames.add(SqlTypeName.get(decl.dataType.getTypeName().toString()));
+                    cosetteTable.columnNullabilities.add(decl.strategy != ColumnStrategy.NOT_NULLABLE);
+                    break;
+                case FOREIGN_KEY:
+                    System.err.println("Foreign key constraint is not implemented in cosette yet.");
+                    break;
+                case PRIMARY_KEY:
+                case UNIQUE:
+                    SqlKeyConstraint cons = (SqlKeyConstraint) column;
+                    List<Integer> keys = new ArrayList<>();
+                    for (SqlNode id : (SqlNodeList) cons.getOperandList().get(1)) {
+                        int index = cosetteTable.columnNames.indexOf(id.toString());
+                        keys.add(index);
+                        if (column.getKind() == SqlKind.PRIMARY_KEY) {
+                            cosetteTable.columnNullabilities.set(index, false);
+                        }
+                    }
+                    cosetteTable.columnKeys.add(ImmutableBitSet.of(keys));
+                    break;
+                default:
+                    throw new Exception("Unsupported declaration type" + column.getKind() + " in table " + createTable.name);
+            }
+        }
+        tables.put(createTable.name.toString(), cosetteTable);
+    }
+
+    protected Map<String, Table> getTableMap() {
+        return tables;
+    }
+
+}

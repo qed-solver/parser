@@ -1,12 +1,10 @@
 package org.cosette;
 
-import org.apache.calcite.sql.parser.SqlParseException;
 import org.apache.commons.io.FilenameUtils;
 
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileWriter;
-import java.io.IOException;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -17,12 +15,10 @@ import java.util.regex.Pattern;
  */
 public class Main {
 
-    public static void main(String[] args) throws IOException {
-        Process mysql = Runtime.getRuntime().exec("cmd mysqld");
+    public static void main(String[] args) {
         for (String filename : args) {
             parseFile(filename);
         }
-        mysql.destroy();
     }
 
     /**
@@ -62,10 +58,10 @@ public class Main {
                 String statement = scanner.next().trim();
                 if (!statement.isBlank()) {
                     try {
-                        try {
-                            sqlParse.parseDML(statement);
-                        } catch (SqlParseException ignore) {
+                        if (statement.toUpperCase().startsWith("CREATE TABLE")) {
                             sqlParse.applyDDL(statement);
+                        } else {
+                            sqlParse.parseDML(statement);
                         }
                     } catch (Exception e) {
                         throw new Exception("In statement:\n" + statement.replaceAll("(?m)^", "\t") + "\n" + e.getMessage());
