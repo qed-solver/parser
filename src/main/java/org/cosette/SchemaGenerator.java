@@ -2,18 +2,20 @@ package org.cosette;
 
 import org.apache.calcite.config.Lex;
 import org.apache.calcite.jdbc.CalciteSchema;
+import org.apache.calcite.rel.logical.LogicalFilter;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
+import org.apache.calcite.rex.RexNode;
 import org.apache.calcite.schema.*;
 import org.apache.calcite.schema.impl.AbstractSchema;
 import org.apache.calcite.schema.impl.AbstractTable;
-import org.apache.calcite.sql.SqlKind;
-import org.apache.calcite.sql.SqlNode;
-import org.apache.calcite.sql.SqlNodeList;
+import org.apache.calcite.sql.*;
+import org.apache.calcite.sql.ddl.SqlCheckConstraint;
 import org.apache.calcite.sql.ddl.SqlColumnDeclaration;
 import org.apache.calcite.sql.ddl.SqlCreateTable;
 import org.apache.calcite.sql.ddl.SqlKeyConstraint;
 import org.apache.calcite.sql.parser.SqlParser;
+import org.apache.calcite.sql.parser.SqlParserPos;
 import org.apache.calcite.sql.parser.ddl.SqlDdlParserImpl;
 import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.util.ImmutableBitSet;
@@ -25,10 +27,10 @@ import java.util.*;
  */
 public class SchemaGenerator {
 
+    final CosetteSchema schema = new CosetteSchema();
     private final SqlParser.Config schemaParserConfig = SqlParser.Config.DEFAULT
             .withParserFactory(SqlDdlParserImpl.FACTORY)
             .withLex(Lex.MYSQL);
-    private final CosetteSchema schema = new CosetteSchema();
 
     /**
      * Create a SchemaGenerator instance by setting up a connection to JDBC.
@@ -52,7 +54,7 @@ public class SchemaGenerator {
      * @return The current schema.
      */
     public SchemaPlus extractSchema() {
-        return CalciteSchema.createRootSchema(true, false, "Cosette", schema).plus();
+        return schema.plus();
     }
 
     /**
@@ -66,10 +68,18 @@ public class SchemaGenerator {
 
 class CosetteTable extends AbstractTable {
 
+    final CosetteSchema owner;
     final List<Boolean> columnNullabilities = new ArrayList<>();
     final List<String> columnNames = new ArrayList<>();
     final List<SqlTypeName> columnTypeNames = new ArrayList<>();
+    final List<SqlBasicCall> checkConstraints = new ArrayList<>();
     final Set<ImmutableBitSet> columnKeys = new HashSet<>();
+    final SqlIdentifier id;
+
+    public CosetteTable(CosetteSchema schema, SqlIdentifier name) {
+        owner = schema;
+        id = name;
+    }
 
     @Override
     public RelDataType getRowType(RelDataTypeFactory typeFactory) {
@@ -84,6 +94,24 @@ class CosetteTable extends AbstractTable {
     public Statistic getStatistic() {
         return Statistics.of(0, new ArrayList<>(columnKeys));
     }
+
+    public List<RexNode> deriveCheckConstraint() {
+        List<RexNode> derivedConstraints = new ArrayList<>();
+        RawPlanner planner = new RawPlanner(owner.plus());
+        for (SqlBasicCall check : checkConstraints) {
+            SqlSelect wrapper = new SqlSelect(SqlParserPos.ZERO, SqlNodeList.EMPTY, SqlNodeList.SINGLETON_STAR,
+                    this.id, check, null, null, SqlNodeList.EMPTY, null, null, null, null);
+            try {
+                planner.parse(wrapper.toString());
+                LogicalFilter filter = (LogicalFilter) planner.rel(check).project().getInput(0);
+                derivedConstraints.add(filter.getCondition());
+            } catch (Exception ignore) {
+
+            }
+        }
+        return derivedConstraints;
+    }
+
 }
 
 class CosetteSchema extends AbstractSchema {
@@ -94,11 +122,12 @@ class CosetteSchema extends AbstractSchema {
         if (createTable.columnList == null) {
             throw new Exception("No column in table " + createTable.name);
         }
-        CosetteTable cosetteTable = new CosetteTable();
+        CosetteTable cosetteTable = new CosetteTable(this, createTable.name);
+
         for (SqlNode column : createTable.columnList) {
             switch (column.getKind()) {
                 case CHECK:
-                    System.err.println("Check constraint is not implemented in cosette yet.");
+                    cosetteTable.checkConstraints.add((SqlBasicCall) ((SqlCheckConstraint) column).getOperandList().get(1));
                     break;
                 case COLUMN_DECL:
                     SqlColumnDeclaration decl = (SqlColumnDeclaration) column;
@@ -123,7 +152,7 @@ class CosetteSchema extends AbstractSchema {
                     cosetteTable.columnKeys.add(ImmutableBitSet.of(keys));
                     break;
                 default:
-                    throw new Exception("Unsupported declaration type" + column.getKind() + " in table " + createTable.name);
+                    throw new Exception("Unsupported declaration type " + column.getKind() + " in table " + createTable.name);
             }
         }
         tables.put(createTable.name.toString(), cosetteTable);
@@ -131,6 +160,10 @@ class CosetteSchema extends AbstractSchema {
 
     protected Map<String, Table> getTableMap() {
         return tables;
+    }
+
+    public SchemaPlus plus() {
+        return CalciteSchema.createRootSchema(true, false, "Cosette", this).plus();
     }
 
 }

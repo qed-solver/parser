@@ -74,7 +74,7 @@ public class Main {
             scanner.close();
         } catch (Exception e) {
             System.err.println("In file:\n\t" + filename);
-            System.err.println(e.getMessage().trim() + "\n");
+            System.err.println(e.toString().trim() + "\n");
         }
     }
 
@@ -137,7 +137,7 @@ public class Main {
             parseSQLFile(intermediate);
         } catch (Exception e) {
             System.err.println("In file:\n\t" + filename);
-            System.err.println(e.getMessage().trim() + "\n");
+            System.err.println(e.toString().trim() + "\n");
         }
     }
 
