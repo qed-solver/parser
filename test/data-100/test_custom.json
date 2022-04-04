@@ -1,12 +1,7 @@
 {
   "schemas" : [ {
-    "types" : [ "INTEGER", "INTEGER", "VARCHAR" ],
-    "strategy" : [ "NULLABLE", "NULLABLE", "NULLABLE" ],
-    "key" : [ ],
-    "foreign" : [ ]
-  }, {
-    "types" : [ "INTEGER", "INTEGER", "VARCHAR" ],
-    "strategy" : [ "NULLABLE", "NULLABLE", "NULLABLE" ],
+    "types" : [ "INTEGER", "INTEGER", "VARCHAR", "VARCHAR" ],
+    "strategy" : [ "NULLABLE", "NULLABLE", "NULLABLE", "NULLABLE" ],
     "key" : [ ],
     "foreign" : [ ]
   } ],
@@ -23,33 +18,50 @@
         "type" : "VARCHAR"
       }, {
         "column" : 3,
-        "type" : "INTEGER"
-      }, {
-        "column" : 4,
-        "type" : "INTEGER"
-      }, {
-        "column" : 5,
         "type" : "VARCHAR"
       } ],
       "source" : {
-        "join" : {
-          "kind" : "LEFT",
+        "filter" : {
           "condition" : {
-            "operator" : "=",
+            "operator" : "AND",
             "operand" : [ {
-              "column" : 0,
-              "type" : "INTEGER"
+              "operator" : "=",
+              "operand" : [ {
+                "column" : 0,
+                "type" : "INTEGER"
+              }, {
+                "operator" : "1",
+                "operand" : [ ],
+                "type" : "INTEGER"
+              } ],
+              "type" : "BOOLEAN"
             }, {
-              "column" : 3,
-              "type" : "INTEGER"
+              "operator" : "LIKE",
+              "operand" : [ {
+                "column" : 2,
+                "type" : "VARCHAR"
+              }, {
+                "operator" : "_ISO-8859-1'%TEST%'",
+                "operand" : [ ],
+                "type" : "CHAR"
+              } ],
+              "type" : "BOOLEAN"
+            }, {
+              "operator" : "LIKE",
+              "operand" : [ {
+                "column" : 3,
+                "type" : "VARCHAR"
+              }, {
+                "operator" : "_ISO-8859-1'%TEST3%'",
+                "operand" : [ ],
+                "type" : "CHAR"
+              } ],
+              "type" : "BOOLEAN"
             } ],
             "type" : "BOOLEAN"
           },
-          "left" : {
+          "source" : {
             "scan" : 0
-          },
-          "right" : {
-            "scan" : 1
           }
         }
       }
@@ -67,37 +79,54 @@
         "type" : "VARCHAR"
       }, {
         "column" : 3,
-        "type" : "INTEGER"
-      }, {
-        "column" : 4,
-        "type" : "INTEGER"
-      }, {
-        "column" : 5,
         "type" : "VARCHAR"
       } ],
       "source" : {
-        "join" : {
-          "kind" : "LEFT",
+        "filter" : {
           "condition" : {
-            "operator" : "=",
+            "operator" : "AND",
             "operand" : [ {
-              "column" : 0,
-              "type" : "INTEGER"
+              "operator" : "=",
+              "operand" : [ {
+                "column" : 0,
+                "type" : "INTEGER"
+              }, {
+                "operator" : "2",
+                "operand" : [ ],
+                "type" : "INTEGER"
+              } ],
+              "type" : "BOOLEAN"
             }, {
-              "column" : 3,
-              "type" : "INTEGER"
+              "operator" : "LIKE",
+              "operand" : [ {
+                "column" : 2,
+                "type" : "VARCHAR"
+              }, {
+                "operator" : "_ISO-8859-1'%TEST%'",
+                "operand" : [ ],
+                "type" : "CHAR"
+              } ],
+              "type" : "BOOLEAN"
+            }, {
+              "operator" : "LIKE",
+              "operand" : [ {
+                "column" : 3,
+                "type" : "VARCHAR"
+              }, {
+                "operator" : "_ISO-8859-1'%TEST3%'",
+                "operand" : [ ],
+                "type" : "CHAR"
+              } ],
+              "type" : "BOOLEAN"
             } ],
             "type" : "BOOLEAN"
           },
-          "left" : {
+          "source" : {
             "scan" : 0
-          },
-          "right" : {
-            "scan" : 1
           }
         }
       }
     }
   } ],
-  "help" : [ "LogicalProject(CMTE_ID=[$0], TRANSACTION_AMT=[$1], NAME=[$2], CMTE_ID0=[$3], TX_AMT=[$4], DESCRIPTION=[$5])\n  LogicalJoin(condition=[=($0, $3)], joinType=[left])\n    LogicalTableScan(table=[[NYC]])\n    LogicalTableScan(table=[[SF]])\n", "LogicalProject(CMTE_ID=[$0], TRANSACTION_AMT=[$1], NAME=[$2], CMTE_ID0=[$3], TX_AMT=[$4], DESCRIPTION=[$5])\n  LogicalJoin(condition=[=($0, $3)], joinType=[left])\n    LogicalTableScan(table=[[NYC]])\n    LogicalTableScan(table=[[SF]])\n" ]
+  "help" : [ "LogicalProject(CMTE_ID=[$0], TRANSACTION_AMT=[$1], NAME=[$2], STR_NAME=[$3])\n  LogicalFilter(condition=[AND(=($0, 1), LIKE($2, '%test%'), LIKE($3, '%test3%'))])\n    LogicalTableScan(table=[[INDIV_SAMPLE_NYC]])\n", "LogicalProject(CMTE_ID=[$0], TRANSACTION_AMT=[$1], NAME=[$2], STR_NAME=[$3])\n  LogicalFilter(condition=[AND(=($0, 2), LIKE($2, '%test%'), LIKE($3, '%test3%'))])\n    LogicalTableScan(table=[[INDIV_SAMPLE_NYC]])\n" ]
 }

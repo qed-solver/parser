@@ -1,14 +1,26 @@
+;;; [FOR-PARSER] STRING-COL INDIV_SAMPLE_NYC.NAME INDIV_SAMPLE_NYC.STR_NAME [END-FOR-PARSER]
 #lang rosette
 
 (require "../util.rkt" "../sql.rkt" "../table.rkt"  "../evaluator.rkt" "../equal.rkt" "../cosette.rkt" "../denotation.rkt" "../syntax.rkt")
 
-(define NYC (Table "NYC" (list "CMTE_ID" "TRANSACTION_AMT" "NAME") (gen-sym-schema 3 1)))
-(define SF (Table "SF" (list "CMTE_ID0" "TX_AMT" "DESCRIPTION") (gen-sym-schema 3 1)))
+(define INDIV_SAMPLE_NYC (Table "INDIV_SAMPLE_NYC" (list "CMTE_ID" "TRANSACTION_AMT" "NAME" "STR_NAME") (gen-sym-schema 4 1)))
 
+(define (gen-a)
+	(define-symbolic* a boolean?)
+  a)
+(define (gen-b)
+	(define-symbolic* b boolean?)
+  b)
+(define (gen-c)
+	(define-symbolic* c boolean?)
+  c)
+(define (gen-d)
+	(define-symbolic* d boolean?)
+  d)
 
-(define q1s (SELECT (VALS "NYC_JOIN_SF.CMTE_ID" "NYC_JOIN_SF.TRANSACTION_AMT" "NYC_JOIN_SF.NAME" "NYC_JOIN_SF.CMTE_ID0" "NYC_JOIN_SF.TX_AMT" "NYC_JOIN_SF.DESCRIPTION") FROM (AS (LEFT-OUTER-JOIN (NAMED NYC) (NAMED SF) (BINOP "NYC.CMTE_ID" = "SF.CMTE_ID0")) [ "NYC_JOIN_SF" (list "CMTE_ID" "TRANSACTION_AMT" "NAME" "CMTE_ID0" "TX_AMT" "DESCRIPTION") ]) WHERE (TRUE)))
+(define q1s (SELECT (VALS "INDIV_SAMPLE_NYC.CMTE_ID" "INDIV_SAMPLE_NYC.TRANSACTION_AMT" "INDIV_SAMPLE_NYC.NAME" "INDIV_SAMPLE_NYC.STR_NAME") FROM (NAMED INDIV_SAMPLE_NYC) WHERE (AND (AND (BINOP "INDIV_SAMPLE_NYC.CMTE_ID" = 1) (filter-sym (gen-a)) ) (filter-sym (gen-b)) )))
 
-(define q2s (SELECT (VALS "NYC_JOIN_SF.CMTE_ID" "NYC_JOIN_SF.TRANSACTION_AMT" "NYC_JOIN_SF.NAME" "NYC_JOIN_SF.CMTE_ID0" "NYC_JOIN_SF.TX_AMT" "NYC_JOIN_SF.DESCRIPTION") FROM (AS (LEFT-OUTER-JOIN (NAMED NYC) (NAMED SF) (BINOP "NYC.CMTE_ID" = "SF.CMTE_ID0")) [ "NYC_JOIN_SF" (list "CMTE_ID" "TRANSACTION_AMT" "NAME" "CMTE_ID0" "TX_AMT" "DESCRIPTION") ]) WHERE (TRUE)))
+(define q2s (SELECT (VALS "INDIV_SAMPLE_NYC.CMTE_ID" "INDIV_SAMPLE_NYC.TRANSACTION_AMT" "INDIV_SAMPLE_NYC.NAME" "INDIV_SAMPLE_NYC.STR_NAME") FROM (NAMED INDIV_SAMPLE_NYC) WHERE (AND (AND (BINOP "INDIV_SAMPLE_NYC.CMTE_ID" = 2) (filter-sym (gen-a)) ) (filter-sym (gen-b)) )))
 
 
 (cond
@@ -16,8 +28,6 @@
 	[(eq? #f #t) println("ORDER BY does not match")]
 	[(eq? #t #t)
 		(let* ([model (verify (same q1s q2s))]
-			   [concrete-t1 (clean-ret-table (evaluate NYC model))]
-			   [concrete-t2 (clean-ret-table (evaluate SF model))])
+			   [concrete-t1 (clean-ret-table (evaluate INDIV_SAMPLE_NYC model))])
 			(println concrete-t1)
-			(println concrete-t2)
 )])

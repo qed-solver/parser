@@ -57,6 +57,7 @@ public class SQLRacketShuttle extends SqlShuttle {
     private static HashMap<String, String> likeRegexToSymbolicVal;
     private static boolean orderByMatches;
     private static ArrayList<SqlNode> table1OrderBy;
+    private static Set<String> stringCols;
 
     // variable for one query
     // should re-initialize value after finishing performing one query.
@@ -87,6 +88,7 @@ public class SQLRacketShuttle extends SqlShuttle {
         likeRegexToSymbolicVal = new HashMap<>();
         orderByMatches = true;
         table1OrderBy = new ArrayList<>();
+        stringCols = new HashSet<String>();
 
 
         // For join operations
@@ -124,18 +126,26 @@ public class SQLRacketShuttle extends SqlShuttle {
             whereForInnerJoin = null;
         }
 
-        // longest chain of LIKE clauses = num of symbolic bools to define
-        int numSymbolicBools = 0;
-        for (ArrayList<List<SqlNode>> s : likeRegex) {
-            numSymbolicBools = numSymbolicBools + s.size();
-            if (s.size() != numSymbolicBools) {
-                likeRegexMatches = false;
-            }
-        }
-
         racketInput = new ArrayList<>();
         likeRegexTableIdx = -1;
         isFirstTable = true;
+
+        // longest chain of LIKE clauses = num of symbolic bools to define
+        int numSymbolicBools = 0;
+        for (ArrayList<List<SqlNode>> s : likeRegex) {
+            // Check whether two queries have equal number of regex expression
+            // If not => We can conclude that LIKE regex does not match
+            likeRegexMatches = (s.size() == numSymbolicBools);
+            numSymbolicBools = numSymbolicBools + s.size();
+
+            for (List<SqlNode> list: s) {
+                stringCols.add(list.get(0).toString());
+            }
+        }
+
+        if (stringCols.size() > 0) {
+            racketInput.add(";;; [FOR-PARSER] STRING-COL " + String.join(" ", stringCols) + " [END-FOR-PARSER]\n");
+        }
 
         // Add required headers & modules.
         racketInput.add("#lang rosette\n\n");
@@ -434,14 +444,13 @@ public class SQLRacketShuttle extends SqlShuttle {
     private void helpFormatHaving(SqlNode having) {
 
         SqlKind havingType = having.getKind();
-        System.out.println(havingType);
+//        System.out.println(havingType);
         switch (havingType) {
             case LESS_THAN: {
                 helpFormatBinopHaving(having, " < ");
                 break;
             }
             case GREATER_THAN: {
-                System.out.println(having);
                 helpFormatBinopHaving(having, " > ");
                 break;
             }
@@ -513,8 +522,6 @@ public class SQLRacketShuttle extends SqlShuttle {
      * @return Null, a placeholder required by interface.
      */
     public SqlNode visit(SqlCall call) {
-//        System.out.println("SQL CALL");
-
         boolean withAggr = false;
 
         SqlKind sqlKind = call.getKind();
@@ -531,8 +538,8 @@ public class SQLRacketShuttle extends SqlShuttle {
 
         switch (sqlKind) {
             case AS:
-                System.out.println("\tSQL AS\n");
-                System.out.println(call.toString());
+//                System.out.println("\tSQL AS\n");
+//                System.out.println(call.toString());
                 // Handle name conversion if there're duplicated column name
                 String identifier = call.toString().split(" ")[0]; // `SF`.`CMTE_ID`
                 identifier = identifier.replaceAll("`", "");
@@ -543,7 +550,7 @@ public class SQLRacketShuttle extends SqlShuttle {
                 }
                 break;
             case JOIN: {
-                System.out.println("\tSQL JOIN\n");
+//                System.out.println("\tSQL JOIN\n");
                 SqlJoin sqlJoin = (SqlJoin) call;
                 String joinType = sqlJoin.getJoinType().toString();
                 racketInput.add(" FROM (AS ");
@@ -747,7 +754,7 @@ public class SQLRacketShuttle extends SqlShuttle {
      * @return Null, a placeholder required by interface.
      */
     public SqlNode visit(SqlIdentifier id) {
-        System.out.println("ID\n");
+//        System.out.println("ID\n");
         // e.g. "INDIV_SAMPLE_NYC.CMTE_ID"
 
         if (!hasJoin) {

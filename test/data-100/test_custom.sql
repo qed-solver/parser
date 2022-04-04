@@ -1,9 +1,10 @@
 CREATE TABLE indiv_sample_nyc(    
 	cmte_id INT,
     transaction_amt INT,
-    name VARCHAR(10)
+    name VARCHAR(10),
+    str_name VARCHAR(10)
     );
 
-SELECT * FROM indiv_sample_nyc WHERE name LIKE '%TRUMP%' AND name LIKE '%TRUMP%' ORDER BY cmte_id DESC;
+SELECT * FROM indiv_sample_nyc WHERE cmte_id = 1 AND name LIKE '%test%' AND str_name LIKE '%test3%';
 
-SELECT cmte_id, name FROM indiv_sample_nyc WHERE name LIKE '%DONALD%';
+SELECT * FROM indiv_sample_nyc WHERE cmte_id = 2 AND name LIKE '%test%' AND str_name LIKE '%test3%';
