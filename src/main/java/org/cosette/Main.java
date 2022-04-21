@@ -68,7 +68,7 @@ public class Main {
                     }
                 }
             }
-            String outputPath = FilenameUtils.getPath(filename) + FilenameUtils.getBaseName(filename) + ".json";
+            String outputPath = FilenameUtils.getFullPath(filename) + FilenameUtils.getBaseName(filename) + ".json";
             File outputFile = new File(outputPath);
             sqlParse.dumpToJSON(outputFile);
             scanner.close();
@@ -129,7 +129,7 @@ public class Main {
                 }
             }
             scanner.close();
-            String intermediate = FilenameUtils.getPath(filename) + FilenameUtils.getBaseName(filename) + ".sql";
+            String intermediate = FilenameUtils.getFullPath(filename) + FilenameUtils.getBaseName(filename) + ".sql";
             File sql = new File(intermediate);
             BufferedWriter bufferedWriter = new BufferedWriter(new FileWriter(sql));
             bufferedWriter.write(sqlBuilder.toString());

@@ -6,7 +6,6 @@ import org.apache.calcite.sql.SqlNode;
 
 import java.io.File;
 import java.io.IOException;
-import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -21,7 +20,7 @@ public class SQLParse {
     /**
      * Create a new instance by setting up the SchemaGenerator instance and the list of RelRoot within.
      */
-    public SQLParse() throws SQLException {
+    public SQLParse() {
         schemaGenerator = new SchemaGenerator();
         rootList = new ArrayList<>();
     }
