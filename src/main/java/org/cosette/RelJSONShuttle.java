@@ -84,6 +84,12 @@ public class RelJSONShuttle implements RelShuttle {
         for (RelOptTable table : tableList) {
             ObjectNode tableObject = mapper.createObjectNode();
 
+            tableObject.put("name", table.getQualifiedName().get(table.getQualifiedName().size() - 1));
+            ArrayNode fieldArray = tableObject.putArray("fields");
+            for (String field : table.getRowType().getFieldNames()) {
+                fieldArray.add(field);
+            }
+
             ArrayNode typeArray = tableObject.putArray("types");
             for (RelDataTypeField field : table.getRowType().getFieldList()) {
                 typeArray.add(field.getType().getSqlTypeName().name());
@@ -217,10 +223,10 @@ public class RelJSONShuttle implements RelShuttle {
 
         ObjectNode filter = environment.createNode();
         ObjectNode filterArguments = environment.createNode();
-        ObjectNode condition = environment.createNode();
-        condition.put("operator", "TRUE");
-        condition.putArray("operand");
-        condition.put("type", "BOOLEAN");
+        ObjectNode and = environment.createNode();
+        and.put("operator", "AND");
+        ArrayNode condition = and.putArray("operand");
+        and.put("type", "BOOLEAN");
         List<Integer> groups = new ArrayList<>(aggregate.getGroupSet().asList());
         List<RelDataTypeField> types = aggregate.getInput().getRowType().getFieldList();
         for (int index = 0; index < groups.size(); index++) {
@@ -232,16 +238,12 @@ public class RelJSONShuttle implements RelShuttle {
             equivalence.put("operator", "=");
             equivalence.putArray("operand").add(leftColumn).add(rightColumn);
             equivalence.put("type", "BOOLEAN");
-            ObjectNode and = environment.createNode();
-            and.put("operator", "AND");
-            and.putArray("operand").add(condition).add(equivalence);
-            and.put("type", "BOOLEAN");
-            condition = and;
+            condition.add(equivalence);
         }
         inputProjectArguments.set("source", childShuttle.getRelNode());
         inputProject.set("project", inputProjectArguments);
         RelJSONShuttle filterChildShuttle = visitChild(aggregate.getInput(), environment.amend(null, groupCount));
-        filterArguments.set("condition", condition);
+        filterArguments.set("condition", and);
         filterArguments.set("source", filterChildShuttle.getRelNode());
         filter.set("filter", filterArguments);
 
@@ -370,8 +372,7 @@ public class RelJSONShuttle implements RelShuttle {
         RelJSONShuttle childShuttle = visitChild(project.getInput(), environment);
         List<RexNode> projects = project.getProjects();
         for (RexNode projection : projects) {
-            Environment inputEnvironment = environment.amend(null, 0);
-            parameters.add(visitRexNode(projection, inputEnvironment, project.getInput().getRowType().getFieldCount()).getRexNode());
+            parameters.add(visitRexNode(projection, environment, project.getInput().getRowType().getFieldCount()).getRexNode());
         }
         arguments.set("source", childShuttle.getRelNode());
         relNode.set("project", arguments);
@@ -391,7 +392,7 @@ public class RelJSONShuttle implements RelShuttle {
         // TODO: Correlation in condition?
         ObjectNode arguments = environment.createNode();
         arguments.put("kind", join.getJoinType().toString());
-        arguments.set("condition", visitRexNode(join.getCondition(), environment, 0).getRexNode());
+        arguments.set("condition", visitRexNode(join.getCondition(), environment, join.getLeft().getRowType().getFieldCount() + join.getRight().getRowType().getFieldCount()).getRexNode());
         arguments.set("left", visitChild(join.getLeft(), environment).getRelNode());
         arguments.set("right", visitChild(join.getRight(), environment).getRelNode());
         relNode.set("join", arguments);
@@ -480,10 +481,10 @@ public class RelJSONShuttle implements RelShuttle {
             column.add(index).add(types.get(index).getType().getSqlTypeName().name()).add(collation.shortString());
         }
         if (sort.offset != null) {
-            arguments.set("offset", visitRexNode(sort.offset, environment, 0).getRexNode());
+            arguments.set("offset", visitRexNode(sort.offset, environment, sort.getInput().getRowType().getFieldCount()).getRexNode());
         }
         if (sort.fetch != null) {
-            arguments.set("limit", visitRexNode(sort.fetch, environment, 0).getRexNode());
+            arguments.set("limit", visitRexNode(sort.fetch, environment, sort.getInput().getRowType().getFieldCount()).getRexNode());
         }
         arguments.set("source", childShuttle.getRelNode());
         relNode.set("sort", arguments);

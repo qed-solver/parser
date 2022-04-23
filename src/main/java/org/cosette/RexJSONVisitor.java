@@ -4,8 +4,6 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.apache.calcite.rex.*;
 
-import java.util.Locale;
-
 /**
  * AN implementation of RexVisitor interface that could convert a RelNode instance to a ObjectNode instance.
  */
@@ -95,7 +93,7 @@ public class RexJSONVisitor implements RexVisitor<ObjectNode> {
     public ObjectNode visitLiteral(RexLiteral literal) {
         String value = "NULL";
         if (literal.getValue() != null) {
-            value = literal.getValue().toString().toUpperCase(Locale.ROOT);
+            value = literal.getValue().toString();
         }
         rexNode.put("operator", value);
         rexNode.putArray("operand");
@@ -112,7 +110,7 @@ public class RexJSONVisitor implements RexVisitor<ObjectNode> {
      */
     @Override
     public ObjectNode visitCall(RexCall call) {
-        rexNode.put("operator", call.getOperator().toString().toUpperCase(Locale.ROOT));
+        rexNode.put("operator", call.getOperator().toString());
         ArrayNode arguments = rexNode.putArray("operand");
         for (RexNode operand : call.getOperands()) {
             arguments.add(visitChild(operand));
@@ -164,7 +162,7 @@ public class RexJSONVisitor implements RexVisitor<ObjectNode> {
      */
     @Override
     public ObjectNode visitSubQuery(RexSubQuery subQuery) {
-        rexNode.put("operator", subQuery.getOperator().toString().toUpperCase(Locale.ROOT));
+        rexNode.put("operator", subQuery.getOperator().toString());
         ArrayNode arguments = rexNode.putArray("operand");
         for (RexNode operand : subQuery.getOperands()) {
             arguments.add(visitChild(operand));
