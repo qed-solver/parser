@@ -363,6 +363,7 @@ public class RelJSONShuttle implements RelShuttle {
      */
     @Override
     public RelNode visit(LogicalProject project) {
+        // TODO: Correlation in targets?
         ObjectNode arguments = environment.createNode();
         ArrayNode parameters = arguments.putArray("target");
         RelJSONShuttle childShuttle = visitChild(project.getInput(), environment);
@@ -385,6 +386,7 @@ public class RelJSONShuttle implements RelShuttle {
 
     @Override
     public RelNode visit(LogicalJoin join) {
+        // TODO: Correlation in condition?
         ObjectNode arguments = environment.createNode();
         arguments.put("kind", join.getJoinType().toString());
         arguments.set("condition", visitRexNode(join.getCondition(), environment, join.getLeft().getRowType().getFieldCount() + join.getRight().getRowType().getFieldCount()).getRexNode());
