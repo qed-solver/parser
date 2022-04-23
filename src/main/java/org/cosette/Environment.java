@@ -111,7 +111,7 @@ public class Environment {
         if (environment.containsKey(id)) {
             return environment.get(id);
         }
-        return level;
+        throw new RuntimeException("Correlation ID not declared.");
     }
 
     /**

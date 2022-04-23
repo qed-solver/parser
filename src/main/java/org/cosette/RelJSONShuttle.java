@@ -181,7 +181,7 @@ public class RelJSONShuttle implements RelShuttle {
      * @param node The given RelNode instance.
      */
     private void notImplemented(RelNode node) {
-        relNode.put("error", "Not implemented: " + node.getRelTypeName());
+        throw new RuntimeException("Not implemented: " + node.getRelTypeName());
     }
 
     /**
@@ -370,7 +370,8 @@ public class RelJSONShuttle implements RelShuttle {
         RelJSONShuttle childShuttle = visitChild(project.getInput(), environment);
         List<RexNode> projects = project.getProjects();
         for (RexNode projection : projects) {
-            parameters.add(visitRexNode(projection, environment, projects.size()).getRexNode());
+            Environment inputEnvironment = environment.amend(null, 0);
+            parameters.add(visitRexNode(projection, inputEnvironment, project.getInput().getRowType().getFieldCount()).getRexNode());
         }
         arguments.set("source", childShuttle.getRelNode());
         relNode.set("project", arguments);
