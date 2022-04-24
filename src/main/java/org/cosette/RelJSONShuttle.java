@@ -77,11 +77,11 @@ public class RelJSONShuttle implements RelShuttle {
         }
 
         List<List<String>> tableNames = new ArrayList<>();
-        for (RelOptTable table : tableList) {
+        int index = 0;
+        while (index < tableList.size()) {
+            RelOptTable table = tableList.get(index);
             tableNames.add(table.getQualifiedName());
-        }
 
-        for (RelOptTable table : tableList) {
             ObjectNode tableObject = mapper.createObjectNode();
 
             tableObject.put("name", table.getQualifiedName().get(table.getQualifiedName().size() - 1));
@@ -111,11 +111,12 @@ public class RelJSONShuttle implements RelShuttle {
                 }
             }
 
-            // FOREIGN KEY IS NOT SUPPORTED BY CALCITE YET.
+            // TODO: Broken Foreign Key implementation for Cosette. to be fixed when Calcite supports foreign keys.
             ArrayNode foreignArray = tableObject.putArray("foreign");
             List<RelReferentialConstraint> constraints = table.getReferentialConstraints();
             if (constraints != null) {
                 for (RelReferentialConstraint constraint : constraints) {
+                    // Potentially refer to undeclared tables.
                     ArrayNode foreignMap = foreignArray.addArray();
                     int source = tableNames.indexOf(constraint.getSourceQualifiedName());
                     int target = tableNames.indexOf(constraint.getTargetQualifiedName());
@@ -133,14 +134,17 @@ public class RelJSONShuttle implements RelShuttle {
             if (raw != null) {
                 ArrayNode checkArray = tableObject.putArray("guaranteed");
                 for (RexNode check : raw.deriveCheckConstraint()) {
-                    //TODO: New table introduced in check?
-                    RexJSONVisitor checkVisitor = new RexJSONVisitor(new Environment(mapper, new ArrayList<>(tableList)), table.getRowType().getFieldCount());
+                    Environment checkEnvironment = new Environment(mapper, tableList);
+                    RexJSONVisitor checkVisitor = new RexJSONVisitor(checkEnvironment, table.getRowType().getFieldCount());
                     checkArray.add(check.accept(checkVisitor));
+                    tableList = checkEnvironment.getRelOptTables();
                 }
             }
 
-
             schemaArray.add(tableObject);
+
+            index += 1;
+
         }
 
         mapper.writerWithDefaultPrettyPrinter().writeValue(file, mainObject);

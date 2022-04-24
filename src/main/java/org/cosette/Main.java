@@ -51,17 +51,21 @@ public class Main {
 
     private static void parseSQLFile(String filename) {
         try {
+            Pattern comment = Pattern.compile("--.*(\\n|$)");
             Scanner scanner = new Scanner(new File(filename));
-            SQLParse sqlParse = new SQLParse();
+            SchemaGenerator generator = new SchemaGenerator();
+            SQLJSONParser parser = new SQLJSONParser();
             scanner.useDelimiter(Pattern.compile(";"));
             while (scanner.hasNext()) {
-                String statement = scanner.next().trim();
+                String statement = comment.matcher(scanner.next()).replaceAll("\n").trim();
                 if (!statement.isBlank()) {
                     try {
                         if (statement.toUpperCase().startsWith("CREATE TABLE")) {
-                            sqlParse.applyDDL(statement);
+                            generator.applyCreateTable(statement);
+                        } else if (statement.toUpperCase().startsWith("DECLARE FUNCTION")) {
+                            generator.applyDeclareFunction(statement);
                         } else {
-                            sqlParse.parseDML(statement);
+                            parser.parseDML(generator.extractSchema(), statement);
                         }
                     } catch (Exception e) {
                         throw new Exception("In statement:\n" + statement.replaceAll("(?m)^", "\t") + "\n" + e.getMessage());
@@ -70,7 +74,7 @@ public class Main {
             }
             String outputPath = FilenameUtils.getFullPath(filename) + FilenameUtils.getBaseName(filename) + ".json";
             File outputFile = new File(outputPath);
-            sqlParse.dumpToJSON(outputFile);
+            parser.dumpToJSON(outputFile);
             scanner.close();
         } catch (Exception e) {
             System.err.println("In file:\n\t" + filename);
