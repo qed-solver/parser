@@ -442,6 +442,13 @@ public class RelJSONShuttle implements RelShuttle {
 
     @Override
     public RelNode visit(LogicalIntersect intersect) {
+        if (!intersect.all) {
+            ArrayNode arguments = relNode.putArray("intersect");
+            for (RelNode input : intersect.getInputs()) {
+                arguments.add(visitChild(input, environment).getRelNode());
+            }
+            return null;
+        }
         notImplemented(intersect);
         return null;
     }

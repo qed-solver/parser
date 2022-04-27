@@ -67,7 +67,7 @@ public class SchemaGenerator {
             .put("BIGINT", int.class)
             .put("INTEGER", int.class)
             .build();
-    private static final Pattern scalarFunctionPattern = Pattern.compile("DECLARE\\s+FUNCTION\\s+(?<identifier>\\w+)\\s*\\((?<source>.*)\\)\\s+RETURNS\\s+(?<target>.+)");
+    private static final Pattern scalarFunctionPattern = Pattern.compile("(?i)DECLARE\\s+FUNCTION\\s+(?<identifier>\\w+)\\s*\\((?<source>.*)\\)\\s+RETURNS\\s+(?<target>.+)");
     private static final SqlParser.Config schemaParserConfig = SqlParser.Config.DEFAULT
             .withParserFactory(SqlDdlParserImpl.FACTORY)
             .withLex(Lex.MYSQL);
