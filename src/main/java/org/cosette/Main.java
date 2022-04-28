@@ -62,7 +62,7 @@ public class Main {
                     try {
                         if (statement.toUpperCase().startsWith("CREATE TABLE")) {
                             generator.applyCreateTable(statement);
-                        } else if (statement.toUpperCase().startsWith("DECLARE FUNCTION")) {
+                        } else if (statement.toUpperCase().startsWith("DECLARE")) {
                             generator.applyDeclareFunction(statement);
                         } else {
                             parser.parseDML(generator.extractSchema(), statement);

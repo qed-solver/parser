@@ -1,5 +1,6 @@
 package org.cosette;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import org.apache.calcite.config.Lex;
 import org.apache.calcite.jdbc.CalciteSchema;
@@ -8,9 +9,7 @@ import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.rex.RexNode;
 import org.apache.calcite.schema.*;
-import org.apache.calcite.schema.impl.AbstractSchema;
-import org.apache.calcite.schema.impl.AbstractTable;
-import org.apache.calcite.schema.impl.ScalarFunctionImpl;
+import org.apache.calcite.schema.impl.*;
 import org.apache.calcite.sql.*;
 import org.apache.calcite.sql.ddl.SqlCheckConstraint;
 import org.apache.calcite.sql.ddl.SqlColumnDeclaration;
@@ -67,18 +66,18 @@ public class SchemaGenerator {
             .put("BIGINT", int.class)
             .put("INTEGER", int.class)
             .build();
-    private static final Pattern scalarFunctionPattern = Pattern.compile("(?i)DECLARE\\s+FUNCTION\\s+(?<identifier>\\w+)\\s*\\((?<source>.*)\\)\\s+RETURNS\\s+(?<target>.+)");
+    private static final Pattern functionPattern = Pattern.compile("(?i)DECLARE\\s+(?<type>SCALAR|AGGREGATE)\\s+FUNCTION\\s+(?<identifier>\\w+)\\s*\\((?<source>.*)\\)\\s+RETURNS\\s+(?<target>.+)");
     private static final SqlParser.Config schemaParserConfig = SqlParser.Config.DEFAULT
             .withParserFactory(SqlDdlParserImpl.FACTORY)
             .withLex(Lex.MYSQL);
     private final CosetteSchema schema;
-    private final Map<String, ScalarFunction> declaredFunctions = new HashMap<>();
+    private final Map<String, Function> declaredFunctions = new HashMap<>();
 
     /**
      * Create a SchemaGenerator instance by setting up a connection to JDBC.
      */
     public SchemaGenerator() {
-        schema = new CosetteSchema(declaredFunctions);
+        schema = new CosetteSchema(this);
     }
 
     /**
@@ -98,7 +97,7 @@ public class SchemaGenerator {
      * @param declareFunction The given DECLARE FUNCTION statement.
      */
     public void applyDeclareFunction(String declareFunction) throws Exception {
-        Matcher matcher = scalarFunctionPattern.matcher(declareFunction);
+        Matcher matcher = functionPattern.matcher(declareFunction);
         if (!matcher.find()) {
             throw new RuntimeException("Broken function declaration:\n" + declareFunction);
         }
@@ -116,10 +115,26 @@ public class SchemaGenerator {
             }
             parameters[i] = toPrimitive.get(arg);
         }
+        Function customFunction;
         Constructor<Method> methodConstructor = Method.class.getDeclaredConstructor(Class.class, String.class, Class[].class, Class.class, Class[].class, int.class, int.class, String.class, byte[].class, byte[].class, byte[].class);
         methodConstructor.setAccessible(true);
-        Method scalarFunction = methodConstructor.newInstance(SchemaGenerator.class, "cosetteFunction", parameters, toPrimitive.get(target), null, 0, 0, "", null, null, null);
-        declaredFunctions.put(identifier, ScalarFunctionImpl.createUnsafe(scalarFunction));
+        if (matcher.group("type").equalsIgnoreCase("SCALAR")) {
+            Method scalarFunction = methodConstructor.newInstance(SchemaGenerator.class, "cosetteFunction", parameters, toPrimitive.get(target), null, 0, 0, "", null, null, null);
+            customFunction = ScalarFunctionImpl.createUnsafe(scalarFunction);
+        } else {
+            ReflectiveFunctionBase.ParameterListBuilder sourceParameters =
+                    ReflectiveFunctionBase.builder();
+            ImmutableList.Builder<Class<?>> sourceTypes = ImmutableList.builder();
+            for (Class<?> clazz : parameters) {
+                sourceParameters.add(clazz, clazz.getName(), false);
+                sourceTypes.add(clazz);
+            }
+            Method nullFunction = methodConstructor.newInstance(SchemaGenerator.class, "cosetteFunction", parameters, toPrimitive.get(target), null, 0, 0, "", null, null, null);
+            Constructor<AggregateFunctionImpl> aggregateFunctionConstructor = AggregateFunctionImpl.class.getDeclaredConstructor(Class.class, List.class, List.class, Class.class, Class.class, Method.class, Method.class, Method.class, Method.class);
+            aggregateFunctionConstructor.setAccessible(true);
+            customFunction = aggregateFunctionConstructor.newInstance(SchemaGenerator.class, sourceParameters.build(), sourceTypes.build(), toPrimitive.get(target), toPrimitive.get(target), nullFunction, nullFunction, null, null);
+        }
+        declaredFunctions.put(identifier, customFunction);
     }
 
     /**
@@ -127,6 +142,13 @@ public class SchemaGenerator {
      */
     public SchemaPlus extractSchema() {
         return schema.plus();
+    }
+
+    /**
+     * @return The declared custom functions.
+     */
+    public Map<String, Function> customFunctions() {
+        return declaredFunctions;
     }
 
 }
@@ -182,10 +204,10 @@ class CosetteTable extends AbstractTable {
 class CosetteSchema extends AbstractSchema {
 
     final HashMap<String, Table> tables = new HashMap<>();
-    final Map<String, ScalarFunction> context;
+    final SchemaGenerator owner;
 
-    public CosetteSchema(Map<String, ScalarFunction> declaredFunctions) {
-        context = declaredFunctions;
+    public CosetteSchema(SchemaGenerator source) {
+        owner = source;
     }
 
     public void addTable(SqlCreateTable createTable) throws Exception {
@@ -234,8 +256,8 @@ class CosetteSchema extends AbstractSchema {
 
     public SchemaPlus plus() {
         SchemaPlus raw = CalciteSchema.createRootSchema(true, false, "Cosette", this).plus();
-        for (String fn : context.keySet()) {
-            raw.add(fn, context.get(fn));
+        for (String fn : owner.customFunctions().keySet()) {
+            raw.add(fn, owner.customFunctions().get(fn));
         }
         return raw;
     }
