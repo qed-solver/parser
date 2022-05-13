@@ -1,10 +1,14 @@
-CREATE TABLE indiv_sample_nyc(    
-	cmte_id INT,
-    transaction_amt INT,
-    name VARCHAR(10),
-    str_name VARCHAR(10)
-    );
+CREATE TABLE Customers(
+ id INT,
+ name VARCHAR(10)
+ );
 
-SELECT * FROM indiv_sample_nyc WHERE cmte_id = 1 AND name LIKE '%test%' AND str_name LIKE '%test3%';
+CREATE TABLE Orders(
+ id INT,
+ customerId INT,
+ price INT
+ );
 
-SELECT * FROM indiv_sample_nyc WHERE cmte_id = 2 AND name LIKE '%test%' AND str_name LIKE '%test3%';
+SELECT * FROM Customers WHERE id = 3;
+
+SELECT * FROM Customers WHERE name = '%Smith';

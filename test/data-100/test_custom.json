@@ -1,7 +1,7 @@
 {
   "schemas" : [ {
-    "types" : [ "INTEGER", "INTEGER", "VARCHAR", "VARCHAR" ],
-    "strategy" : [ "NULLABLE", "NULLABLE", "NULLABLE", "NULLABLE" ],
+    "types" : [ "INTEGER", "VARCHAR" ],
+    "strategy" : [ "NULLABLE", "NULLABLE" ],
     "key" : [ ],
     "foreign" : [ ]
   } ],
@@ -12,51 +12,19 @@
         "type" : "INTEGER"
       }, {
         "column" : 1,
-        "type" : "INTEGER"
-      }, {
-        "column" : 2,
-        "type" : "VARCHAR"
-      }, {
-        "column" : 3,
         "type" : "VARCHAR"
       } ],
       "source" : {
         "filter" : {
           "condition" : {
-            "operator" : "AND",
+            "operator" : "=",
             "operand" : [ {
-              "operator" : "=",
-              "operand" : [ {
-                "column" : 0,
-                "type" : "INTEGER"
-              }, {
-                "operator" : "1",
-                "operand" : [ ],
-                "type" : "INTEGER"
-              } ],
-              "type" : "BOOLEAN"
+              "column" : 0,
+              "type" : "INTEGER"
             }, {
-              "operator" : "LIKE",
-              "operand" : [ {
-                "column" : 2,
-                "type" : "VARCHAR"
-              }, {
-                "operator" : "_ISO-8859-1'%TEST%'",
-                "operand" : [ ],
-                "type" : "CHAR"
-              } ],
-              "type" : "BOOLEAN"
-            }, {
-              "operator" : "LIKE",
-              "operand" : [ {
-                "column" : 3,
-                "type" : "VARCHAR"
-              }, {
-                "operator" : "_ISO-8859-1'%TEST3%'",
-                "operand" : [ ],
-                "type" : "CHAR"
-              } ],
-              "type" : "BOOLEAN"
+              "operator" : "3",
+              "operand" : [ ],
+              "type" : "INTEGER"
             } ],
             "type" : "BOOLEAN"
           },
@@ -73,51 +41,19 @@
         "type" : "INTEGER"
       }, {
         "column" : 1,
-        "type" : "INTEGER"
-      }, {
-        "column" : 2,
-        "type" : "VARCHAR"
-      }, {
-        "column" : 3,
         "type" : "VARCHAR"
       } ],
       "source" : {
         "filter" : {
           "condition" : {
-            "operator" : "AND",
+            "operator" : "=",
             "operand" : [ {
-              "operator" : "=",
-              "operand" : [ {
-                "column" : 0,
-                "type" : "INTEGER"
-              }, {
-                "operator" : "2",
-                "operand" : [ ],
-                "type" : "INTEGER"
-              } ],
-              "type" : "BOOLEAN"
+              "column" : 1,
+              "type" : "VARCHAR"
             }, {
-              "operator" : "LIKE",
-              "operand" : [ {
-                "column" : 2,
-                "type" : "VARCHAR"
-              }, {
-                "operator" : "_ISO-8859-1'%TEST%'",
-                "operand" : [ ],
-                "type" : "CHAR"
-              } ],
-              "type" : "BOOLEAN"
-            }, {
-              "operator" : "LIKE",
-              "operand" : [ {
-                "column" : 3,
-                "type" : "VARCHAR"
-              }, {
-                "operator" : "_ISO-8859-1'%TEST3%'",
-                "operand" : [ ],
-                "type" : "CHAR"
-              } ],
-              "type" : "BOOLEAN"
+              "operator" : "_ISO-8859-1'%SMITH'",
+              "operand" : [ ],
+              "type" : "VARCHAR"
             } ],
             "type" : "BOOLEAN"
           },
@@ -128,5 +64,5 @@
       }
     }
   } ],
-  "help" : [ "LogicalProject(CMTE_ID=[$0], TRANSACTION_AMT=[$1], NAME=[$2], STR_NAME=[$3])\n  LogicalFilter(condition=[AND(=($0, 1), LIKE($2, '%test%'), LIKE($3, '%test3%'))])\n    LogicalTableScan(table=[[INDIV_SAMPLE_NYC]])\n", "LogicalProject(CMTE_ID=[$0], TRANSACTION_AMT=[$1], NAME=[$2], STR_NAME=[$3])\n  LogicalFilter(condition=[AND(=($0, 2), LIKE($2, '%test%'), LIKE($3, '%test3%'))])\n    LogicalTableScan(table=[[INDIV_SAMPLE_NYC]])\n" ]
+  "help" : [ "LogicalProject(ID=[$0], NAME=[$1])\n  LogicalFilter(condition=[=($0, 3)])\n    LogicalTableScan(table=[[CUSTOMERS]])\n", "LogicalProject(ID=[$0], NAME=[$1])\n  LogicalFilter(condition=[=($1, '%Smith')])\n    LogicalTableScan(table=[[CUSTOMERS]])\n" ]
 }

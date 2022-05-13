@@ -586,6 +586,7 @@ public class SQLRacketShuttle extends SqlShuttle {
                         racketInput.add(") ])");
                         break;
                     }
+                    case "COMMA":
                     case "INNER":
                         // 1. Join two tables
                         racketInput.add("(JOIN ");
@@ -603,7 +604,6 @@ public class SQLRacketShuttle extends SqlShuttle {
                         whereForInnerJoin = sqlJoin.getCondition();
                         break;
                     case "FULL":
-                        // TODO: Need Implement
                         break;
                 }
 
