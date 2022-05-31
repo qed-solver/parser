@@ -1,8 +1,0 @@
-(define q1s
-  (SELECT-GROUP
-    (VALS "indiv_sample_nyc.id" "indiv_sample_nyc.transaction_amt")
-    FROM (indiv_sample_nyc)
-    WHERE (TRUE)
-    '("indiv_sample_nyc.cmte_id")
-    aggr-sum
-    "indiv_sample_nyc.transaction_amt"))
