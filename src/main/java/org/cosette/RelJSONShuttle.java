@@ -17,18 +17,14 @@ import org.apache.calcite.rel.type.RelDataTypeField;
 import org.apache.calcite.rex.RexLiteral;
 import org.apache.calcite.rex.RexNode;
 import org.apache.calcite.schema.ColumnStrategy;
-import org.apache.calcite.schema.SchemaPlus;
-import org.apache.calcite.tools.FrameworkConfig;
-import org.apache.calcite.tools.Frameworks;
-import org.apache.calcite.tools.RelBuilder;
 import org.apache.calcite.util.ImmutableBitSet;
 import org.apache.calcite.util.mapping.IntPair;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.Writer;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -174,12 +170,13 @@ public class RelJSONShuttle implements RelShuttle {
      * @param node The given RelNode instance.
      */
     private void notImplemented(RelNode node) {
-        relNode.put("error", "Not implemented: " + node.getRelTypeName());
+        throw new RuntimeException("Not implemented: " + node.getRelTypeName());
     }
 
     /**
      * Visit a RelVariable node. <br>
      * Format: {relNode: id}
+     *
      * @param variable The given RelNode instance.
      * @return Null, a placeholder required by interface.
      */
@@ -209,10 +206,10 @@ public class RelJSONShuttle implements RelShuttle {
 
         ObjectNode filter = environment.createNode();
         ObjectNode filterArguments = environment.createNode();
-        ObjectNode condition = environment.createNode();
-        condition.put("operator", "TRUE");
-        condition.putArray("operand");
-        condition.put("type", "BOOLEAN");
+        ObjectNode and = environment.createNode();
+        and.put("operator", "AND");
+        ArrayNode condition = and.putArray("operand");
+        and.put("type", "BOOLEAN");
         List<Integer> groups = new ArrayList<>(aggregate.getGroupSet().asList());
         List<RelDataTypeField> types = aggregate.getInput().getRowType().getFieldList();
         for (int index = 0; index < groups.size(); index++) {
@@ -224,16 +221,12 @@ public class RelJSONShuttle implements RelShuttle {
             equivalence.put("operator", "=");
             equivalence.putArray("operand").add(leftColumn).add(rightColumn);
             equivalence.put("type", "BOOLEAN");
-            ObjectNode and = environment.createNode();
-            and.put("operator", "AND");
-            and.putArray("operand").add(condition).add(equivalence);
-            and.put("type", "BOOLEAN");
-            condition = and;
+            condition.add(equivalence);
         }
         inputProjectArguments.set("source", childShuttle.getRelNode());
         inputProject.set("project", inputProjectArguments);
         RelJSONShuttle filterChildShuttle = visitChild(aggregate.getInput(), environment.amend(null, groupCount));
-        filterArguments.set("condition", condition);
+        filterArguments.set("condition", and);
         filterArguments.set("source", filterChildShuttle.getRelNode());
         filter.set("filter", filterArguments);
 
@@ -361,8 +354,8 @@ public class RelJSONShuttle implements RelShuttle {
         ArrayNode parameters = arguments.putArray("target");
         RelJSONShuttle childShuttle = visitChild(project.getInput(), environment);
         List<RexNode> projects = project.getProjects();
-        for (RexNode projection: projects) {
-            parameters.add(visitRexNode(projection, environment, projects.size()).getRexNode());
+        for (RexNode projection : projects) {
+            parameters.add(visitRexNode(projection, environment, project.getInput().getRowType().getFieldCount()).getRexNode());
         }
         arguments.set("source", childShuttle.getRelNode());
         relNode.set("project", arguments);
@@ -382,7 +375,7 @@ public class RelJSONShuttle implements RelShuttle {
         // TODO: Correlation in condition?
         ObjectNode arguments = environment.createNode();
         arguments.put("kind", join.getJoinType().toString());
-        arguments.set("condition", visitRexNode(join.getCondition(), environment, 0).getRexNode());
+        arguments.set("condition", visitRexNode(join.getCondition(), environment, join.getLeft().getRowType().getFieldCount() + join.getRight().getRowType().getFieldCount()).getRexNode());
         arguments.set("left", visitChild(join.getLeft(), environment).getRelNode());
         arguments.set("right", visitChild(join.getRight(), environment).getRelNode());
         relNode.set("join", arguments);
@@ -428,6 +421,13 @@ public class RelJSONShuttle implements RelShuttle {
 
     @Override
     public RelNode visit(LogicalIntersect intersect) {
+        if (!intersect.all) {
+            ArrayNode arguments = relNode.putArray("intersect");
+            for (RelNode input : intersect.getInputs()) {
+                arguments.add(visitChild(input, environment).getRelNode());
+            }
+            return null;
+        }
         notImplemented(intersect);
         return null;
     }
@@ -471,10 +471,10 @@ public class RelJSONShuttle implements RelShuttle {
             column.add(index).add(types.get(index).getType().getSqlTypeName().name()).add(collation.shortString());
         }
         if (sort.offset != null) {
-            arguments.set("offset", visitRexNode(sort.offset, environment, 0).getRexNode());
+            arguments.set("offset", visitRexNode(sort.offset, environment, sort.getInput().getRowType().getFieldCount()).getRexNode());
         }
         if (sort.fetch != null) {
-            arguments.set("limit", visitRexNode(sort.fetch, environment, 0).getRexNode());
+            arguments.set("limit", visitRexNode(sort.fetch, environment, sort.getInput().getRowType().getFieldCount()).getRexNode());
         }
         arguments.set("source", childShuttle.getRelNode());
         relNode.set("sort", arguments);

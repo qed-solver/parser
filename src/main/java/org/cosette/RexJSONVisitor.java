@@ -2,12 +2,7 @@ package org.cosette;
 
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rex.*;
-import org.apache.calcite.sql.SqlKind;
-
-import java.util.Locale;
-import java.util.Objects;
 
 /**
  * AN implementation of RexVisitor interface that could convert a RelNode instance to a ObjectNode instance.
@@ -60,6 +55,7 @@ public class RexJSONVisitor implements RexVisitor<ObjectNode> {
     /**
      * Visit a RexVariable node. <br>
      * Format: {rexNode: id, type: ANY}
+     *
      * @param variable The given RexNode instance.
      * @return The ObjectNode corresponding to the given RexNode instance.
      */
@@ -97,7 +93,7 @@ public class RexJSONVisitor implements RexVisitor<ObjectNode> {
     public ObjectNode visitLiteral(RexLiteral literal) {
         String value = "NULL";
         if (literal.getValue() != null) {
-            value = literal.getValue().toString().toUpperCase(Locale.ROOT);
+            value = literal.getValue().toString();
         }
         rexNode.put("operator", value);
         rexNode.putArray("operand");
@@ -114,7 +110,7 @@ public class RexJSONVisitor implements RexVisitor<ObjectNode> {
      */
     @Override
     public ObjectNode visitCall(RexCall call) {
-        rexNode.put("operator", call.getOperator().toString().toUpperCase(Locale.ROOT));
+        rexNode.put("operator", call.getOperator().toString());
         ArrayNode arguments = rexNode.putArray("operand");
         for (RexNode operand : call.getOperands()) {
             arguments.add(visitChild(operand));
@@ -166,7 +162,7 @@ public class RexJSONVisitor implements RexVisitor<ObjectNode> {
      */
     @Override
     public ObjectNode visitSubQuery(RexSubQuery subQuery) {
-        rexNode.put("operator", subQuery.getOperator().toString().toUpperCase(Locale.ROOT));
+        rexNode.put("operator", subQuery.getOperator().toString());
         ArrayNode arguments = rexNode.putArray("operand");
         for (RexNode operand : subQuery.getOperands()) {
             arguments.add(visitChild(operand));
