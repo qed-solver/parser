@@ -173,7 +173,7 @@ public class RawPlanner implements RelOptTable.ViewExpander {
                 sqlValidatorConfig
                         .withDefaultNullCollation(connectionConfig.defaultNullCollation())
                         .withLenientOperatorLookup(connectionConfig.lenientOperatorLookup())
-                        .withSqlConformance(connectionConfig.conformance())
+                        .withConformance(connectionConfig.conformance())
                         .withIdentifierExpansion(true));
     }
 

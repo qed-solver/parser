@@ -35,29 +35,38 @@
 					</execution>
 				</executions>
 			</plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <source>17</source>
+                    <target>17</target>
+                    <compilerArgs>--enable-preview</compilerArgs>
+                </configuration>
+            </plugin>
         </plugins>
     </build>
 
     <properties>
-        <maven.compiler.source>11</maven.compiler.source>
-        <maven.compiler.target>11</maven.compiler.target>
+        <maven.compiler.source>17</maven.compiler.source>
+        <maven.compiler.target>17</maven.compiler.target>
     </properties>
 
     <dependencies>
         <dependency>
             <groupId>org.apache.calcite</groupId>
             <artifactId>calcite-core</artifactId>
-            <version>1.27.0</version>
+            <version>1.30.0</version>
         </dependency>
         <dependency>
             <groupId>org.apache.calcite</groupId>
             <artifactId>calcite-server</artifactId>
-            <version>1.27.0</version>
+            <version>1.30.0</version>
         </dependency>
         <dependency>
             <groupId>org.apache.calcite.avatica</groupId>
             <artifactId>avatica-core</artifactId>
-            <version>1.18.0</version>
+            <version>1.20.0</version>
         </dependency>
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
@@ -73,6 +82,11 @@
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-nop</artifactId>
             <version>1.7.25</version>
+        </dependency>
+        <dependency>
+            <groupId>org.glavo.kala</groupId>
+            <artifactId>kala-common</artifactId>
+            <version>0.38.0</version>
         </dependency>
     </dependencies>
 </project>
