@@ -180,8 +180,8 @@ public class RelVariable implements RelNode {
 
     @Override
     public RelNode accept(RelShuttle shuttle) {
-        if (shuttle instanceof RelJSONShuttle) {
-            return ((RelJSONShuttle) shuttle).visit(this);
+        if (shuttle instanceof RelJSONShuttle relJSONShuttle) {
+            return relJSONShuttle.visit(this);
         }
         return null;
     }

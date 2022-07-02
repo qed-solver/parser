@@ -32,8 +32,8 @@ public class RexVariable extends RexNode {
 
     @Override
     public <R> R accept(RexVisitor<R> visitor) {
-        if (visitor instanceof RexJSONVisitor) {
-            return (R) ((RexJSONVisitor) visitor).visit(this);
+        if (visitor instanceof RexJSONVisitor rexJSONVisitor) {
+            return (R) rexJSONVisitor.visit(this);
         }
         return null;
     }

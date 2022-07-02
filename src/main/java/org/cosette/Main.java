@@ -51,7 +51,7 @@ public class Main {
 
     private static void parseSQLFile(String filename) {
         try {
-            Pattern comment = Pattern.compile("--.*(\\n|$)");
+            Pattern comment = Pattern.compile("--.*(\\r?\\n|$)");
             Scanner scanner = new Scanner(new File(filename));
             SchemaGenerator generator = new SchemaGenerator();
             SQLJSONParser parser = new SQLJSONParser();
@@ -60,8 +60,8 @@ public class Main {
                 String statement = comment.matcher(scanner.next()).replaceAll("\n").trim();
                 if (!statement.isBlank()) {
                     try {
-                        if (statement.toUpperCase().startsWith("CREATE TABLE")) {
-                            generator.applyCreateTable(statement);
+                        if (statement.toUpperCase().startsWith("CREATE")) {
+                            generator.applyCreate(statement);
                         } else if (statement.toUpperCase().startsWith("DECLARE")) {
                             generator.applyDeclareFunction(statement);
                         } else {

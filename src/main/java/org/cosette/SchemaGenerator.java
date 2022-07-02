@@ -2,6 +2,7 @@ package org.cosette;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import org.apache.calcite.avatica.util.Quoting;
 import org.apache.calcite.config.Lex;
 import org.apache.calcite.jdbc.CalciteSchema;
 import org.apache.calcite.rel.logical.LogicalFilter;
@@ -11,10 +12,7 @@ import org.apache.calcite.rex.RexNode;
 import org.apache.calcite.schema.*;
 import org.apache.calcite.schema.impl.*;
 import org.apache.calcite.sql.*;
-import org.apache.calcite.sql.ddl.SqlCheckConstraint;
-import org.apache.calcite.sql.ddl.SqlColumnDeclaration;
-import org.apache.calcite.sql.ddl.SqlCreateTable;
-import org.apache.calcite.sql.ddl.SqlKeyConstraint;
+import org.apache.calcite.sql.ddl.*;
 import org.apache.calcite.sql.parser.SqlParser;
 import org.apache.calcite.sql.parser.SqlParserPos;
 import org.apache.calcite.sql.parser.ddl.SqlDdlParserImpl;
@@ -69,7 +67,8 @@ public class SchemaGenerator {
     private static final Pattern functionPattern = Pattern.compile("(?i)DECLARE\\s+(?<type>SCALAR|AGGREGATE)\\s+FUNCTION\\s+(?<identifier>\\w+)\\s*\\((?<source>.*)\\)\\s+RETURNS\\s+(?<target>.+)");
     private static final SqlParser.Config schemaParserConfig = SqlParser.Config.DEFAULT
             .withParserFactory(SqlDdlParserImpl.FACTORY)
-            .withLex(Lex.MYSQL);
+            .withLex(Lex.MYSQL)
+            .withQuoting(Quoting.DOUBLE_QUOTE);
     private final CosetteSchema schema;
     private final Map<String, Function> declaredFunctions = new HashMap<>();
 
@@ -81,14 +80,23 @@ public class SchemaGenerator {
     }
 
     /**
-     * Execute a CREATE TABLE statement.
+     * Execute a CREATE statement.
      *
-     * @param createTable The given CREATE TABLE statement.
+     * @param create The given CREATE statement.
      */
-    public void applyCreateTable(String createTable) throws Exception {
-        SqlParser schemaParser = SqlParser.create(createTable, schemaParserConfig);
+    public void applyCreate(String create) throws Exception {
+        Pattern supported = Pattern.compile("(?i)CREATE\\s+(VIEW|TABLE)");
+        if (!supported.matcher(create).find()) {
+            // TODO: Improve error handling
+            return;
+        }
+        SqlParser schemaParser = SqlParser.create(create, schemaParserConfig);
         SqlNode schemaNode = schemaParser.parseStmt();
-        schema.addTable((SqlCreateTable) schemaNode);
+        switch (schemaNode) {
+            case SqlCreateTable sqlCreateTable -> schema.addTable(sqlCreateTable);
+            case SqlCreateView sqlCreateView -> schema.addView(sqlCreateView);
+            default -> throw new RuntimeException("Unsupported create statement:\n" + create);
+        }
     }
 
     /**
@@ -218,20 +226,15 @@ class CosetteSchema extends AbstractSchema {
 
         for (SqlNode column : createTable.columnList) {
             switch (column.getKind()) {
-                case CHECK:
-                    cosetteTable.checkConstraints.add((SqlBasicCall) ((SqlCheckConstraint) column).getOperandList().get(1));
-                    break;
-                case COLUMN_DECL:
+                case CHECK -> cosetteTable.checkConstraints.add((SqlBasicCall) ((SqlCheckConstraint) column).getOperandList().get(1));
+                case COLUMN_DECL -> {
                     SqlColumnDeclaration decl = (SqlColumnDeclaration) column;
                     cosetteTable.columnNames.add(decl.name.toString());
                     cosetteTable.columnTypeNames.add(SqlTypeName.get(decl.dataType.getTypeName().toString()));
                     cosetteTable.columnNullabilities.add(decl.strategy != ColumnStrategy.NOT_NULLABLE);
-                    break;
-                case FOREIGN_KEY:
-                    System.err.println("Foreign key constraint is not implemented in cosette yet.");
-                    break;
-                case PRIMARY_KEY:
-                case UNIQUE:
+                }
+                case FOREIGN_KEY -> System.err.println("Foreign key constraint is not implemented in cosette yet.");
+                case PRIMARY_KEY, UNIQUE -> {
                     SqlKeyConstraint cons = (SqlKeyConstraint) column;
                     List<Integer> keys = new ArrayList<>();
                     for (SqlNode id : (SqlNodeList) cons.getOperandList().get(1)) {
@@ -242,12 +245,15 @@ class CosetteSchema extends AbstractSchema {
                         }
                     }
                     cosetteTable.columnKeys.add(ImmutableBitSet.of(keys));
-                    break;
-                default:
-                    throw new Exception("Unsupported declaration type " + column.getKind() + " in table " + createTable.name);
+                }
+                default -> throw new Exception("Unsupported declaration type " + column.getKind() + " in table " + createTable.name);
             }
         }
         tables.put(createTable.name.toString(), cosetteTable);
+    }
+
+    public void addView(SqlCreateView sqlCreateView) {
+        System.out.println(sqlCreateView);
     }
 
     protected Map<String, Table> getTableMap() {
