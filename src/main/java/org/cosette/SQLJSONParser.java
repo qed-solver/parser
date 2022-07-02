@@ -15,13 +15,13 @@ import java.util.List;
  */
 public class SQLJSONParser {
 
-    private final List<RelRoot> rootList;
+    private final List<RelNode> relNodes;
 
     /**
      * Create a new instance by setting up the SchemaGenerator instance and the list of RelRoot within.
      */
     public SQLJSONParser() {
-        rootList = new ArrayList<>();
+        relNodes = new ArrayList<>();
     }
 
     /**
@@ -31,9 +31,8 @@ public class SQLJSONParser {
      */
     public void parseDML(SchemaPlus context, String dml) throws Exception {
         RawPlanner planner = new RawPlanner(context);
-        SqlNode sqlNode = planner.parse(dml);
-        RelRoot relRoot = planner.rel(sqlNode);
-        rootList.add(relRoot);
+        planner.parse(dml);
+        relNodes.add(planner.rel());
     }
 
     /**
@@ -42,11 +41,7 @@ public class SQLJSONParser {
      * @param file The given file.
      */
     public void dumpToJSON(File file) throws IOException {
-        ArrayList<RelNode> nodeList = new ArrayList<>();
-        for (RelRoot root : rootList) {
-            nodeList.add(root.project());
-        }
-        RelJSONShuttle.dumpToJSON(nodeList, file);
+        RelJSONShuttle.dumpToJSON(relNodes, file);
     }
 
 }

@@ -9,6 +9,7 @@ import org.apache.calcite.plan.*;
 import org.apache.calcite.plan.volcano.VolcanoPlanner;
 import org.apache.calcite.prepare.CalciteCatalogReader;
 import org.apache.calcite.rel.RelCollationTraitDef;
+import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.RelRoot;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeSystem;
@@ -79,7 +80,7 @@ public class RawPlanner implements RelOptTable.ViewExpander {
                         .withPruneInputOfAggregate(false))
                 .withDecorrelationEnabled(false)
                 .withExpand(false)
-                .withTrimUnusedFields(false);
+                .withTrimUnusedFields(true);
         FrameworkConfig config = Frameworks.newConfigBuilder()
                 .defaultSchema(schema)
                 .parserConfig(SqlParser.Config.DEFAULT.withLex(Lex.MYSQL))
@@ -191,19 +192,18 @@ public class RawPlanner implements RelOptTable.ViewExpander {
         return requireNonNull(typeFactory, "typeFactory");
     }
 
-    public RelRoot rel(SqlNode sql) {
+    public RelNode rel() {
         SqlNode validatedSqlNode = requireNonNull(this.validatedSqlNode,
                 "validatedSqlNode is null. Need to call #validate() first");
         final RexBuilder rexBuilder = createRexBuilder();
         final RelOptCluster cluster = RelOptCluster.create(
                 requireNonNull(planner, "planner"),
                 rexBuilder);
-        final SqlToRelConverter.Config config =
-                sqlToRelConverterConfig.withTrimUnusedFields(false);
         final SqlToRelConverter sqlToRelConverter =
                 new SqlToRelConverter(this, validator,
-                        createCatalogReader(), cluster, convertletTable, config);
-        return sqlToRelConverter.convertQuery(validatedSqlNode, false, true);
+                        createCatalogReader(), cluster, convertletTable, sqlToRelConverterConfig);
+        var root = sqlToRelConverter.convertQuery(validatedSqlNode, false, true);
+        return sqlToRelConverter.trimUnusedFields(true, root.project());
     }
 
     private RexBuilder createRexBuilder() {
@@ -231,18 +231,16 @@ public class RawPlanner implements RelOptTable.ViewExpander {
 
         final RexBuilder rexBuilder = createRexBuilder();
         final RelOptCluster cluster = RelOptCluster.create(planner, rexBuilder);
-        final SqlToRelConverter.Config config =
-                sqlToRelConverterConfig.withTrimUnusedFields(false);
         final SqlToRelConverter sqlToRelConverter =
                 new SqlToRelConverter(this, validator,
-                        catalogReader, cluster, convertletTable, config);
+                        catalogReader, cluster, convertletTable, sqlToRelConverterConfig);
 
         final RelRoot root =
                 sqlToRelConverter.convertQuery(sqlNode, true, false);
         final RelRoot root2 =
                 root.withRel(sqlToRelConverter.flattenTypes(root.rel, true));
         final RelBuilder relBuilder =
-                config.getRelBuilderFactory().create(cluster, null);
+                sqlToRelConverterConfig.getRelBuilderFactory().create(cluster, null);
         return root2.withRel(
                 RelDecorrelator.decorrelateQuery(root.rel, relBuilder));
     }

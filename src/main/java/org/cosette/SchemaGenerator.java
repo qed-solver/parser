@@ -190,7 +190,7 @@ class CosetteTable extends AbstractTable {
                     this.id, check, null, null, SqlNodeList.EMPTY, null, null, null, null);
             try {
                 planner.parse(wrapper.toString());
-                LogicalFilter filter = (LogicalFilter) planner.rel(check).project().getInput(0);
+                LogicalFilter filter = (LogicalFilter) planner.rel().getInput(0);
                 derivedConstraints.add(filter.getCondition());
             } catch (Exception ignore) {
 
