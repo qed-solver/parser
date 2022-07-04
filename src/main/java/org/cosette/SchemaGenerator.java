@@ -13,6 +13,7 @@ import org.apache.calcite.schema.*;
 import org.apache.calcite.schema.impl.*;
 import org.apache.calcite.sql.*;
 import org.apache.calcite.sql.ddl.*;
+import org.apache.calcite.sql.dialect.CalciteSqlDialect;
 import org.apache.calcite.sql.parser.SqlParser;
 import org.apache.calcite.sql.parser.SqlParserPos;
 import org.apache.calcite.sql.parser.ddl.SqlDdlParserImpl;
@@ -218,9 +219,9 @@ class CosetteSchema extends AbstractSchema {
         owner = source;
     }
 
-    public void addTable(SqlCreateTable createTable) throws Exception {
+    public void addTable(SqlCreateTable createTable) {
         if (createTable.columnList == null) {
-            throw new Exception("No column in table " + createTable.name);
+            throw new RuntimeException("No column in table " + createTable.name);
         }
         CosetteTable cosetteTable = new CosetteTable(this, createTable.name);
 
@@ -246,14 +247,16 @@ class CosetteSchema extends AbstractSchema {
                     }
                     cosetteTable.columnKeys.add(ImmutableBitSet.of(keys));
                 }
-                default -> throw new Exception("Unsupported declaration type " + column.getKind() + " in table " + createTable.name);
+                default -> throw new RuntimeException("Unsupported declaration type " + column.getKind() + " in table " + createTable.name);
             }
         }
         tables.put(createTable.name.toString(), cosetteTable);
     }
 
     public void addView(SqlCreateView sqlCreateView) {
-        System.out.println(sqlCreateView);
+        Table viewTable = ViewTable.viewMacro(plus(), sqlCreateView.query.toSqlString(CalciteSqlDialect.DEFAULT).getSql(),
+                null, null, false).apply(ImmutableList.of());
+        tables.put(sqlCreateView.name.toString(), viewTable);
     }
 
     protected Map<String, Table> getTableMap() {
@@ -261,11 +264,11 @@ class CosetteSchema extends AbstractSchema {
     }
 
     public SchemaPlus plus() {
-        SchemaPlus raw = CalciteSchema.createRootSchema(true, false, "Cosette", this).plus();
+        SchemaPlus plus = CalciteSchema.createRootSchema(true, false, "Cosette", this).plus();
         for (String fn : owner.customFunctions().keySet()) {
-            raw.add(fn, owner.customFunctions().get(fn));
+            plus.add(fn, owner.customFunctions().get(fn));
         }
-        return raw;
+        return plus;
     }
 
 }

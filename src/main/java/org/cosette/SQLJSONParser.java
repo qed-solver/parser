@@ -1,9 +1,7 @@
 package org.cosette;
 
 import org.apache.calcite.rel.RelNode;
-import org.apache.calcite.rel.RelRoot;
 import org.apache.calcite.schema.SchemaPlus;
-import org.apache.calcite.sql.SqlNode;
 
 import java.io.File;
 import java.io.IOException;
