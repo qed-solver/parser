@@ -25,6 +25,7 @@ import java.lang.reflect.Method;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 /**
  * A SchemaGenerator instance can execute DDL statements and generate schemas in the process.
@@ -254,8 +255,18 @@ class CosetteSchema extends AbstractSchema {
     }
 
     public void addView(SqlCreateView sqlCreateView) {
-        Table viewTable = ViewTable.viewMacro(plus(), sqlCreateView.query.toSqlString(CalciteSqlDialect.DEFAULT).getSql(),
-                null, null, false).apply(ImmutableList.of());
+        if (sqlCreateView.columnList == null || sqlCreateView.columnList.getList().isEmpty()) {
+            throw new RuntimeException("No field definition in view " + sqlCreateView.name);
+        }
+        String rawQuery = sqlCreateView.query.toSqlString(CalciteSqlDialect.DEFAULT).getSql();
+        String fields = sqlCreateView.columnList
+                .getList()
+                .stream()
+                .filter(Objects::nonNull)
+                .map(SqlNode::toString)
+                .collect(Collectors.joining("\", \""));
+        String wrapper = "SELECT * FROM (%s) AS \"_\" (\"%s\")".formatted(rawQuery, fields);
+        Table viewTable = ViewTable.viewMacro(plus(), wrapper, null, null, false).apply(ImmutableList.of());
         tables.put(sqlCreateView.name.toString(), viewTable);
     }
 

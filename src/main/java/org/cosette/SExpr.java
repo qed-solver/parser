@@ -3,38 +3,6 @@ package org.cosette;
 import kala.collection.Seq;
 
 public sealed interface SExpr {
-    record Lst(Seq<SExpr> nodes) implements SExpr {
-        @Override public String toString() {
-            return nodes.map(Object::toString).joinToString(" ", "(", ")");
-        }
-    }
-    record Sym(String name) implements SExpr {
-        @Override public String toString() {
-            return name;
-        }
-    }
-    record Str(String value) implements SExpr {
-        @Override public String toString() {
-            // TODO: Proper escaping
-            return "\"" + value + "\"";
-        }
-    }
-    record Bool(boolean value) implements SExpr {
-        @Override public String toString() {
-            return "(" + (value ? "TRUE" : "FALSE") + ")";
-        }
-    }
-    record Int(long value) implements SExpr {
-        @Override public String toString() {
-            return Long.toString(value);
-        }
-    }
-    record Real(double value) implements SExpr {
-        @Override public String toString() {
-            return Double.toString(value);
-        }
-    }
-
     static Lst list(SExpr... elems) {
         return new Lst(Seq.of(elems));
     }
@@ -73,5 +41,48 @@ public sealed interface SExpr {
 
     static Sym quoted(String sym) {
         return symbol("'" + sym);
+    }
+
+    record Lst(Seq<SExpr> nodes) implements SExpr {
+        @Override
+        public String toString() {
+            return nodes.map(Object::toString).joinToString(" ", "(", ")");
+        }
+    }
+
+    record Sym(String name) implements SExpr {
+        @Override
+        public String toString() {
+            return name;
+        }
+    }
+
+    record Str(String value) implements SExpr {
+        @Override
+        public String toString() {
+            // TODO: Proper escaping
+            return "\"" + value + "\"";
+        }
+    }
+
+    record Bool(boolean value) implements SExpr {
+        @Override
+        public String toString() {
+            return "(" + (value ? "TRUE" : "FALSE") + ")";
+        }
+    }
+
+    record Int(long value) implements SExpr {
+        @Override
+        public String toString() {
+            return Long.toString(value);
+        }
+    }
+
+    record Real(double value) implements SExpr {
+        @Override
+        public String toString() {
+            return Double.toString(value);
+        }
     }
 }
