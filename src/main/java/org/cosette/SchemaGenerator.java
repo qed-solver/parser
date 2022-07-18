@@ -2,12 +2,17 @@ package org.cosette;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import org.apache.calcite.adapter.java.JavaTypeFactory;
 import org.apache.calcite.avatica.util.Quoting;
+import org.apache.calcite.config.CalciteConnectionProperty;
 import org.apache.calcite.config.Lex;
+import org.apache.calcite.jdbc.CalciteConnection;
+import org.apache.calcite.jdbc.CalcitePrepare;
 import org.apache.calcite.jdbc.CalciteSchema;
 import org.apache.calcite.rel.logical.LogicalFilter;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
+import org.apache.calcite.rel.type.RelDataTypeImpl;
 import org.apache.calcite.rex.RexNode;
 import org.apache.calcite.schema.*;
 import org.apache.calcite.schema.impl.*;
@@ -22,6 +27,9 @@ import org.apache.calcite.util.ImmutableBitSet;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
+import java.lang.reflect.Type;
+import java.sql.DriverManager;
+import java.sql.SQLException;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -254,7 +262,7 @@ class CosetteSchema extends AbstractSchema {
         tables.put(createTable.name.toString(), cosetteTable);
     }
 
-    public void addView(SqlCreateView sqlCreateView) {
+    public void addView(SqlCreateView sqlCreateView) throws SQLException {
         if (sqlCreateView.columnList == null || sqlCreateView.columnList.getList().isEmpty()) {
             throw new RuntimeException("No field definition in view " + sqlCreateView.name);
         }
@@ -266,7 +274,15 @@ class CosetteSchema extends AbstractSchema {
                 .map(SqlNode::toString)
                 .collect(Collectors.joining("\", \""));
         String wrapper = "SELECT * FROM (%s) AS \"_\" (\"%s\")".formatted(rawQuery, fields);
-        Table viewTable = ViewTable.viewMacro(plus(), wrapper, null, null, false).apply(ImmutableList.of());
+        Properties info = new Properties();
+        info.setProperty(CalciteConnectionProperty.CASE_SENSITIVE.camelName(), "FALSE");
+        CalciteConnection connection = DriverManager.getConnection("jdbc:calcite:", info)
+                .unwrap(CalciteConnection.class);
+        CalciteSchema calciteSchema = CalciteSchema.from(plus());
+        CalcitePrepare.AnalyzeViewResult parsed = Schemas.analyzeView(connection, calciteSchema, null, wrapper, null, false);
+        JavaTypeFactory typeFactory = (JavaTypeFactory) parsed.typeFactory;
+        Type elementType = typeFactory.getJavaClass(parsed.rowType);
+        Table viewTable = new ViewTable(elementType, RelDataTypeImpl.proto(parsed.rowType), wrapper, calciteSchema.path(null), null);
         tables.put(sqlCreateView.name.toString(), viewTable);
     }
 
