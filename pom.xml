@@ -86,7 +86,7 @@
         <dependency>
             <groupId>org.glavo.kala</groupId>
             <artifactId>kala-common</artifactId>
-            <version>0.38.0</version>
+            <version>0.43.0</version>
         </dependency>
     </dependencies>
 </project>

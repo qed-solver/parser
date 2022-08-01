@@ -101,10 +101,15 @@ public class SchemaGenerator {
             return;
         }
         SqlParser schemaParser = SqlParser.create(create, schemaParserConfig);
-        SqlNode schemaNode = schemaParser.parseStmt();
+        SqlNode schemaNode;
+        schemaNode = schemaParser.parseStmt();
         switch (schemaNode) {
             case SqlCreateTable sqlCreateTable -> schema.addTable(sqlCreateTable);
-            case SqlCreateView sqlCreateView -> schema.addView(sqlCreateView);
+            case SqlCreateView sqlCreateView -> {
+                try {
+                    schema.addView(sqlCreateView);
+                } catch (Exception ignored) {}
+            }
             default -> throw new RuntimeException("Unsupported create statement:\n" + create);
         }
     }
