@@ -3,6 +3,7 @@ package org.cosette;
 import kala.collection.Seq;
 import org.apache.calcite.rex.*;
 import org.apache.calcite.sql.SqlKind;
+import org.apache.calcite.util.NlsString;
 
 import java.math.BigDecimal;
 
@@ -12,7 +13,7 @@ public record RexRacketVisitor(Env env) {
             case RexInputRef inputRef -> SExpr.app("v-var", SExpr.integer(env.base() + inputRef.getIndex()));
             case RexLiteral literal -> {
                 var val = switch (literal.getValue()) {
-                    case null -> SExpr.quoted("sqlnull");
+                    case null -> SExpr.quoted("null");
                     case Float v -> SExpr.real(v);
                     case Double v -> SExpr.real(v);
                     case BigDecimal v -> {
@@ -26,6 +27,7 @@ public record RexRacketVisitor(Env env) {
                     case Long v -> SExpr.integer(v);
                     case Boolean v -> SExpr.bool(v);
                     case String v -> SExpr.string(v);
+                    case NlsString v -> SExpr.string(v.toString());
                     default -> throw new UnsupportedOperationException("Unsupported literal: " + literal);
                 };
                 yield SExpr.app("v-op", val, SExpr.app("list"));
@@ -43,7 +45,7 @@ public record RexRacketVisitor(Env env) {
             }
             case RexCall call -> {
                 var operands = Seq.from(call.getOperands()).map(this::visit);
-                yield SExpr.app("v-op", SExpr.quoted(call.op.getName()), SExpr.app("list", operands));
+                yield SExpr.app("v-op", SExpr.quoted(call.op.getName().replace(" ", "-").toLowerCase()), SExpr.app("list", operands));
             }
             case RexFieldAccess access -> {
                 var id = SExpr.integer(env.resolve(((RexCorrelVariable) access.getReferenceExpr()).id) + access.getField().getIndex());

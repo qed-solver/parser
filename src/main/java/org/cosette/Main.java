@@ -72,9 +72,8 @@ public class Main {
                     }
                 }
             }
-            String outputPath = FilenameUtils.getFullPath(filename) + FilenameUtils.getBaseName(filename) + ".json";
-            File outputFile = new File(outputPath);
-            parser.dumpToJSON(outputFile);
+            String outputPath = FilenameUtils.getFullPath(filename) + FilenameUtils.getBaseName(filename);
+            parser.dumpOuput(outputPath);
             scanner.close();
         } catch (Exception e) {
             System.err.println("In file:\n\t" + filename);

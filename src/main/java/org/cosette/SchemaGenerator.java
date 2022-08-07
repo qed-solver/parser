@@ -94,7 +94,7 @@ public class SchemaGenerator {
      *
      * @param create The given CREATE statement.
      */
-    public void applyCreate(String create) throws Exception {
+    public void applyCreate(String create) {
         Pattern supported = Pattern.compile("(?i)CREATE\\s+(VIEW|TABLE)");
         if (!supported.matcher(create).find()) {
             // TODO: Improve error handling
@@ -102,7 +102,11 @@ public class SchemaGenerator {
         }
         SqlParser schemaParser = SqlParser.create(create, schemaParserConfig);
         SqlNode schemaNode;
-        schemaNode = schemaParser.parseStmt();
+        try {
+            schemaNode = schemaParser.parseStmt();
+        } catch (Exception ignored) {
+            return;
+        }
         switch (schemaNode) {
             case SqlCreateTable sqlCreateTable -> schema.addTable(sqlCreateTable);
             case SqlCreateView sqlCreateView -> {

@@ -5,6 +5,7 @@ import org.apache.calcite.schema.SchemaPlus;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -36,10 +37,11 @@ public class SQLJSONParser {
     /**
      * Dump the parsed statements to a file.
      *
-     * @param file The given file.
+     * @param path The given file.
      */
-    public void dumpToJSON(File file) throws IOException {
-        RelJSONShuttle.dumpToJSON(relNodes, file);
+    public void dumpOuput(String path) throws IOException {
+        RelJSONShuttle.dumpToJSON(relNodes, new File(path + ".json"));
+        RelRacketShuttle.dumpToRacket(relNodes, Paths.get(path + ".rkt"));
     }
 
 }

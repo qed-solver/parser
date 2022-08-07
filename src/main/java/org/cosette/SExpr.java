@@ -27,10 +27,6 @@ public sealed interface SExpr {
         return new Real(value);
     }
 
-    static Sym nll() {
-        return new Sym("sqlnull");
-    }
-
     static Lst app(String fn, SExpr... args) {
         return app(fn, Seq.of(args));
     }
@@ -41,6 +37,10 @@ public sealed interface SExpr {
 
     static Sym quoted(String sym) {
         return symbol("'" + sym);
+    }
+
+    static Lst def(String sym, SExpr expr) {
+        return SExpr.list(SExpr.symbol("define"), SExpr.symbol(sym), expr);
     }
 
     record Lst(Seq<SExpr> nodes) implements SExpr {
@@ -68,7 +68,7 @@ public sealed interface SExpr {
     record Bool(boolean value) implements SExpr {
         @Override
         public String toString() {
-            return "(" + (value ? "TRUE" : "FALSE") + ")";
+            return value ? "#t" : "#f";
         }
     }
 
