@@ -193,9 +193,7 @@ public class RawPlanner implements RelOptTable.ViewExpander {
         return requireNonNull(typeFactory, "typeFactory");
     }
 
-    public RelNode rel() {
-        SqlNode validatedSqlNode = requireNonNull(this.validatedSqlNode,
-                "validatedSqlNode is null. Need to call #validate() first");
+    public RelNode rel(SqlNode sqlNode) {
         final RexBuilder rexBuilder = createRexBuilder();
         final RelOptCluster cluster = RelOptCluster.create(
                 requireNonNull(planner, "planner"),
@@ -203,7 +201,7 @@ public class RawPlanner implements RelOptTable.ViewExpander {
         final SqlToRelConverter sqlToRelConverter =
                 new SqlToRelConverter(this, validator,
                         createCatalogReader(), cluster, convertletTable, sqlToRelConverterConfig);
-        var root = sqlToRelConverter.convertQuery(validatedSqlNode, false, true);
+        var root = sqlToRelConverter.convertQuery(sqlNode, false, true);
         return sqlToRelConverter.trimUnusedFields(true, root.project());
     }
 

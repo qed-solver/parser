@@ -2,6 +2,11 @@ package org.cosette;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import kala.collection.Seq;
+import kala.collection.mutable.MutableHashMap;
+import kala.collection.mutable.MutableList;
+import kala.collection.mutable.MutableMap;
+import kala.collection.mutable.MutableSet;
 import org.apache.calcite.adapter.java.JavaTypeFactory;
 import org.apache.calcite.avatica.util.Quoting;
 import org.apache.calcite.config.CalciteConnectionProperty;
@@ -171,6 +176,10 @@ public class SchemaGenerator {
         return schema.plus();
     }
 
+    public CosetteSchema getRawSchema() {
+        return schema;
+    }
+
     /**
      * @return The declared custom functions.
      */
@@ -183,11 +192,11 @@ public class SchemaGenerator {
 class CosetteTable extends AbstractTable {
 
     final CosetteSchema owner;
-    final List<Boolean> columnNullabilities = new ArrayList<>();
-    final List<String> columnNames = new ArrayList<>();
-    final List<SqlTypeName> columnTypeNames = new ArrayList<>();
-    final List<SqlBasicCall> checkConstraints = new ArrayList<>();
-    final Set<ImmutableBitSet> columnKeys = new HashSet<>();
+    final MutableList<Boolean> columnNullabilities = MutableList.create();
+    final MutableList<String> columnNames = MutableList.create();
+    final MutableList<SqlTypeName> columnTypeNames = MutableList.create();
+    final MutableList<SqlBasicCall> checkConstraints = MutableList.create();
+    final MutableSet<ImmutableBitSet> columnKeys = MutableSet.create();
     final SqlIdentifier id;
 
     public CosetteTable(CosetteSchema schema, SqlIdentifier name) {
@@ -201,12 +210,12 @@ class CosetteTable extends AbstractTable {
         for (int index = 0; index < columnNames.size(); index += 1) {
             fields.add(typeFactory.createTypeWithNullability(typeFactory.createSqlType(columnTypeNames.get(index)), columnNullabilities.get(index)));
         }
-        return typeFactory.createStructType(fields, columnNames);
+        return typeFactory.createStructType(fields, columnNames.asJava());
     }
 
     @Override
     public Statistic getStatistic() {
-        return Statistics.of(0, new ArrayList<>(columnKeys));
+        return Statistics.of(0, new ArrayList<>(columnKeys.asJava()));
     }
 
     public List<RexNode> deriveCheckConstraint() {
@@ -216,8 +225,7 @@ class CosetteTable extends AbstractTable {
             SqlSelect wrapper = new SqlSelect(SqlParserPos.ZERO, SqlNodeList.EMPTY, SqlNodeList.SINGLETON_STAR,
                     this.id, check, null, null, SqlNodeList.EMPTY, null, null, null, null);
             try {
-                planner.parse(wrapper.toString());
-                LogicalFilter filter = (LogicalFilter) planner.rel().getInput(0);
+                LogicalFilter filter = (LogicalFilter) planner.rel(planner.parse(wrapper.toString())).getInput(0);
                 derivedConstraints.add(filter.getCondition());
             } catch (Exception ignore) {
 
@@ -230,7 +238,7 @@ class CosetteTable extends AbstractTable {
 
 class CosetteSchema extends AbstractSchema {
 
-    final HashMap<String, Table> tables = new HashMap<>();
+    final MutableMap<String, Table> tables = new MutableHashMap<>();
     final SchemaGenerator owner;
 
     public CosetteSchema(SchemaGenerator source) {
@@ -245,12 +253,12 @@ class CosetteSchema extends AbstractSchema {
 
         for (SqlNode column : createTable.columnList) {
             switch (column.getKind()) {
-                case CHECK -> cosetteTable.checkConstraints.add((SqlBasicCall) ((SqlCheckConstraint) column).getOperandList().get(1));
+                case CHECK -> cosetteTable.checkConstraints.append((SqlBasicCall) ((SqlCheckConstraint) column).getOperandList().get(1));
                 case COLUMN_DECL -> {
                     SqlColumnDeclaration decl = (SqlColumnDeclaration) column;
-                    cosetteTable.columnNames.add(decl.name.toString());
-                    cosetteTable.columnTypeNames.add(SqlTypeName.get(decl.dataType.getTypeName().toString()));
-                    cosetteTable.columnNullabilities.add(decl.strategy != ColumnStrategy.NOT_NULLABLE);
+                    cosetteTable.columnNames.append(decl.name.toString());
+                    cosetteTable.columnTypeNames.append(SqlTypeName.get(decl.dataType.getTypeName().toString()));
+                    cosetteTable.columnNullabilities.append(decl.strategy != ColumnStrategy.NOT_NULLABLE);
                 }
                 case FOREIGN_KEY -> System.err.println("Foreign key constraint is not implemented in cosette yet.");
                 case PRIMARY_KEY, UNIQUE -> {
@@ -296,7 +304,7 @@ class CosetteSchema extends AbstractSchema {
     }
 
     protected Map<String, Table> getTableMap() {
-        return tables;
+        return tables.asJava();
     }
 
     public SchemaPlus plus() {

@@ -73,6 +73,7 @@ public class Main {
                 }
             }
             String outputPath = FilenameUtils.getFullPath(filename) + FilenameUtils.getBaseName(filename);
+            parser.pruneWith(generator.getRawSchema());
             parser.dumpOuput(outputPath);
             scanner.close();
         } catch (Exception e) {
