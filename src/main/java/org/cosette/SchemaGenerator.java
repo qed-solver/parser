@@ -99,7 +99,7 @@ public class SchemaGenerator {
      *
      * @param create The given CREATE statement.
      */
-    public void applyCreate(String create) {
+    public void applyCreate(String create) throws SQLException {
         Pattern supported = Pattern.compile("(?i)CREATE\\s+(VIEW|TABLE)");
         if (!supported.matcher(create).find()) {
             // TODO: Improve error handling
@@ -109,7 +109,9 @@ public class SchemaGenerator {
         SqlNode schemaNode;
         try {
             schemaNode = schemaParser.parseStmt();
-        } catch (Exception ignored) {
+        } catch (Exception e) {
+            System.err.println("Warning: Skipping problematic statement:\n" + create);
+            System.err.println(e + "\n");
             return;
         }
         switch (schemaNode) {
@@ -117,7 +119,10 @@ public class SchemaGenerator {
             case SqlCreateView sqlCreateView -> {
                 try {
                     schema.addView(sqlCreateView);
-                } catch (Exception ignored) {}
+                } catch (Exception e) {
+                    System.err.println("Warning: Encountered problematic view definition:\n" + create);
+                    System.err.println(e.getCause() + "\n");
+                }
             }
             default -> throw new RuntimeException("Unsupported create statement:\n" + create);
         }
