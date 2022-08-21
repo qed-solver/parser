@@ -2,7 +2,6 @@ package org.cosette;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import kala.collection.Seq;
 import kala.collection.mutable.MutableHashMap;
 import kala.collection.mutable.MutableList;
 import kala.collection.mutable.MutableMap;
@@ -23,7 +22,6 @@ import org.apache.calcite.schema.*;
 import org.apache.calcite.schema.impl.*;
 import org.apache.calcite.sql.*;
 import org.apache.calcite.sql.ddl.*;
-import org.apache.calcite.sql.dialect.CalciteSqlDialect;
 import org.apache.calcite.sql.parser.SqlParser;
 import org.apache.calcite.sql.parser.SqlParserPos;
 import org.apache.calcite.sql.parser.ddl.SqlDdlParserImpl;
@@ -118,7 +116,7 @@ public class SchemaGenerator {
             case SqlCreateTable sqlCreateTable -> schema.addTable(sqlCreateTable);
             case SqlCreateView sqlCreateView -> {
                 try {
-                    schema.addView(sqlCreateView);
+                    schema.addView(sqlCreateView, create);
                 } catch (Exception e) {
                     System.err.println("Warning: Encountered problematic view definition:\n" + create);
                     System.err.println(e.getCause() + "\n");
@@ -284,11 +282,16 @@ class CosetteSchema extends AbstractSchema {
         tables.put(createTable.name.toString(), cosetteTable);
     }
 
-    public void addView(SqlCreateView sqlCreateView) throws SQLException {
+    public void addView(SqlCreateView sqlCreateView, String rawDef) throws SQLException {
         if (sqlCreateView.columnList == null || sqlCreateView.columnList.getList().isEmpty()) {
             throw new RuntimeException("No field definition in view " + sqlCreateView.name);
         }
-        String rawQuery = sqlCreateView.query.toSqlString(CalciteSqlDialect.DEFAULT).getSql();
+        // Some regex hackery to extract the raw definition...
+        var matcher = Pattern.compile("(?s).*?\\(.*?\\)\\s+[Aa][Ss](.*)").matcher(rawDef);
+        if (!matcher.find()) {
+            throw new RuntimeException("Cannot extract definition of view " + sqlCreateView.name);
+        }
+        var rawQuery = matcher.group(1);
         String fields = sqlCreateView.columnList
                 .getList()
                 .stream()
