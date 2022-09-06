@@ -3,7 +3,6 @@ package org.cosette;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import org.apache.calcite.plan.RelOptTable;
 import org.apache.calcite.rel.RelFieldCollation;
 import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.RelReferentialConstraint;
@@ -16,7 +15,6 @@ import org.apache.calcite.rel.logical.*;
 import org.apache.calcite.rel.type.RelDataTypeField;
 import org.apache.calcite.rex.RexLiteral;
 import org.apache.calcite.rex.RexNode;
-import org.apache.calcite.schema.ColumnStrategy;
 import org.apache.calcite.util.ImmutableBitSet;
 import org.apache.calcite.util.mapping.IntPair;
 
@@ -62,7 +60,7 @@ public class RelJSONShuttle implements RelShuttle {
 
         ArrayNode helpArray = mainObject.putArray("help");
 
-        List<RelOptTable> tableList = new ArrayList<>();
+        List<CosetteTable> tableList = new ArrayList<>();
 
         for (RelNode relNode : relNodes) {
             Environment environment = new Environment(mapper, tableList);
@@ -73,72 +71,65 @@ public class RelJSONShuttle implements RelShuttle {
             relNode.accept(relJsonShuttle);
             queryArray.add(relJsonShuttle.getRelNode());
 
-            tableList = environment.getRelOptTables();
+            tableList = environment.getCosetteTables();
         }
 
-        List<List<String>> tableNames = new ArrayList<>();
+        var tableNames = new ArrayList<>();
         int index = 0;
         while (index < tableList.size()) {
-            RelOptTable table = tableList.get(index);
-            tableNames.add(table.getQualifiedName());
+            CosetteTable table = tableList.get(index);
+            tableNames.add(table.id);
 
             ObjectNode tableObject = mapper.createObjectNode();
 
-            tableObject.put("name", table.getQualifiedName().get(table.getQualifiedName().size() - 1));
+            tableObject.put("name", table.id);
             ArrayNode fieldArray = tableObject.putArray("fields");
-            for (String field : table.getRowType().getFieldNames()) {
+            for (String field : table.names) {
                 fieldArray.add(field);
             }
 
             ArrayNode typeArray = tableObject.putArray("types");
-            for (RelDataTypeField field : table.getRowType().getFieldList()) {
-                typeArray.add(field.getType().getSqlTypeName().name());
+            for (var type : table.types) {
+                typeArray.add(type.name());
             }
 
-            ArrayNode strategyArray = tableObject.putArray("strategy");
-            for (ColumnStrategy columnStrategy : table.getColumnStrategies()) {
-                strategyArray.add(columnStrategy.toString());
+            ArrayNode strategyArray = tableObject.putArray("nullable");
+            for (var nullable : table.nullabilities) {
+                strategyArray.add(nullable);
             }
 
             ArrayNode keyArray = tableObject.putArray("key");
-            List<ImmutableBitSet> keys = table.getKeys();
-            if (keys != null) {
-                for (ImmutableBitSet key : keys) {
-                    ArrayNode components = keyArray.addArray();
-                    for (int unique : key) {
-                        components.add(unique);
-                    }
+            var keys = table.keys;
+            for (ImmutableBitSet key : keys) {
+                ArrayNode components = keyArray.addArray();
+                for (int unique : key) {
+                    components.add(unique);
                 }
             }
 
             // TODO: Broken Foreign Key implementation for Cosette. to be fixed when Calcite supports foreign keys.
             ArrayNode foreignArray = tableObject.putArray("foreign");
-            List<RelReferentialConstraint> constraints = table.getReferentialConstraints();
-            if (constraints != null) {
-                for (RelReferentialConstraint constraint : constraints) {
-                    // Potentially refer to undeclared tables.
-                    ArrayNode foreignMap = foreignArray.addArray();
-                    int source = tableNames.indexOf(constraint.getSourceQualifiedName());
-                    int target = tableNames.indexOf(constraint.getTargetQualifiedName());
-                    ArrayNode sourceArray = foreignMap.addArray();
-                    ArrayNode targetArray = foreignMap.addArray();
-                    foreignMap.addArray().add(source).add(target);
-                    for (IntPair intPair : constraint.getColumnPairs()) {
-                        sourceArray.add(intPair.source);
-                        targetArray.add(intPair.target);
-                    }
+            var constraints = table.refConstraints;
+            for (RelReferentialConstraint constraint : constraints) {
+                // Potentially refer to undeclared tables.
+                ArrayNode foreignMap = foreignArray.addArray();
+                int source = tableNames.indexOf(constraint.getSourceQualifiedName());
+                int target = tableNames.indexOf(constraint.getTargetQualifiedName());
+                ArrayNode sourceArray = foreignMap.addArray();
+                ArrayNode targetArray = foreignMap.addArray();
+                foreignMap.addArray().add(source).add(target);
+                for (IntPair intPair : constraint.getColumnPairs()) {
+                    sourceArray.add(intPair.source);
+                    targetArray.add(intPair.target);
                 }
             }
 
-            CosetteTable raw = table.unwrap(CosetteTable.class);
-            if (raw != null) {
-                ArrayNode checkArray = tableObject.putArray("guaranteed");
-                for (RexNode check : raw.deriveCheckConstraint()) {
-                    Environment checkEnvironment = new Environment(mapper, tableList);
-                    RexJSONVisitor checkVisitor = new RexJSONVisitor(checkEnvironment, table.getRowType().getFieldCount());
-                    checkArray.add(check.accept(checkVisitor));
-                    tableList = checkEnvironment.getRelOptTables();
-                }
+            ArrayNode checkArray = tableObject.putArray("guaranteed");
+            for (RexNode check : table.checkConstraints) {
+                Environment checkEnvironment = new Environment(mapper, tableList);
+                RexJSONVisitor checkVisitor = new RexJSONVisitor(checkEnvironment, table.names.size());
+                checkArray.add(check.accept(checkVisitor));
+                tableList = checkEnvironment.getCosetteTables();
             }
 
             schemaArray.add(tableObject);
@@ -300,7 +291,7 @@ public class RelJSONShuttle implements RelShuttle {
      */
     @Override
     public RelNode visit(TableScan scan) {
-        relNode.put("scan", environment.identifyTable(scan.getTable()));
+        relNode.put("scan", environment.identifyTable(scan.getTable().unwrap(CosetteTable.class)));
         return null;
     }
 

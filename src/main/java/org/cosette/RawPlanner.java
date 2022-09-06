@@ -69,24 +69,9 @@ public class RawPlanner implements RelOptTable.ViewExpander {
     private @Nullable RelOptPlanner planner;
     // set in STATE_4_VALIDATE
     private @Nullable SqlValidator validator;
-    private @Nullable SqlNode validatedSqlNode;
 
     public RawPlanner(SchemaPlus schema) {
-        SqlToRelConverter.Config converterConfig = SqlToRelConverter.config()
-                .withRelBuilderConfigTransform(c -> c.withPushJoinCondition(false)
-                        .withSimplify(false)
-                        .withSimplifyValues(false)
-                        .withBloat(-1)
-                        .withDedupAggregateCalls(false)
-                        .withPruneInputOfAggregate(false))
-                .withDecorrelationEnabled(false)
-                .withExpand(false)
-                .withTrimUnusedFields(true);
-        FrameworkConfig config = Frameworks.newConfigBuilder()
-                .defaultSchema(schema)
-                .parserConfig(SqlParser.Config.DEFAULT.withLex(Lex.MYSQL).withQuoting(Quoting.DOUBLE_QUOTE))
-                .sqlToRelConverterConfig(converterConfig)
-                .build();
+        var config = generateConfig(schema);
         this.costFactory = config.getCostFactory();
         this.defaultSchema = config.getDefaultSchema();
         this.operatorTable = config.getOperatorTable();
@@ -99,6 +84,29 @@ public class RawPlanner implements RelOptTable.ViewExpander {
         this.executor = config.getExecutor();
         this.context = config.getContext();
         this.connectionConfig = connConfig(context, parserConfig);
+    }
+
+    public static FrameworkConfig generateConfig(SchemaPlus schema) {
+        SqlToRelConverter.Config converterConfig = SqlToRelConverter.config()
+                .withRelBuilderConfigTransform(c -> c.withPushJoinCondition(false)
+                        .withSimplify(false)
+                        .withSimplifyValues(false)
+                        .withBloat(-1)
+                        .withDedupAggregateCalls(false)
+                        .withPruneInputOfAggregate(false))
+                .withDecorrelationEnabled(false)
+                .withExpand(false)
+                .withTrimUnusedFields(true);
+        var builderConfig = RelBuilder.Config.DEFAULT
+                .withBloat(-1)
+                .withSimplify(false)
+                .withSimplifyValues(false);
+        return Frameworks.newConfigBuilder()
+                .defaultSchema(schema)
+                .parserConfig(SqlParser.Config.DEFAULT.withLex(Lex.MYSQL).withQuoting(Quoting.DOUBLE_QUOTE))
+                .sqlToRelConverterConfig(converterConfig)
+                .context(Contexts.of(builderConfig))
+                .build();
     }
 
     private static CalciteConnectionConfig connConfig(Context context,
@@ -159,11 +167,10 @@ public class RawPlanner implements RelOptTable.ViewExpander {
         SqlNode sqlNode = parser.parseStmt();
         this.validator = createSqlValidator(createCatalogReader());
         try {
-            validatedSqlNode = validator.validate(sqlNode);
+            return validator.validate(sqlNode);
         } catch (RuntimeException e) {
             throw new ValidationException(e);
         }
-        return validatedSqlNode;
     }
 
     private SqlValidator createSqlValidator(CalciteCatalogReader catalogReader) {
@@ -201,8 +208,7 @@ public class RawPlanner implements RelOptTable.ViewExpander {
         final SqlToRelConverter sqlToRelConverter =
                 new SqlToRelConverter(this, validator,
                         createCatalogReader(), cluster, convertletTable, sqlToRelConverterConfig);
-        var root = sqlToRelConverter.convertQuery(sqlNode, false, true);
-        return sqlToRelConverter.trimUnusedFields(true, root.project());
+        return sqlToRelConverter.convertQuery(sqlNode, false, true).project();
     }
 
     private RexBuilder createRexBuilder() {

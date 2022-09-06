@@ -2,7 +2,6 @@ package org.cosette;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import org.apache.calcite.plan.RelOptTable;
 import org.apache.calcite.rel.core.CorrelationId;
 
 import java.util.HashMap;
@@ -17,14 +16,14 @@ import java.util.Set;
  */
 public class Environment {
 
-    private final List<RelOptTable> relOptTables;
+    private final List<CosetteTable> cosetteTables;
     private final ObjectMapper relMapper;
     private final HashMap<CorrelationId, Integer> environment;
     private final int level;
 
-    private Environment(ObjectMapper mapper, List<RelOptTable> schemas, HashMap<CorrelationId, Integer> existing, int base) {
+    private Environment(ObjectMapper mapper, List<CosetteTable> schemas, HashMap<CorrelationId, Integer> existing, int base) {
         relMapper = mapper;
-        relOptTables = schemas;
+        cosetteTables = schemas;
         environment = existing;
         level = base;
     }
@@ -35,7 +34,7 @@ public class Environment {
      * @param mapper  A ObjectMapper instance that could be used to generate JSON.
      * @param schemas A list of tables as input reference.
      */
-    public Environment(ObjectMapper mapper, List<RelOptTable> schemas) {
+    public Environment(ObjectMapper mapper, List<CosetteTable> schemas) {
         this(mapper, schemas, new HashMap<>(), 0);
     }
 
@@ -53,19 +52,19 @@ public class Environment {
      * @param table The RelOptTable instance to be located.
      * @return The index of the given RelOptTable instance.
      */
-    public int identifyTable(RelOptTable table) {
-        if (!relOptTables.contains(table)) {
-            relOptTables.add(table);
+    public int identifyTable(CosetteTable table) {
+        if (!cosetteTables.contains(table)) {
+            cosetteTables.add(table);
         }
-        return relOptTables.indexOf(table);
+        return cosetteTables.indexOf(table);
     }
 
     /**
      * @return The RelOptTable list that includes the given reference and all additional RelOptTable instances that has
      * been looked up for.
      */
-    public List<RelOptTable> getRelOptTables() {
-        return relOptTables;
+    public List<CosetteTable> getCosetteTables() {
+        return cosetteTables;
     }
 
     /**
@@ -81,7 +80,7 @@ public class Environment {
         if (id != null) {
             copy.put(id, level);
         }
-        return new Environment(relMapper, relOptTables, copy, level + delta);
+        return new Environment(relMapper, cosetteTables, copy, level + delta);
     }
 
     /**

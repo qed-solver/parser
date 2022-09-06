@@ -2,10 +2,8 @@ package org.cosette;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import kala.collection.mutable.MutableHashMap;
-import kala.collection.mutable.MutableList;
-import kala.collection.mutable.MutableMap;
-import kala.collection.mutable.MutableSet;
+import kala.collection.Seq;
+import kala.collection.mutable.*;
 import org.apache.calcite.adapter.java.JavaTypeFactory;
 import org.apache.calcite.avatica.util.Quoting;
 import org.apache.calcite.config.CalciteConnectionProperty;
@@ -13,6 +11,7 @@ import org.apache.calcite.config.Lex;
 import org.apache.calcite.jdbc.CalciteConnection;
 import org.apache.calcite.jdbc.CalcitePrepare;
 import org.apache.calcite.jdbc.CalciteSchema;
+import org.apache.calcite.rel.RelReferentialConstraint;
 import org.apache.calcite.rel.logical.LogicalFilter;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
@@ -179,10 +178,6 @@ public class SchemaGenerator {
         return schema.plus();
     }
 
-    public CosetteSchema getRawSchema() {
-        return schema;
-    }
-
     /**
      * @return The declared custom functions.
      */
@@ -193,50 +188,37 @@ public class SchemaGenerator {
 }
 
 class CosetteTable extends AbstractTable {
+    String id;
+    Seq<String> names;
+    Seq<SqlTypeName> types;
+    Seq<Boolean> nullabilities;
+    Seq<ImmutableBitSet> keys;
+    Seq<RelReferentialConstraint> refConstraints;
+    Seq<RexNode> checkConstraints;
 
-    final CosetteSchema owner;
-    final MutableList<Boolean> columnNullabilities = MutableList.create();
-    final MutableList<String> columnNames = MutableList.create();
-    final MutableList<SqlTypeName> columnTypeNames = MutableList.create();
-    final MutableList<SqlBasicCall> checkConstraints = MutableList.create();
-    final MutableSet<ImmutableBitSet> columnKeys = MutableSet.create();
-    final SqlIdentifier id;
-
-    public CosetteTable(CosetteSchema schema, SqlIdentifier name) {
-        owner = schema;
-        id = name;
+    public CosetteTable(String id, Seq<String> names, Seq<SqlTypeName> types, Seq<Boolean> nullabilities, Seq<ImmutableBitSet> keys, Seq<RexNode> checkConstraints) {
+        this.id = id;
+        this.names = names;
+        this.types = types;
+        this.nullabilities = nullabilities;
+        this.keys = keys;
+        this.refConstraints = Seq.empty();
+        this.checkConstraints = checkConstraints;
     }
 
     @Override
     public RelDataType getRowType(RelDataTypeFactory typeFactory) {
         List<RelDataType> fields = new ArrayList<>();
-        for (int index = 0; index < columnNames.size(); index += 1) {
-            fields.add(typeFactory.createTypeWithNullability(typeFactory.createSqlType(columnTypeNames.get(index)), columnNullabilities.get(index)));
+        for (int index = 0; index < names.size(); index += 1) {
+            fields.add(typeFactory.createTypeWithNullability(typeFactory.createSqlType(types.get(index)), nullabilities.get(index)));
         }
-        return typeFactory.createStructType(fields, columnNames.asJava());
+        return typeFactory.createStructType(fields, names.asJava());
     }
 
     @Override
     public Statistic getStatistic() {
-        return Statistics.of(0, new ArrayList<>(columnKeys.asJava()));
+        return Statistics.of(0, keys.asJava());
     }
-
-    public List<RexNode> deriveCheckConstraint() {
-        List<RexNode> derivedConstraints = new ArrayList<>();
-        RawPlanner planner = new RawPlanner(owner.plus());
-        for (SqlBasicCall check : checkConstraints) {
-            SqlSelect wrapper = new SqlSelect(SqlParserPos.ZERO, SqlNodeList.EMPTY, SqlNodeList.SINGLETON_STAR,
-                    this.id, check, null, null, SqlNodeList.EMPTY, null, null, null, null);
-            try {
-                LogicalFilter filter = (LogicalFilter) planner.rel(planner.parse(wrapper.toString())).getInput(0);
-                derivedConstraints.add(filter.getCondition());
-            } catch (Exception ignore) {
-
-            }
-        }
-        return derivedConstraints;
-    }
-
 }
 
 class CosetteSchema extends AbstractSchema {
@@ -252,33 +234,46 @@ class CosetteSchema extends AbstractSchema {
         if (createTable.columnList == null) {
             throw new RuntimeException("No column in table " + createTable.name);
         }
-        CosetteTable cosetteTable = new CosetteTable(this, createTable.name);
-
+        var planner = new RawPlanner(this.plus());
+        var names = MutableList.<String>create();
+        var types = MutableList.<SqlTypeName>create();
+        var nullabilities = MutableList.<Boolean>create();
+        var keys = MutableList.<ImmutableBitSet>create();
+        var checkConstraints = MutableList.<RexNode>create();
         for (SqlNode column : createTable.columnList) {
             switch (column.getKind()) {
-                case CHECK -> cosetteTable.checkConstraints.append((SqlBasicCall) ((SqlCheckConstraint) column).getOperandList().get(1));
+                case CHECK -> {
+                    var check = (SqlBasicCall) ((SqlCheckConstraint) column).getOperandList().get(1);
+                    var wrapper = new SqlSelect(SqlParserPos.ZERO, SqlNodeList.EMPTY, SqlNodeList.SINGLETON_STAR,
+                            createTable.name, check, null, null, SqlNodeList.EMPTY, null, null, null, null);
+                    try {
+                        var filter = (LogicalFilter) planner.rel(wrapper).getInput(0);
+                        checkConstraints.append(filter.getCondition());
+                    } catch (Exception ignore) {}
+                }
                 case COLUMN_DECL -> {
                     SqlColumnDeclaration decl = (SqlColumnDeclaration) column;
-                    cosetteTable.columnNames.append(decl.name.toString());
-                    cosetteTable.columnTypeNames.append(SqlTypeName.get(decl.dataType.getTypeName().toString()));
-                    cosetteTable.columnNullabilities.append(decl.strategy != ColumnStrategy.NOT_NULLABLE);
+                    names.append(decl.name.toString());
+                    types.append(SqlTypeName.get(decl.dataType.getTypeName().toString()));
+                    nullabilities.append(decl.strategy != ColumnStrategy.NOT_NULLABLE);
                 }
                 case FOREIGN_KEY -> System.err.println("Foreign key constraint is not implemented in cosette yet.");
                 case PRIMARY_KEY, UNIQUE -> {
                     SqlKeyConstraint cons = (SqlKeyConstraint) column;
-                    List<Integer> keys = new ArrayList<>();
+                    List<Integer> key = new ArrayList<>();
                     for (SqlNode id : (SqlNodeList) cons.getOperandList().get(1)) {
-                        int index = cosetteTable.columnNames.indexOf(id.toString());
-                        keys.add(index);
+                        int index = names.indexOf(id.toString());
+                        key.add(index);
                         if (column.getKind() == SqlKind.PRIMARY_KEY) {
-                            cosetteTable.columnNullabilities.set(index, false);
+                            nullabilities.set(index, false);
                         }
                     }
-                    cosetteTable.columnKeys.add(ImmutableBitSet.of(keys));
+                    keys.append(ImmutableBitSet.of(key));
                 }
                 default -> throw new RuntimeException("Unsupported declaration type " + column.getKind() + " in table " + createTable.name);
             }
         }
+        var cosetteTable = new CosetteTable(createTable.name.toString(), names, types, nullabilities, keys, checkConstraints);
         tables.put(createTable.name.toString(), cosetteTable);
     }
 

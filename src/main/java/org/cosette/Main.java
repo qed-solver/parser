@@ -1,5 +1,6 @@
 package org.cosette;
 
+import org.apache.calcite.tools.RelBuilder;
 import org.apache.commons.io.FilenameUtils;
 
 import java.io.BufferedWriter;
@@ -73,8 +74,8 @@ public class Main {
                 }
             }
             String outputPath = FilenameUtils.getFullPath(filename) + FilenameUtils.getBaseName(filename);
-            parser.pruneWith(generator.getRawSchema());
-            parser.dumpOuput(outputPath);
+            var builder = RelBuilder.create(RawPlanner.generateConfig(generator.extractSchema()));
+            parser.dumpOuput(builder, outputPath);
             scanner.close();
         } catch (Exception e) {
             System.err.println("In file:\n\t" + filename);

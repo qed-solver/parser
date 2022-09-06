@@ -76,15 +76,15 @@ public record RelRacketShuttle(Env env) {
         var rels = Seq.from(relNodes)
                 .mapIndexed((i, rel) -> SExpr.def("r" + i, new RelRacketShuttle(env).visit(rel)));
         Seq<SExpr> tabs = env.tables().toSeq().map(t -> {
+            var table = t.unwrap(CosetteTable.class);
+            assert table != null;
             var fullName = Seq.from(t.getQualifiedName()).joinToString(".");
-            Seq<SExpr> fields = Seq.from(t.getRowType().getFieldNames()).map(SExpr::string);
+            Seq<SExpr> fields = Seq.from(table.names).map(SExpr::string);
             return SExpr.app("table-info", SExpr.string(fullName), SExpr.app("list", fields));
         });
         var tables = SExpr.def("tables", SExpr.app("list", tabs));
         var output = """
-                #lang rosette
-                                
-                (require "relation.rkt" "cosette.rkt")
+                #lang cosette
                 
                 %s
                 
