@@ -1,5 +1,6 @@
 package org.cosette;
 
+import kala.collection.Seq;
 import kala.collection.mutable.MutableArrayList;
 import kala.collection.mutable.MutableList;
 import org.apache.calcite.rel.RelNode;
@@ -9,6 +10,7 @@ import org.apache.calcite.tools.RelBuilder;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.List;
 
@@ -55,7 +57,17 @@ public class SQLJSONParser {
         nodes.forEach(scanner::scan);
         var pruner = new RelPruner(scanner.usages().toImmutableMap());
         var rNodes = nodes.map(pruner).asJava();
-        RelJSONShuttle.dumpToJSON(rNodes, new File(path + ".json"));
-        RelRacketShuttle.dumpToRacket(rNodes, Paths.get(path + ".rkt"));
+        File batch = new File(path + ".batch");
+        if (!batch.exists() || !batch.isDirectory()) {
+            batch.mkdir();
+        }
+        if (!rNodes.isEmpty()) {
+            var origin = rNodes.get(0);
+            Seq.fill(rNodes.size() - 1, i -> i + 1).forEachChecked(i -> {
+                var pair = List.of(origin, rNodes.get(i));
+                RelJSONShuttle.dumpToJSON(pair, Paths.get(batch.getPath(), i + ".json").toFile());
+                RelRacketShuttle.dumpToRacket(pair, Paths.get(batch.getPath(), i + ".rkt"));
+            });
+        }
     }
 }
