@@ -255,6 +255,8 @@ public class RelJSONShuttle implements RelShuttle {
                 column.put("type", types.get(target).getType().getSqlTypeName().name());
                 operands.add(column);
             }
+            function.put("distinct", call.isDistinct());
+            function.put("ignoreNulls", call.ignoreNulls());
             function.put("type", call.getType().getSqlTypeName().name());
             aggregationFunctions.add(function);
         }
