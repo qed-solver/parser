@@ -138,7 +138,7 @@ public class RelJSONShuttle implements RelShuttle {
 
         }
 
-        mapper.writerWithDefaultPrettyPrinter().writeValue(file, mainObject);
+        mapper.writer().writeValue(file, mainObject);
 
     }
 
