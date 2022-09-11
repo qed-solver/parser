@@ -21,6 +21,10 @@ record Env(int base, int delta, ImmutableMap<CorrelationId, Integer> globals, Mu
         return new Env(base + delta, d, globals, tables);
     }
 
+    Env lifted(int d) {
+        return new Env(base + d, delta, globals, tables);
+    }
+
     int resolve(RelOptTable table) {
         var idx = tables.indexOf(table);
         if (idx == -1) {
@@ -31,6 +35,6 @@ record Env(int base, int delta, ImmutableMap<CorrelationId, Integer> globals, Mu
     }
 
     int resolve(CorrelationId id) {
-        return globals.get(id);
+        return globals.getOrThrow(id, () -> new RuntimeException("Correlation ID not declared"));
     }
 }
