@@ -91,7 +91,7 @@ public record RelJSONShuttle(Env env) {
                 ))));
             }
             case LogicalCorrelate correlate -> {
-                var rightShuttle = new RelJSONShuttle(env.advanced(correlate.getLeft().getRowType().getFieldCount()).recorded(correlate.getVariablesSet()));
+                var rightShuttle = new RelJSONShuttle(env.advanced(correlate.getLeft().getRowType().getFieldCount()).recorded(correlate.getVariablesSet()).advanced(0));
                 yield object(Map.of("correlate", array(Seq.of(
                         visit(correlate.getLeft()),
                         rightShuttle.visit(correlate.getRight())
