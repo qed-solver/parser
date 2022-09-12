@@ -192,8 +192,8 @@ public record RelJSONShuttle(Env env) {
                 ));
                 case RexSubQuery subQuery -> object(Map.of(
                         "operator", new TextNode(subQuery.getOperator().toString()),
-                        "operand", array(Seq.from(subQuery.getOperands()).map(this::visit)
-                                .appended(new RelJSONShuttle(env.advanced(0)).visit(subQuery.rel))),
+                        "operand", array(Seq.from(subQuery.getOperands()).map(this::visit)),
+                        "query", new RelJSONShuttle(env.advanced(0)).visit(subQuery.rel),
                         "type", new TextNode(subQuery.getType().getSqlTypeName().name())
                 ));
                 case RexCall call -> object(Map.of(
