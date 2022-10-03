@@ -15,6 +15,31 @@ import java.nio.file.Path;
 import java.util.List;
 
 public record RelRacketShuttle(Env env) {
+    public static void dumpToRacket(List<RelNode> relNodes, Path path) throws IOException {
+        assert relNodes.size() == 2;
+        var env = Env.empty();
+        var rels = Seq.from(relNodes)
+                .mapIndexed((i, rel) -> SExpr.def("r" + i, new RelRacketShuttle(env).visit(rel)));
+        Seq<SExpr> tabs = env.tables().toSeq().map(t -> {
+            var table = t.unwrap(CosetteTable.class);
+            assert table != null;
+            var fullName = Seq.from(t.getQualifiedName()).joinToString(".");
+            Seq<SExpr> fields = Seq.from(table.names).map(SExpr::string);
+            return SExpr.app("table-info", SExpr.string(fullName), SExpr.app("list", fields));
+        });
+        var tables = SExpr.def("tables", SExpr.app("list", tabs));
+        var output = """
+                #lang cosette
+                                
+                %s
+                                
+                %s
+                                
+                (solve-relations r0 r1 tables println)
+                """.formatted(rels.joinToString("\n"), tables);
+        Files.write(path, output.getBytes());
+    }
+
     public SExpr visit(RelNode rel) {
         return switch (rel) {
             case TableScan scan -> SExpr.app("r-scan", SExpr.integer(env.resolve(scan.getTable())));
@@ -41,19 +66,22 @@ public record RelRacketShuttle(Env env) {
                     case LEFT -> "left";
                     case RIGHT -> "right";
                     case FULL -> "full";
-                    default -> throw new UnsupportedOperationException("Not supported join type: " + join.getJoinType());
+                    default ->
+                            throw new UnsupportedOperationException("Not supported join type: " + join.getJoinType());
                 });
                 yield SExpr.app("r-join", kind, visitor.visit(join.getCondition()), visit(left), visit(right));
             }
             case LogicalAggregate aggregate -> {
                 var aggs = SExpr.app("list", Seq.from(aggregate.getAggCallList()).map(agg -> {
                     var name = SExpr.quoted(switch (agg.getAggregation().getName().toLowerCase()) {
-                        case "count" -> "aggr-count" + (agg.isDistinct() ? "-distinct" : "") + (agg.ignoreNulls() ? "-all" : "");
+                        case "count" ->
+                                "aggr-count" + (agg.isDistinct() ? "-distinct" : "") + (agg.ignoreNulls() ? "-all" : "");
                         case "sum" -> "aggr-sum";
                         case "max" -> "aggr-max";
                         case "min" -> "aggr-min";
                         case "avg" -> "aggr-avg";
-                        default -> throw new UnsupportedOperationException("Not supported aggregation function: " + agg.getAggregation().getName());
+                        default ->
+                                throw new UnsupportedOperationException("Not supported aggregation function: " + agg.getAggregation().getName());
                     });
                     var cols = SExpr.app("list", Seq.from(agg.getArgList()).map(SExpr::integer));
                     return SExpr.app("v-agg", name, cols);
@@ -71,31 +99,6 @@ public record RelRacketShuttle(Env env) {
             }
             default -> throw new UnsupportedOperationException("Not implemented: " + rel.getRelTypeName());
         };
-    }
-
-    public static void dumpToRacket(List<RelNode> relNodes, Path path) throws IOException {
-        assert relNodes.size() == 2;
-        var env = Env.empty();
-        var rels = Seq.from(relNodes)
-                .mapIndexed((i, rel) -> SExpr.def("r" + i, new RelRacketShuttle(env).visit(rel)));
-        Seq<SExpr> tabs = env.tables().toSeq().map(t -> {
-            var table = t.unwrap(CosetteTable.class);
-            assert table != null;
-            var fullName = Seq.from(t.getQualifiedName()).joinToString(".");
-            Seq<SExpr> fields = Seq.from(table.names).map(SExpr::string);
-            return SExpr.app("table-info", SExpr.string(fullName), SExpr.app("list", fields));
-        });
-        var tables = SExpr.def("tables", SExpr.app("list", tabs));
-        var output = """
-                #lang cosette
-                
-                %s
-                
-                %s
-                
-                (solve-relations r0 r1 tables println)
-                """.formatted(rels.joinToString("\n"), tables);
-        Files.write(path, output.getBytes());
     }
 
     public record RexRacketVisitor(Env env) {
@@ -128,7 +131,8 @@ public record RelRacketShuttle(Env env) {
                         case EXISTS -> "exists";
                         case UNIQUE -> "unique";
                         case IN -> "in";
-                        case SqlKind kind -> throw new UnsupportedOperationException("Unsupported subquery operation: " + kind);
+                        case SqlKind kind ->
+                                throw new UnsupportedOperationException("Unsupported subquery operation: " + kind);
                     };
                     var operands = Seq.from(subQuery.getOperands()).map(this::visit);
                     var rel = new RelRacketShuttle(env.advanced(0)).visit(subQuery.rel);

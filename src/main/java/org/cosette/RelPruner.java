@@ -22,8 +22,8 @@ import org.apache.calcite.rex.RexSubQuery;
 import org.apache.calcite.util.ImmutableBitSet;
 
 public class RelPruner implements RelFolder {
-    ImmutableMap<String, ImmutableSet<Integer>> usages;
     private final MutableMap<RelOptTable, Tuple2<CosetteTable, RelDataType>> cache = MutableMap.create();
+    ImmutableMap<String, ImmutableSet<Integer>> usages;
 
     public RelPruner(ImmutableMap<String, ImmutableSet<Integer>> usages) {
         this.usages = usages;
@@ -116,7 +116,8 @@ record RelScanner(MutableMap<String, ImmutableSet<Integer>> usages) {
     }
 
     private class RexScanner extends RexShuttle {
-        @Override public RexNode visitSubQuery(RexSubQuery subQuery) {
+        @Override
+        public RexNode visitSubQuery(RexSubQuery subQuery) {
             scan(subQuery.rel);
             return super.visitSubQuery(subQuery);
         }

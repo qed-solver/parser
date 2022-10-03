@@ -3,7 +3,9 @@ package org.cosette;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import kala.collection.Seq;
-import kala.collection.mutable.*;
+import kala.collection.mutable.MutableHashMap;
+import kala.collection.mutable.MutableList;
+import kala.collection.mutable.MutableMap;
 import org.apache.calcite.adapter.java.JavaTypeFactory;
 import org.apache.calcite.avatica.util.Quoting;
 import org.apache.calcite.config.CalciteConnectionProperty;
@@ -249,7 +251,8 @@ class CosetteSchema extends AbstractSchema {
                     try {
                         var filter = (LogicalFilter) planner.rel(wrapper).getInput(0);
                         checkConstraints.append(filter.getCondition());
-                    } catch (Exception ignore) {}
+                    } catch (Exception ignore) {
+                    }
                 }
                 case COLUMN_DECL -> {
                     SqlColumnDeclaration decl = (SqlColumnDeclaration) column;
@@ -270,7 +273,8 @@ class CosetteSchema extends AbstractSchema {
                     }
                     keys.append(ImmutableBitSet.of(key));
                 }
-                default -> throw new RuntimeException("Unsupported declaration type " + column.getKind() + " in table " + createTable.name);
+                default ->
+                        throw new RuntimeException("Unsupported declaration type " + column.getKind() + " in table " + createTable.name);
             }
         }
         var cosetteTable = new CosetteTable(createTable.name.toString(), names, types, nullabilities, keys, checkConstraints);

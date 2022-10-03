@@ -202,7 +202,7 @@ public record RelJSONShuttle(Env env) {
                         "type", new TextNode(call.getType().getSqlTypeName().name())
                 ));
                 case RexFieldAccess fieldAccess -> object(Map.of(
-                        "column", new IntNode (fieldAccess.getField().getIndex() + env.resolve(((RexCorrelVariable) fieldAccess.getReferenceExpr()).id)),
+                        "column", new IntNode(fieldAccess.getField().getIndex() + env.resolve(((RexCorrelVariable) fieldAccess.getReferenceExpr()).id)),
                         "type", new TextNode(fieldAccess.getType().getSqlTypeName().name())
                 ));
                 default -> throw new RuntimeException("Not implemented: " + rex.getKind());
