@@ -8,6 +8,7 @@ import kala.collection.Seq;
 import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.core.TableScan;
 import org.apache.calcite.rel.logical.*;
+import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rex.*;
 
 import java.io.File;
@@ -36,12 +37,12 @@ public record RelJSONShuttle(Env env) {
 
         var tables = shuttle.env.tables().map(table -> table.unwrap(CosetteTable.class));
         var schemas = array(tables.map(table -> object(Map.of(
-                "name", new TextNode(table.id),
-                "fields", array(table.names.map(TextNode::new)),
-                "types", array(table.types.map(type -> new TextNode(type.name()))),
-                "nullable", array(table.nullabilities.map(RelJSONShuttle::bool)),
-                "key", array(table.keys.map(key -> array(Seq.from(key).map(IntNode::new)))),
-                "guaranteed", array(table.checkConstraints.map(check -> new RexJSONVisitor(shuttle.env.advanced(table.names.size())).visit(check)))
+                "name", new TextNode(table.getName()),
+                "fields", array(table.getColumnNames().map(TextNode::new)),
+                "types", array(table.getColumnTypes().map(type -> new TextNode(type.toString()))),
+                "nullable", array(table.getColumnTypes().map(RelDataType::isNullable).map(RelJSONShuttle::bool)),
+                "key", array(Seq.from(table.getKeys().map(key -> array(Seq.from(key).map(IntNode::new))))),
+                "guaranteed", array(table.getConstraints().map(check -> new RexJSONVisitor(shuttle.env.advanced(table.getColumnNames().size())).visit(check)).toImmutableSeq())
         ))));
 
         var main = object(Map.of(

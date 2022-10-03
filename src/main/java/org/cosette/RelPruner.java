@@ -1,6 +1,7 @@
 package org.cosette;
 
 import kala.collection.Seq;
+import kala.collection.Set;
 import kala.collection.immutable.ImmutableMap;
 import kala.collection.immutable.ImmutableSeq;
 import kala.collection.immutable.ImmutableSet;
@@ -40,15 +41,13 @@ public class RelPruner implements RelFolder {
         if (!cache.containsKey(table)) {
             var fieldList = table.getRowType().getFieldList();
             var fields = usages.get(RelScanner.getName(scan)).toSeq().sorted();
-            var names = fields.map(table.getRowType().getFieldNames()::get);
-            var types = fields.map(i -> fieldList.get(i).getType().getSqlTypeName());
-            var nullabilities = fields.map(i -> fieldList.get(i).getType().isNullable());
+            var columns = ImmutableMap.from(fields.map(table.getRowType().getFieldNames()::get).zip(fields.map(i -> fieldList.get(i).getType())));
             var keys = table.getKeys() == null
-                    ? ImmutableSeq.<ImmutableBitSet>empty()
-                    : Seq.from(table.getKeys()).filter(ks -> ImmutableSet.from(ks).removedAll(fields).isEmpty())
-                    .map(ks -> ImmutableBitSet.of(ImmutableSet.from(ks).map(fields::indexOf)));
+                    ? ImmutableSet.<ImmutableBitSet>empty()
+                    : ImmutableSet.from(Seq.from(table.getKeys()).filter(ks -> ImmutableSet.from(ks).removedAll(fields).isEmpty())
+                    .map(ks -> ImmutableBitSet.of(ImmutableSet.from(ks).map(fields::indexOf))));
             var qName = table.getQualifiedName();
-            cosTable = new CosetteTable(qName.get(qName.size() - 1), names, types, nullabilities, keys, Seq.empty());
+            cosTable = new CosetteTable(qName.get(qName.size() - 1), columns, keys, Set.empty());
             rowType = new RelRecordType(fields.map(fieldList::get).asJava());
             cache.put(table, Tuple.of(cosTable, rowType));
         } else {

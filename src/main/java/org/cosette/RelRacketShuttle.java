@@ -24,7 +24,7 @@ public record RelRacketShuttle(Env env) {
             var table = t.unwrap(CosetteTable.class);
             assert table != null;
             var fullName = Seq.from(t.getQualifiedName()).joinToString(".");
-            Seq<SExpr> fields = Seq.from(table.names).map(SExpr::string);
+            Seq<SExpr> fields = table.getColumnNames().map(SExpr::string);
             return SExpr.app("table-info", SExpr.string(fullName), SExpr.app("list", fields));
         });
         var tables = SExpr.def("tables", SExpr.app("list", tabs));

@@ -2,7 +2,7 @@ package org.cosette;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import kala.collection.Seq;
+import kala.collection.immutable.ImmutableSet;
 import kala.collection.mutable.MutableHashMap;
 import kala.collection.mutable.MutableList;
 import kala.collection.mutable.MutableMap;
@@ -13,10 +13,7 @@ import org.apache.calcite.config.Lex;
 import org.apache.calcite.jdbc.CalciteConnection;
 import org.apache.calcite.jdbc.CalcitePrepare;
 import org.apache.calcite.jdbc.CalciteSchema;
-import org.apache.calcite.rel.RelReferentialConstraint;
 import org.apache.calcite.rel.logical.LogicalFilter;
-import org.apache.calcite.rel.type.RelDataType;
-import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.rel.type.RelDataTypeImpl;
 import org.apache.calcite.rex.RexNode;
 import org.apache.calcite.schema.*;
@@ -189,40 +186,6 @@ public class SchemaGenerator {
 
 }
 
-class CosetteTable extends AbstractTable {
-    String id;
-    Seq<String> names;
-    Seq<SqlTypeName> types;
-    Seq<Boolean> nullabilities;
-    Seq<ImmutableBitSet> keys;
-    Seq<RelReferentialConstraint> refConstraints;
-    Seq<RexNode> checkConstraints;
-
-    public CosetteTable(String id, Seq<String> names, Seq<SqlTypeName> types, Seq<Boolean> nullabilities, Seq<ImmutableBitSet> keys, Seq<RexNode> checkConstraints) {
-        this.id = id;
-        this.names = names;
-        this.types = types;
-        this.nullabilities = nullabilities;
-        this.keys = keys;
-        this.refConstraints = Seq.empty();
-        this.checkConstraints = checkConstraints;
-    }
-
-    @Override
-    public RelDataType getRowType(RelDataTypeFactory typeFactory) {
-        List<RelDataType> fields = new ArrayList<>();
-        for (int index = 0; index < names.size(); index += 1) {
-            fields.add(typeFactory.createTypeWithNullability(typeFactory.createSqlType(types.get(index)), nullabilities.get(index)));
-        }
-        return typeFactory.createStructType(fields, names.asJava());
-    }
-
-    @Override
-    public Statistic getStatistic() {
-        return Statistics.of(0, keys.asJava());
-    }
-}
-
 class CosetteSchema extends AbstractSchema {
 
     final MutableMap<String, Table> tables = new MutableHashMap<>();
@@ -277,7 +240,7 @@ class CosetteSchema extends AbstractSchema {
                         throw new RuntimeException("Unsupported declaration type " + column.getKind() + " in table " + createTable.name);
             }
         }
-        var cosetteTable = new CosetteTable(createTable.name.toString(), names, types, nullabilities, keys, checkConstraints);
+        var cosetteTable = new CosetteTable(createTable.name.toString(), names.zip(types.zip(nullabilities).map(type -> new RelType.BaseType(type._1, type._2))).toImmutableMap(), ImmutableSet.from(keys), ImmutableSet.from(checkConstraints));
         tables.put(createTable.name.toString(), cosetteTable);
     }
 
