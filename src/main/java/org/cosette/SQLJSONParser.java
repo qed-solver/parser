@@ -66,7 +66,7 @@ public class SQLJSONParser {
             Seq.fill(rNodes.size() - 1, i -> i + 1).forEachChecked(i -> {
                 var pair = List.of(origin, rNodes.get(i));
                 RelJSONShuttle.dumpToJSON(pair, Paths.get(batch.getPath(), i + ".json").toFile());
-                RelRacketShuttle.dumpToRacket(pair, Paths.get(batch.getPath(), i + ".rkt"));
+                // RelRacketShuttle.dumpToRacket(pair, Paths.get(batch.getPath(), i + ".rkt"));
             });
         }
     }

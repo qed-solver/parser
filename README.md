@@ -1,13 +1,13 @@
 # Cosette Parser
 
-SQL parser for the [Cosette Solver](https://github.com/cosette-solver/cosette-rs)
+SQL parser for the [Cosette Solver](https://github.com/cosette-solver)
 based on that of [Apache Calcite](https://calcite.apache.org/).
 
 ## Requirements
 
-Java version 11.
+Java version 17.
 
-## Get Cosette Parser
+## Get and Run the Cosette parser
 
 ### Download and build
 
@@ -15,6 +15,14 @@ Java version 11.
 $ git clone git://github.com/cosette-solver/cosette-parser.git
 $ cd cosette-parser
 $ ./mvnw install
+```
+
+### Run
+
+One can start the main class "org.cosette.Main" on JVM manually, with a path containing SQL files as the command line arguments.
+Or you may use
+```bash
+$ ./mvnw exec:exec -Dargs="<input-paths>"
 ```
 
 ## License

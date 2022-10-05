@@ -13,8 +13,15 @@
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>exec-maven-plugin</artifactId>
                 <version>3.0.0</version>
-                <configuration>
-                    <mainClass>org.cosette.Main</mainClass>
+				<configuration>
+					<executable>java</executable>
+					<arguments>
+						<argument>--enable-preview</argument>
+						<argument>-classpath</argument>
+						<classpath/>
+						<argument>org.cosette.Main</argument>
+						<argument>${args}</argument>
+					</arguments>
                 </configuration>
 			</plugin>
 			<plugin>
