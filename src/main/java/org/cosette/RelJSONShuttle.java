@@ -58,7 +58,7 @@ public record RelJSONShuttle(Env env) {
             case TableScan scan -> object(Map.of("scan", new IntNode(env.resolve(scan.getTable()))));
             case LogicalValues values -> {
                 var visitor = new RexJSONVisitor(env);
-                var schema = array(Seq.from(values.getRowType().getFieldList()).map(field -> new TextNode(field.getType().getSqlTypeName().name())));
+                var schema = array(Seq.from(values.getRowType().getFieldList()).map(field -> new TextNode(field.getType().toString())));
                 var records = array(Seq.from(values.getTuples()).map(tuple -> array(Seq.from(tuple).map(visitor::visit))));
                 yield object(Map.of("values", object(Map.of(
                         "schema", schema,
@@ -102,7 +102,7 @@ public record RelJSONShuttle(Env env) {
                 var groupCount = aggregate.getGroupCount();
                 var level = env.base();
                 var types = Seq.from(aggregate.getInput().getRowType().getFieldList())
-                        .map(type -> new TextNode(type.getType().getSqlTypeName().name()));
+                        .map(type -> new TextNode(type.getType().toString()));
                 var keyCols = array(Seq.from(aggregate.getGroupSet()).map(key -> object(Map.of(
                         "column", new IntNode(level + key),
                         "type", types.get(key)
@@ -134,7 +134,7 @@ public record RelJSONShuttle(Env env) {
                         )))),
                         "distinct", bool(call.isDistinct()),
                         "ignoreNulls", bool(call.ignoreNulls()),
-                        "type", new TextNode(call.getType().getSqlTypeName().name())
+                        "type", new TextNode(call.getType().toString())
                 ))));
                 var aggregated = object(Map.of("aggregate", object(Map.of(
                         "function", aggs,
@@ -157,7 +157,7 @@ public record RelJSONShuttle(Env env) {
             }
             case LogicalSort sort -> {
                 var types = Seq.from(sort.getInput().getRowType().getFieldList())
-                        .map(type -> new TextNode(type.getType().getSqlTypeName().name()));
+                        .map(type -> new TextNode(type.getType().toString()));
                 var collations = array(Seq.from(sort.collation.getFieldCollations()).map(collation -> {
                     var index = collation.getFieldIndex();
                     return array(Seq.of(new IntNode(index), types.get(index), new TextNode(collation.shortString())));
@@ -184,27 +184,27 @@ public record RelJSONShuttle(Env env) {
             return switch (rex) {
                 case RexInputRef inputRef -> object(Map.of(
                         "column", new IntNode(inputRef.getIndex() + env.base()),
-                        "type", new TextNode(inputRef.getType().getSqlTypeName().name())
+                        "type", new TextNode(inputRef.getType().toString())
                 ));
                 case RexLiteral literal -> object(Map.of(
                         "operator", new TextNode(literal.getValue() == null ? "NULL" : literal.getValue().toString()),
                         "operand", array(Seq.empty()),
-                        "type", new TextNode(literal.getType().getSqlTypeName().name())
+                        "type", new TextNode(literal.getType().toString())
                 ));
                 case RexSubQuery subQuery -> object(Map.of(
                         "operator", new TextNode(subQuery.getOperator().toString()),
                         "operand", array(Seq.from(subQuery.getOperands()).map(this::visit)),
                         "query", new RelJSONShuttle(env.advanced(0)).visit(subQuery.rel),
-                        "type", new TextNode(subQuery.getType().getSqlTypeName().name())
+                        "type", new TextNode(subQuery.getType().toString())
                 ));
                 case RexCall call -> object(Map.of(
                         "operator", new TextNode(call.getOperator().toString()),
                         "operand", array(Seq.from(call.getOperands()).map(this::visit)),
-                        "type", new TextNode(call.getType().getSqlTypeName().name())
+                        "type", new TextNode(call.getType().toString())
                 ));
                 case RexFieldAccess fieldAccess -> object(Map.of(
                         "column", new IntNode(fieldAccess.getField().getIndex() + env.resolve(((RexCorrelVariable) fieldAccess.getReferenceExpr()).id)),
-                        "type", new TextNode(fieldAccess.getType().getSqlTypeName().name())
+                        "type", new TextNode(fieldAccess.getType().toString())
                 ));
                 default -> throw new RuntimeException("Not implemented: " + rex.getKind());
             };
