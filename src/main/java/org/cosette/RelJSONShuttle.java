@@ -50,7 +50,7 @@ public record RelJSONShuttle(Env env) {
                 "queries", queries,
                 "help", helps
         ));
-        mapper.writer().writeValue(file, main);
+        mapper.writerWithDefaultPrettyPrinter().writeValue(file, main);
     }
 
     public JsonNode visit(RelNode rel) {

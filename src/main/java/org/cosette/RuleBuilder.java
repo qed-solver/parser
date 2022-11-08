@@ -1,5 +1,6 @@
 package org.cosette;
 
+import kala.collection.Seq;
 import kala.collection.Set;
 import kala.collection.immutable.ImmutableMap;
 import org.apache.calcite.plan.Context;
@@ -7,9 +8,13 @@ import org.apache.calcite.plan.RelOptCluster;
 import org.apache.calcite.plan.RelOptSchema;
 import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.core.JoinRelType;
+import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.rex.RexBuilder;
+import org.apache.calcite.rex.RexNode;
 import org.apache.calcite.schema.SchemaPlus;
+import org.apache.calcite.sql.*;
 import org.apache.calcite.sql.fun.SqlStdOperatorTable;
+import org.apache.calcite.sql.type.SqlReturnTypeInference;
 import org.apache.calcite.tools.FrameworkConfig;
 import org.apache.calcite.tools.Frameworks;
 import org.apache.calcite.tools.RelBuilder;
@@ -42,15 +47,24 @@ public class RuleBuilder extends RelBuilder {
         return this;
     }
 
+    public RexNode constructGeneric(String name, Seq<String> dependencies, RelType returnType) {
+        SqlReturnTypeInference returnTypeInference = opBinding -> {
+            final RelDataTypeFactory factory = opBinding.getTypeFactory();
+            return factory.createTypeWithNullability(returnType, returnType.isNullable());
+        };
+        SqlOperator genericFunction = new SqlFunction(name, SqlKind.OTHER_FUNCTION, returnTypeInference, null, null, SqlFunctionCategory.USER_DEFINED_FUNCTION);
+        return getRexBuilder().makeCall(genericFunction, dependencies.map(this::field).asJava());
+    }
+
     public static void main(String[] args) throws IOException {
         CosetteTable leftTable = new CosetteTable("leftTable",
                 ImmutableMap.of("leftColumn", new RelType.VarType("PRIMARY_TYPE", false),
-                        "rest", new RelType.VarType("LEFT_REST_TYPE", true)),
+                        "leftRest", new RelType.VarType("LEFT_REST_TYPE", true)),
                 Set.of(), Set.empty());
 
         CosetteTable rightTable = new CosetteTable("rightTable",
                 ImmutableMap.of("rightKey", new RelType.VarType("PRIMARY_TYPE", false),
-                        "rest", new RelType.VarType("RIGHT_REST_TYPE", true)),
+                        "rightRest", new RelType.VarType("RIGHT_REST_TYPE", true)),
                 Set.of(Set.of("rightKey")), Set.empty());
 
         RuleBuilder ruleMaker = RuleBuilder.create().addTable(leftTable).addTable(rightTable);
@@ -63,6 +77,9 @@ public class RuleBuilder extends RelBuilder {
                 ruleMaker.field(2, 0, "leftColumn"),
                 ruleMaker.field(2, 1, "rightKey")
         ));
+
+        ruleMaker.project(Seq.of(ruleMaker.constructGeneric("GenericFunction", Seq.of("leftColumn", "leftRest"),
+                new RelType.VarType("RESULT_TYPE", true))), Seq.of("renamed"));
 
         RelNode node = ruleMaker.build();
 
