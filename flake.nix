@@ -23,10 +23,15 @@
           '';
         };
       in {
-        defaultPackage = cosette-parser;
-        devShell = pkgs.mkShell {
+        packages.default = cosette-parser;
+        devShells.default = pkgs.mkShell {
           inputsFrom = [ cosette-parser ];
         };
       }
     );
+
+  nixConfig = {
+    extra-substituters = [ "https://cosette.cachix.org" ];
+    extra-trusted-public-keys = [ "cosette.cachix.org-1:d2Pfpw41eAAEZsDLXMnSMjjCpaemLAAxIrLCJaMIEWk=" ];
+  };
 }
