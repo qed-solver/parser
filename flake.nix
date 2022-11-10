@@ -12,7 +12,7 @@
           name = "cosette-parser";
           src = pkgs.fetchurl {
             url = "https://github.com/cosette-solver/cosette-parser/releases/download/experimental-release/cosette-parser-1.0-SNAPSHOT-jar-with-dependencies.jar";
-            sha256 = "sha256-Iut8Apo8PVumjv7VckK8UGzMOcmGzyax3x2hO8NC7vM=";
+            sha256 = "sha256-XKn+GZ2OtaDRFT0pE/aprWFlrgaV/X6bD5bvCVyRTzk=";
           };
           buildInputs = with pkgs; [ jre ];
           nativeBuildInputs = with pkgs; [ makeWrapper ];
