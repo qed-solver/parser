@@ -11,7 +11,7 @@
         cosette-parser = pkgs.stdenv.mkDerivation {
           name = "cosette-parser";
           src = pkgs.fetchurl {
-            url = "https://github.com/cosette-solver/cosette-parser/releases/download/experimental-1e56f42c2208844a980afeff3a25ee4a7010b980/cosette-parser-1.0-SNAPSHOT-jar-with-dependencies.jar";
+            url = "https://github.com/cosette-solver/cosette-parser/releases/download/experimental-release/cosette-parser-1.0-SNAPSHOT-jar-with-dependencies.jar";
             sha256 = "sha256-Iut8Apo8PVumjv7VckK8UGzMOcmGzyax3x2hO8NC7vM=";
           };
           buildInputs = with pkgs; [ jre ];
