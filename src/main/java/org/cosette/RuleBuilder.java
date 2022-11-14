@@ -2,29 +2,27 @@ package org.cosette;
 
 import kala.collection.Seq;
 import kala.collection.Set;
-import kala.collection.immutable.ImmutableMap;
+import kala.tuple.Tuple;
+import kala.tuple.Tuple2;
+import kala.tuple.Tuple3;
 import org.apache.calcite.plan.Context;
 import org.apache.calcite.plan.RelOptCluster;
 import org.apache.calcite.plan.RelOptSchema;
-import org.apache.calcite.rel.RelNode;
-import org.apache.calcite.rel.core.JoinRelType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
-import org.apache.calcite.rex.RexBuilder;
-import org.apache.calcite.rex.RexNode;
 import org.apache.calcite.schema.SchemaPlus;
 import org.apache.calcite.sql.*;
-import org.apache.calcite.sql.fun.SqlStdOperatorTable;
 import org.apache.calcite.sql.type.SqlReturnTypeInference;
 import org.apache.calcite.tools.FrameworkConfig;
 import org.apache.calcite.tools.Frameworks;
 import org.apache.calcite.tools.RelBuilder;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
-import java.io.File;
-import java.io.IOException;
-import java.util.List;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class RuleBuilder extends RelBuilder {
+
+    private final AtomicInteger TABLE_ID_GENERATOR = new AtomicInteger();
 
     private final SchemaPlus root;
     protected RuleBuilder(@Nullable Context context, RelOptCluster cluster, RelOptSchema relOptSchema, SchemaPlus schema) {
@@ -47,45 +45,26 @@ public class RuleBuilder extends RelBuilder {
         return this;
     }
 
-    public RexNode constructGeneric(String name, Seq<String> dependencies, RelType returnType) {
+    /**
+     * Create a simple table given the column types and whether they are unique (i.e. can be key)
+     * @param schema the list of column types and they are unique
+     * @return the table created from the given schema
+     */
+    public CosetteTable createSimpleTable(Seq<Tuple2<RelType, Boolean>> schema) {
+        String identifier = "Table_" + TABLE_ID_GENERATOR.get();
+        Seq<Tuple3<String, RelType, Boolean>> cols = schema.mapIndexed((idx, tuple) -> Tuple.of(identifier + "_Column_" + idx, tuple._1, tuple._2));
+        return new CosetteTable(identifier,
+                cols.map(tuple -> Map.entry(tuple._1, tuple._2)).toImmutableMap(),
+                Set.from(cols.filter(tuple -> tuple._3).map(tuple -> Set.of(tuple._1))),
+                Set.of());
+    }
+
+    public SqlOperator constructGenericFunction(String name, RelType returnType) {
         SqlReturnTypeInference returnTypeInference = opBinding -> {
             final RelDataTypeFactory factory = opBinding.getTypeFactory();
             return factory.createTypeWithNullability(returnType, returnType.isNullable());
         };
-        SqlOperator genericFunction = new SqlFunction(name, SqlKind.OTHER_FUNCTION, returnTypeInference, null, null, SqlFunctionCategory.USER_DEFINED_FUNCTION);
-        return getRexBuilder().makeCall(genericFunction, dependencies.map(this::field).asJava());
-    }
-
-    public static void main(String[] args) throws IOException {
-        CosetteTable leftTable = new CosetteTable("leftTable",
-                ImmutableMap.of("leftColumn", new RelType.VarType("PRIMARY_TYPE", false),
-                        "leftRest", new RelType.VarType("LEFT_REST_TYPE", true)),
-                Set.of(), Set.empty());
-
-        CosetteTable rightTable = new CosetteTable("rightTable",
-                ImmutableMap.of("rightKey", new RelType.VarType("PRIMARY_TYPE", false),
-                        "rightRest", new RelType.VarType("RIGHT_REST_TYPE", true)),
-                Set.of(Set.of("rightKey")), Set.empty());
-
-        RuleBuilder ruleMaker = RuleBuilder.create().addTable(leftTable).addTable(rightTable);
-        RexBuilder rexBuilder = ruleMaker.getRexBuilder();
-
-        ruleMaker.scan("leftTable");
-        ruleMaker.scan("rightTable");
-
-        ruleMaker.join(JoinRelType.LEFT, rexBuilder.makeCall(SqlStdOperatorTable.EQUALS,
-                ruleMaker.field(2, 0, "leftColumn"),
-                ruleMaker.field(2, 1, "rightKey")
-        ));
-
-        ruleMaker.project(Seq.of(ruleMaker.constructGeneric("GenericFunction", Seq.of("leftColumn", "leftRest"),
-                new RelType.VarType("RESULT_TYPE", true))), Seq.of("renamed"));
-
-        RelNode node = ruleMaker.build();
-
-        System.out.println(node.explain());
-
-        RelJSONShuttle.dumpToJSON(List.of(node), new File("var.json"));
+        return new SqlFunction(name, SqlKind.OTHER_FUNCTION, returnTypeInference, null, null, SqlFunctionCategory.USER_DEFINED_FUNCTION);
     }
 
 }
