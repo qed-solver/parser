@@ -10,23 +10,36 @@ import org.apache.calcite.sql.type.SqlTypeName;
 
 import java.io.File;
 import java.io.IOException;
+import java.lang.reflect.Modifier;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.List;
 
 public class ElevatedCoreRules {
 
     /**
      * Ignored rules:
-     * - Aggregation related rules
+     * - Aggregation related rules: unsupported for now
+     *   - Aggregate*
+     *   - CalcToWindow
+     * - CalcRemove: trivially true
+     * - CalcReduceDecimal: casting is not understood by the prover
+     * - CalcReduceExpression: constant reduction is trivial
+     * - CalcSplit: split calc into project above filter, which is exactly how calc is represented in cosette
+     * - CoerceInputs: casting is not understood by the prover
+     * - ExchangeRemoveConstantKeys: exchange not supported
+     * - SortExchangeRemoveConstantKeys: exchange not supported
      */
 
     public static Tuple2<RelNode, RelNode> calcMerge() {
         // A Calc is equivalent to a project above a filter
         RuleBuilder builder = RuleBuilder.create();
         CosetteTable input = builder.createSimpleTable(Seq.of(Tuple.of(new RelType.VarType("INPUT", true), false)));
-        SqlOperator bottomProject = builder.constructGenericFunction("bottomProject", new RelType.VarType("INTER", true));
         SqlOperator bottomFilter = builder.constructGenericFunction("bottomFilter", new RelType.BaseType(SqlTypeName.BOOLEAN, true));
-        SqlOperator topProject = builder.constructGenericFunction("topProject", new RelType.VarType("RESULT", true));
+        SqlOperator bottomProject = builder.constructGenericFunction("bottomProject", new RelType.VarType("INTER", true));
         SqlOperator topFilter = builder.constructGenericFunction("topFilter", new RelType.BaseType(SqlTypeName.BOOLEAN, true));
+        SqlOperator topProject = builder.constructGenericFunction("topProject", new RelType.VarType("RESULT", true));
         String cname = input.getColumnNames().get(0);
         builder.addTable(input);
         builder.scan(input.getName());
@@ -44,14 +57,28 @@ public class ElevatedCoreRules {
         return Tuple.of(before, after);
     }
 
+    public static void dumpElevatedRules(Path dumpFolder, boolean verbose) throws IOException {
+        Files.createDirectories(dumpFolder);
+        Seq.of(ElevatedCoreRules.class.getDeclaredMethods())
+                .filter(method -> Modifier.isStatic(method.getModifiers()) && method.getReturnType().getName().equals("kala.tuple.Tuple2"))
+                .forEachUnchecked(method -> {
+                    String ruleName = method.getName();
+                    Tuple2<RelNode, RelNode> rewrite = (Tuple2<RelNode, RelNode>) method.invoke(null);
+                    if (verbose) {
+                        System.out.println(">>>>>> " + ruleName + " <<<<<<");
+                        System.out.println("Before:");
+                        System.out.println(rewrite._1.explain());
+                        System.out.println("After:");
+                        System.out.println(rewrite._2.explain());
+                    }
+                    File dump = Paths.get(dumpFolder.toAbsolutePath().toString(), ruleName).toFile();
+                    RelJSONShuttle.dumpToJSON(List.of(rewrite._1, rewrite._2), dump);
+                });
+    }
+
     public static void main(String[] args) throws IOException {
-        Tuple2<RelNode, RelNode> rewrite = ElevatedCoreRules.calcMerge();
-        System.out.println("Before:");
-        System.out.println(rewrite._1.explain());
-        System.out.println("After:");
-        System.out.println(rewrite._2.explain());
-        File dump = new File("CalciteRewriteRule.json");
-        RelJSONShuttle.dumpToJSON(List.of(rewrite._1, rewrite._2), dump);
+        Path dumpFolder = Paths.get("ElevatedRules");
+        dumpElevatedRules(dumpFolder, true);
     }
 
 }
