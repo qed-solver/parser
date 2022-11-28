@@ -12,6 +12,7 @@ import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.schema.SchemaPlus;
 import org.apache.calcite.sql.*;
 import org.apache.calcite.sql.type.SqlReturnTypeInference;
+import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.tools.FrameworkConfig;
 import org.apache.calcite.tools.Frameworks;
 import org.apache.calcite.tools.RelBuilder;
@@ -51,7 +52,7 @@ public class RuleBuilder extends RelBuilder {
      * @return the table created from the given schema
      */
     public CosetteTable createSimpleTable(Seq<Tuple2<RelType, Boolean>> schema) {
-        String identifier = "Table_" + TABLE_ID_GENERATOR.get();
+        String identifier = "Table_" + TABLE_ID_GENERATOR.getAndIncrement();
         Seq<Tuple3<String, RelType, Boolean>> cols = schema.mapIndexed((idx, tuple) -> Tuple.of(identifier + "_Column_" + idx, tuple._1, tuple._2));
         return new CosetteTable(identifier,
                 cols.map(tuple -> Map.entry(tuple._1, tuple._2)).toImmutableMap(),
@@ -59,12 +60,20 @@ public class RuleBuilder extends RelBuilder {
                 Set.of());
     }
 
-    public SqlOperator constructGenericFunction(String name, RelType returnType) {
+    public SqlOperator genericOp(String name, RelType returnType) {
         SqlReturnTypeInference returnTypeInference = opBinding -> {
             final RelDataTypeFactory factory = opBinding.getTypeFactory();
             return factory.createTypeWithNullability(returnType, returnType.isNullable());
         };
         return new SqlFunction(name, SqlKind.OTHER_FUNCTION, returnTypeInference, null, null, SqlFunctionCategory.USER_DEFINED_FUNCTION);
+    }
+
+    public SqlOperator genericPredicateOp(String name, boolean nullable) {
+        return genericOp("Predicate-" + name, new RelType.BaseType(SqlTypeName.BOOLEAN, nullable));
+    }
+
+    public SqlOperator genericProjectionOp(String name, RelType projection) {
+        return genericOp("Projection-"+name, projection);
     }
 
 }
