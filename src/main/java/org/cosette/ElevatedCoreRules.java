@@ -4,9 +4,10 @@ import kala.collection.Seq;
 import kala.tuple.Tuple;
 import kala.tuple.Tuple2;
 import org.apache.calcite.rel.RelNode;
+import org.apache.calcite.rel.core.CorrelationId;
 import org.apache.calcite.rel.core.JoinRelType;
 import org.apache.calcite.sql.fun.SqlStdOperatorTable;
-import org.apache.calcite.tools.RelBuilder;
+import org.apache.commons.io.FileUtils;
 
 import java.io.IOException;
 import java.lang.reflect.Modifier;
@@ -20,19 +21,18 @@ public class ElevatedCoreRules {
     public static Tuple2<RelNode, RelNode> calcMerge() {
         // A Calc is equivalent to a project above a filter
         var builder = RuleBuilder.create();
-        var input = builder.createSimpleTable(Seq.of(Tuple.of(new RelType.VarType("INPUT", true), false)));
+        var tableName = builder.sourceSimpleTables(Seq.of(0)).get(0);
+        builder.scan(tableName);
         var bottomFilter = builder.genericPredicateOp("bottom", true);
-        var bottomProject = builder.genericProjectionOp("bottom", new RelType.VarType("INTER", true));
-        var topFilter = builder.genericPredicateOp("top", true);
-        var topProject = builder.genericProjectionOp("top", new RelType.VarType("RESULT", true));
-        builder.addTable(input);
-        builder.scan(input.getName());
         builder.filter(builder.call(bottomFilter, builder.fields()));
+        var bottomProject = builder.genericProjectionOp("bottom", new RelType.VarType("INTER", true));
         builder.project(builder.call(bottomProject, builder.fields()));
+        var topFilter = builder.genericPredicateOp("top", true);
         builder.filter(builder.call(topFilter, builder.fields()));
+        var topProject = builder.genericProjectionOp("top", new RelType.VarType("RESULT", true));
         builder.project(builder.call(topProject, builder.fields()));
         var before = builder.build();
-        builder.scan(input.getName());
+        builder.scan(tableName);
         builder.filter(builder.call(SqlStdOperatorTable.AND,
                 builder.call(bottomFilter, builder.fields()),
                 builder.call(topFilter, builder.call(bottomProject, builder.fields()))));
@@ -43,16 +43,14 @@ public class ElevatedCoreRules {
 
     public static Tuple2<RelNode, RelNode> filterIntoJoin() {
         var builder = RuleBuilder.create();
-        var left = builder.createSimpleTable(Seq.of(Tuple.of(new RelType.VarType("LEFT", true), false)));
-        var right = builder.createSimpleTable(Seq.of(Tuple.of(new RelType.VarType("RIGHT", true), false)));
-        builder.addTable(left).addTable(right);
-        builder.scan(left.getName()).scan(right.getName());
+        var tableNames = builder.sourceSimpleTables(Seq.of(1, 2));
+        tableNames.forEach(builder::scan);
         var joinCondition = builder.genericPredicateOp("join", true);
-        var filterCondition = builder.genericPredicateOp("filter", true);
         builder.join(JoinRelType.INNER, builder.call(joinCondition, Seq.from(builder.fields(2, 0)).concat(builder.fields(2, 1))));
+        var filterCondition = builder.genericPredicateOp("filter", true);
         builder.filter(builder.call(filterCondition, builder.fields()));
         var before = builder.build();
-        builder.scan(left.getName()).scan(right.getName());
+        tableNames.forEach(builder::scan);
         builder.join(JoinRelType.INNER, builder.call(SqlStdOperatorTable.AND,
                 builder.call(joinCondition, Seq.from(builder.fields(2, 0)).concat(builder.fields(2, 1))),
                 builder.call(filterCondition, Seq.from(builder.fields(2, 0)).concat(builder.fields(2, 1)))));
@@ -62,40 +60,58 @@ public class ElevatedCoreRules {
 
     public static Tuple2<RelNode, RelNode> filterProjectTranspose() {
         var builder = RuleBuilder.create();
-        var input = builder.createSimpleTable(Seq.of(Tuple.of(new RelType.VarType("INPUT", true), false)));
-        builder.addTable(input);
+        var tableName = builder.sourceSimpleTables(Seq.of(0)).get(0);
+        builder.scan(tableName);
         var project = builder.genericProjectionOp("select", new RelType.VarType("PROJECT", true));
+        builder.project(builder.call(project, builder.fields()));
         var filter = builder.genericPredicateOp("filter", true);
-        builder.scan(input.getName()).project(builder.call(project, builder.fields()));
         builder.filter(builder.call(filter, builder.fields()));
         var before = builder.build();
-        builder.scan(input.getName()).filter(builder.call(filter, builder.call(project, builder.fields())));
+        builder.scan(tableName).filter(builder.call(filter, builder.call(project, builder.fields())));
         builder.project(builder.call(project, builder.fields()));
         var after = builder.build();
         return Tuple.of(before, after);
     }
 
     public static Seq<Tuple2<RelNode, RelNode>> filterCorrelate() {
-        return null;
+        return Seq.of(JoinRelType.INNER, JoinRelType.LEFT).map(joinType -> {
+            var builder = RuleBuilder.create();
+            var tableNames = builder.sourceSimpleTables(Seq.of(1, 2));
+            tableNames.forEach(builder::scan);
+            builder.correlate(joinType, new CorrelationId(0), builder.fields(2, 0));
+            var filterLeft = builder.genericPredicateOp("filterLeft", true);
+            var filterRight = builder.genericPredicateOp("filterRight", true);
+            var filterBoth = builder.genericPredicateOp("filterBoth", true);
+            builder.filter(builder.and(
+                    builder.call(filterLeft, builder.field(0)),
+                    builder.call(filterRight, builder.field(1)),
+                    builder.call(filterBoth, builder.fields())
+            ));
+            var before = builder.build();
+            builder.scan(tableNames.get(0)).filter(builder.call(filterLeft, builder.fields()));
+            builder.scan(tableNames.get(1)).filter(builder.call(filterRight, builder.fields()));
+            builder.correlate(joinType, new CorrelationId(0), builder.fields(2, 0));
+            builder.filter(builder.call(filterBoth, builder.fields()));
+            var after = builder.build();
+            return Tuple.of(before, after);
+        });
     }
 
     public static Seq<Tuple2<RelNode, RelNode>> filterSetOpTranspose() {
         return Seq.of(SqlStdOperatorTable.UNION_ALL, SqlStdOperatorTable.EXCEPT_ALL).map(kind -> {
             var builder = RuleBuilder.create();
-            var one = builder.createSimpleTable(Seq.of(Tuple.of(new RelType.VarType("SHARED", true), false)));
-            var other = builder.createSimpleTable(Seq.of(Tuple.of(new RelType.VarType("SHARED", true), false)));
-            var filter = builder.genericPredicateOp("filter", true);
-            builder.addTable(one).addTable(other);
-            builder.scan(one.getName()).scan(other.getName());
+            var tableNames = builder.sourceSimpleTables(Seq.of(0, 0));
+            tableNames.forEach(builder::scan);
             if (kind == SqlStdOperatorTable.UNION_ALL) {
                 builder.union(true);
             } else if (kind == SqlStdOperatorTable.EXCEPT_ALL) {
                 builder.minus(true);
             }
+            var filter = builder.genericPredicateOp("filter", true);
             builder.filter(builder.call(filter, builder.fields()));
             var before = builder.build();
-            builder.scan(one.getName()).filter(builder.call(filter, builder.fields()));
-            builder.scan(other.getName()).filter(builder.call(filter, builder.fields()));
+            builder.scan(tableNames.get(0)).filter(builder.call(filter, builder.fields()));
+            builder.scan(tableNames.get(1)).filter(builder.call(filter, builder.fields()));
             if (kind == SqlStdOperatorTable.UNION_ALL) {
                 builder.union(true);
             } else if (kind == SqlStdOperatorTable.EXCEPT_ALL) {
@@ -238,6 +254,7 @@ public class ElevatedCoreRules {
             System.out.println(before.explain());
             System.out.println("After:");
             System.out.println(after.explain());
+            System.out.println(">>>>>> End of rule <<<<<<");
         }
         RelJSONShuttle.dumpToJSON(List.of(before, after), dumpPath.toFile());
     }
@@ -266,6 +283,7 @@ public class ElevatedCoreRules {
 
     public static void main(String[] args) throws IOException {
         Path dumpFolder = Paths.get("ElevatedRules");
+        FileUtils.deleteDirectory(dumpFolder.toFile());
         dumpElevatedRules(dumpFolder, true);
     }
 
