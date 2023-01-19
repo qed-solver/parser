@@ -43,7 +43,8 @@ public class ElevatedCoreRules {
         return Tuple.of(before, after);
     }
 
-    public static Tuple2<RelNode, RelNode> filterJoin() {
+    public static Tuple2<RelNode, RelNode> filterIntoJoin() {
+        // TODO: carefully think about join types
         RuleBuilder builder = RuleBuilder.create();
         CosetteTable left = builder.createSimpleTable(Seq.of(Tuple.of(new RelType.VarType("LEFT", true), false)));
         CosetteTable right = builder.createSimpleTable(Seq.of(Tuple.of(new RelType.VarType("RIGHT", true), false)));
@@ -75,6 +76,10 @@ public class ElevatedCoreRules {
         builder.project(builder.call(project, builder.fields()));
         RelNode after = builder.build();
         return Tuple.of(before, after);
+    }
+
+    public static Tuple2<RelNode, RelNode> filterCorrelate() {
+        return null;
     }
 
     public static Option<Tuple2<RelNode, RelNode>> filterSetOpTranspose(SqlOperator kind) {
@@ -123,6 +128,131 @@ public class ElevatedCoreRules {
      * }
      */
 
+    public static Tuple2<RelNode, RelNode> projectCorrelateTranspose() {
+        return null;
+    }
+
+    public static Tuple2<RelNode, RelNode> projectFilterTranspose() {
+        return null;
+    }
+
+    public static Tuple2<RelNode, RelNode> projectSubQueryToCorrelate() {
+        return null;
+    }
+
+    public static Tuple2<RelNode, RelNode> filterSubQueryToCorrelate() {
+        return null;
+    }
+
+    public static Tuple2<RelNode, RelNode> joinSubQueryToCorrelate() {
+        return null;
+    }
+
+    public static Tuple2<RelNode, RelNode> projectToSemiJoin() {
+        return null;
+    }
+
+    public static Tuple2<RelNode, RelNode> projectJoinRemove() {
+        return null;
+    }
+
+    public static Tuple2<RelNode, RelNode> projectJoinTranspose() {
+        return null;
+    }
+
+    public static Tuple2<RelNode, RelNode> projectSetOpTranspose() {
+        return null;
+    }
+
+    public static Tuple2<RelNode, RelNode> joinConditionPush() {
+        return null;
+    }
+
+    public static Tuple2<RelNode, RelNode> joinAddRedundantSemiJoin() {
+        return null;
+    }
+
+    public static Tuple2<RelNode, RelNode> joinAssociate() {
+        return null;
+    }
+
+    public static Tuple2<RelNode, RelNode> joinCommute() {
+        // Inner/Outer joins
+        return null;
+    }
+
+    public static Tuple2<RelNode, RelNode> joinExtractFilter() {
+        // Inner/Outer joins
+        return null;
+    }
+
+    public static Tuple2<RelNode, RelNode> joinProjectBothTranspose() {
+        // Inner/Outer joins
+        return null;
+    }
+
+    public static Tuple2<RelNode, RelNode> joinProjectLeftTranspose() {
+        // Inner/Outer joins
+        return null;
+    }
+
+    public static Tuple2<RelNode, RelNode> joinProjectRightTranspose() {
+        // Inner/Outer joins
+        return null;
+    }
+
+    public static Tuple2<RelNode, RelNode> joinPushExpressions() {
+        return null;
+    }
+
+    public static Tuple2<RelNode, RelNode> joinPushTransitivePredicates() {
+        return null;
+    }
+
+    public static Tuple2<RelNode, RelNode> joinDeriveIsNotNullFilter() {
+        return null;
+    }
+
+    public static Tuple2<RelNode, RelNode> joinToCorrelate() {
+        return null;
+    }
+
+    public static Tuple2<RelNode, RelNode> joinToSemiJoin() {
+        return null;
+    }
+
+    public static Tuple2<RelNode, RelNode> joinLeftUnionTranspose() {
+        return null;
+    }
+
+    public static Tuple2<RelNode, RelNode> joinRightUnionTranspose() {
+        return null;
+    }
+
+    public static Tuple2<RelNode, RelNode> semiJoinFilterTranspose() {
+        return null;
+    }
+
+    public static Tuple2<RelNode, RelNode> semiJoinProjectTranspose() {
+        return null;
+    }
+
+    public static Tuple2<RelNode, RelNode> semiJoinJoinTranspose() {
+        return null;
+    }
+
+    public static Tuple2<RelNode, RelNode> semiJoinRemove() {
+        return null;
+    }
+
+    public static Tuple2<RelNode, RelNode> unionMerge() {
+        return null;
+    }
+
+    public static Tuple2<RelNode, RelNode> projectFilterValueMerge() {
+        return null;
+    }
+
     public static void dumpElevatedRules(Path dumpFolder, boolean verbose) throws IOException {
         Files.createDirectories(dumpFolder);
         Seq.of(ElevatedCoreRules.class.getDeclaredMethods())
@@ -153,25 +283,54 @@ public class ElevatedCoreRules {
      *   - Aggregate*
      *   - CalcToWindow
      *   - FilterAggregateTranspose
-     *   - FilterCorrelate
+     *   - ProjectAggregateMerge
+     *   - Aggregate values
+     * - Multi-join related rules: unsupported for now:
+     *   - FilterMultiJoinRule
+     *   - ProjectMultiJoinMerge
+     *   - JoinToMultiJoin
+     *   - MultiJoin*
+     * - Sort related rules: unsupported for now
+     *   - Sort*
      * - CalcRemove: trivially true
      * - CalcReduceDecimal: casting is not understood by the prover
      * - CalcReduceExpression: constant reduction is trivial
      * - CalcSplit: split calc into project above filter, which is exactly how calc is represented in cosette
+     * - CalcToWindow: window not supported
      * - CoerceInputs: casting is not understood by the prover
      * - ExchangeRemoveConstantKeys: exchange not supported
      * - SortExchangeRemoveConstantKeys: exchange not supported
+     * - FilterIntoJoinDumb: special case of FilterIntoJoin
      * - FilterMerge: special case of CalcMerge
      * - FilterCalcMerge: special case of CalcMerge
      * - FilterToCalc: special case of CalcMerge
      * - FilterTableFunctionTranspose: functionScan is not understood by prover
      * - FilterScan: filterScan not supported
      * - FilterInterpreterScan: filterScan not supported
-     * - FilterMultiJoinRule: multi-join not supported
      * - FilterExpandIsNotDistinctFrom: case when is not understood by prover
      * - FilterReduceExpression: constant reduction is trivial
      * - IntersectMerge: intersect not supported
      * - IntersectToDistinct: intersect not supported
+     * - Match: match not supported
+     * - MinusMerge: minus with multiple inputs not supported
+     * - ProjectCalcMerge: special case of CalcMerge
+     * - ProjectReduceExpressions: constant reduction is trivial
+     * - ProjectToLogicalProjectAndWindow: window not supported
+     * - ProjectMerge: special case of CalcMerge
+     * - ProjectRemove: trivially true
+     * - ProjectTableScan: bindable table-scan not supported
+     * - ProjectInterpreterTableScan: bindable table-scan not supported
+     * - ProjToCalc special case of CalcMerge
+     * - ProjectWindowTranspose: window not supported
+     * - JoinCommuteOuter: special case of JoinCommute
+     * - JoinProject*TransposeIncludeOuter: special cases of JoinProject*Transpose
+     * - JoinReduceExpressions: constant reduction is trivial
+     * - UnionRemove: trivially true
+     * - UnionPullUpConstants: trivially true
+     * - UnionToDistinct: trivially true
+     * - FilterValuesMerge: special case of ProjectFilterValuesMerge
+     * - ProjectValuesMerge: special case of ProjectFilterValuesMerge
+     * - WindowReduceExpressions: constant reduction is trivial
      */
 
 }
