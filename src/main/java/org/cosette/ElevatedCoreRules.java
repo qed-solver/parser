@@ -121,27 +121,35 @@ public class ElevatedCoreRules {
             return Tuple.of(before, after);
         });
     }
-//
-//    public static Tuple2<RelNode, RelNode> projectCorrelateTranspose() {
-//        return null;
-//    }
-//
-//    public static Tuple2<RelNode, RelNode> projectFilterTranspose() {
-//        return null;
-//    }
-//
-//    public static Tuple2<RelNode, RelNode> projectSubQueryToCorrelate() {
-//        return null;
-//    }
-//
-//    public static Tuple2<RelNode, RelNode> filterSubQueryToCorrelate() {
-//        return null;
-//    }
-//
-//    public static Tuple2<RelNode, RelNode> joinSubQueryToCorrelate() {
-//        return null;
-//    }
-//
+
+    public static Seq<Tuple2<RelNode, RelNode>> projectCorrelateTranspose() {
+        return Seq.of(JoinRelType.INNER, JoinRelType.LEFT).map(joinType -> {
+            var builder = RuleBuilder.create();
+            var leftTable = builder.createCosetteTable(Seq.of(
+                    Tuple.of(new RelType.VarType("Type_1", true), false),
+                    Tuple.of(new RelType.VarType("Type_2", true), false)
+            ));
+            var rightTable = builder.createCosetteTable(Seq.of(
+                    Tuple.of(new RelType.VarType("Type_3", true), false),
+                    Tuple.of(new RelType.VarType("Type_4", true), false)
+            ));
+            builder.addTable(leftTable).addTable(rightTable);
+            builder.scan(leftTable.getName()).scan(rightTable.getName());
+            builder.correlate(joinType, new CorrelationId(0), builder.fields(2, 0));
+            var projectBoth = builder.genericProjectionOp("projectBoth", new RelType.VarType("Type_5", true));
+            builder.project(builder.call(projectBoth, Seq.of(builder.field(0), builder.field(2))));
+            var before = builder.build();
+            builder.scan(leftTable.getName());
+            builder.project(builder.field(0));
+            builder.scan(rightTable.getName());
+            builder.project(builder.field(0));
+            builder.correlate(joinType, new CorrelationId(0), builder.fields(2, 0));
+            builder.project(builder.call(projectBoth, builder.fields()));
+            var after = builder.build();
+            return Tuple.of(before, after);
+        });
+    }
+
 //    public static Tuple2<RelNode, RelNode> projectToSemiJoin() {
 //        return null;
 //    }
@@ -324,7 +332,11 @@ public class ElevatedCoreRules {
      * - Match: match not supported
      * - MinusMerge: minus with multiple inputs not supported
      * - ProjectCalcMerge: special case of CalcMerge
+     * - ProjectFilterTranspose: not meaningful transformation
      * - ProjectReduceExpressions: constant reduction is trivial
+     * - ProjectSubQueryToCorrelate: complicated rule with limited use
+     * - FilterSubQueryToCorrelate: complicated rule with limited use
+     * - JoinSubQueryToCorrelate: complicated rule with limited use
      * - ProjectToLogicalProjectAndWindow: window not supported
      * - ProjectMerge: special case of CalcMerge
      * - ProjectRemove: trivially true
