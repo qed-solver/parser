@@ -151,10 +151,8 @@ public record RelJSONShuttle(Env env) {
             }
             case LogicalIntersect intersect && !intersect.all ->
                     object(Map.of("intersect", array(Seq.from(intersect.getInputs()).map(this::visit))));
-            case LogicalMinus minus -> {
-                var result = object(Map.of("except", array(Seq.from(minus.getInputs()).map(this::visit))));
-                yield minus.all ? result : object(Map.of("distinct", result));
-            }
+            case LogicalMinus minus && !minus.all ->
+                    object(Map.of("except", array(Seq.from(minus.getInputs()).map(this::visit))));
             case LogicalSort sort -> {
                 var types = Seq.from(sort.getInput().getRowType().getFieldList())
                         .map(type -> new TextNode(type.getType().toString()));

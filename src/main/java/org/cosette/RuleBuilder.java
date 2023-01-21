@@ -7,6 +7,7 @@ import kala.tuple.Tuple2;
 import org.apache.calcite.plan.Context;
 import org.apache.calcite.plan.RelOptCluster;
 import org.apache.calcite.plan.RelOptSchema;
+import org.apache.calcite.rex.RexNode;
 import org.apache.calcite.schema.SchemaPlus;
 import org.apache.calcite.sql.*;
 import org.apache.calcite.sql.type.SqlReturnTypeInference;
@@ -72,6 +73,10 @@ public class RuleBuilder extends RelBuilder {
             addTable(table);
             return table.getName();
         });
+    }
+
+    public Seq<RexNode> joinFields() {
+        return Seq.from(fields(2, 0)).concat(fields(2, 1));
     }
 
     public SqlOperator genericOp(String name, RelType returnType) {

@@ -17,9 +17,12 @@ public sealed interface RelType extends RelDataType {
             computeDigest();
         }
 
+        /*
+        * Notice: All virtual types will be translated to integer for prover
+        **/
         @Override
         protected void generateTypeString(StringBuilder sb, boolean withDetail) {
-            sb.append(name);
+            sb.append("INTEGER");
             if (withDetail) {
                 sb.append(": ").append(nullable ? "nullable" : "");
             }
