@@ -10,10 +10,12 @@ import org.apache.calcite.sql.fun.SqlStdOperatorTable;
 import org.apache.commons.io.FileUtils;
 
 import java.io.IOException;
+import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Comparator;
 import java.util.List;
 
 public class ElevatedCoreRules {
@@ -308,35 +310,126 @@ public class ElevatedCoreRules {
         return Tuple.of(before, after);
     }
 
-//    public static Tuple2<RelNode, RelNode> joinCommute() {
-//        // Inner/Outer joins
-//        return null;
-//    }
-//
-//    public static Tuple2<RelNode, RelNode> joinExtractFilter() {
-//        // Inner/Outer joins
-//        return null;
-//    }
-//
-//    public static Tuple2<RelNode, RelNode> joinProjectBothTranspose() {
-//        // Inner/Outer joins
-//        return null;
-//    }
-//
-//    public static Tuple2<RelNode, RelNode> joinProjectLeftTranspose() {
-//        // Inner/Outer joins
-//        return null;
-//    }
-//
-//    public static Tuple2<RelNode, RelNode> joinProjectRightTranspose() {
-//        // Inner/Outer joins
-//        return null;
-//    }
-//
-//    public static Tuple2<RelNode, RelNode> joinPushExpressions() {
-//        return null;
-//    }
-//
+    public static Seq<Tuple2<RelNode, RelNode>> joinCommute() {
+        return Seq.of(JoinRelType.INNER, JoinRelType.FULL).map(joinType -> {
+            var builder = RuleBuilder.create();
+            var tableNames = builder.sourceSimpleTables(Seq.of(1, 2));
+            tableNames.forEach(builder::scan);
+            var join = builder.genericPredicateOp("join", true);
+            builder.join(joinType, builder.call(join, builder.joinFields()));
+            var before = builder.build();
+            tableNames.reversed().forEach(builder::scan);
+            builder.join(joinType, builder.call(join, builder.joinFields().reversed()));
+            builder.project(builder.fields().reverse());
+            var after = builder.build();
+            return Tuple.of(before, after);
+        });
+    }
+
+    public static Tuple2<RelNode, RelNode> joinExtractFilter() {
+        var builder = RuleBuilder.create();
+        var tableNames = builder.sourceSimpleTables(Seq.of(1, 2));
+        tableNames.forEach(builder::scan);
+        var join = builder.genericPredicateOp("join", true);
+        builder.join(JoinRelType.INNER, builder.call(join, builder.joinFields()));
+        var before = builder.build();
+        tableNames.forEach(builder::scan);
+        builder.join(JoinRelType.INNER, builder.literal(true));
+        builder.filter(builder.call(join, builder.fields()));
+        var after = builder.build();
+        return Tuple.of(before, after);
+    }
+
+    public static Seq<Tuple2<RelNode, RelNode>> joinProjectBothTranspose() {
+        return Seq.of(JoinRelType.INNER, JoinRelType.FULL).map(joinType -> {
+            var builder = RuleBuilder.create();
+            var tableNames = builder.sourceSimpleTables(Seq.of(1, 2));
+            builder.scan(tableNames.get(0));
+            var projectA = builder.genericProjectionOp("projectA", new RelType.VarType("PROJECT_A", joinType == JoinRelType.INNER));
+            builder.project(builder.call(projectA, builder.fields()));
+            builder.scan(tableNames.get(1));
+            var projectB = builder.genericProjectionOp("projectB", new RelType.VarType("PROJECT_B", joinType == JoinRelType.INNER));
+            builder.project(builder.call(projectA, builder.fields()));
+            var join = builder.genericPredicateOp("join", true);
+            builder.join(joinType, builder.call(join, builder.joinFields()));
+            var before = builder.build();
+            tableNames.forEach(builder::scan);
+            builder.join(joinType, builder.call(join,
+                    builder.call(projectA, builder.fields(2, 0)),
+                    builder.call(projectB, builder.fields(2, 1))
+            ));
+            builder.project(builder.call(projectA, builder.field(0)), builder.call(projectB, builder.field(1)));
+            var after = builder.build();
+            return Tuple.of(before, after);
+        });
+    }
+
+    public static Seq<Tuple2<RelNode, RelNode>> joinProjectLeftTranspose() {
+        return Seq.of(JoinRelType.INNER, JoinRelType.FULL).map(joinType -> {
+            var builder = RuleBuilder.create();
+            var tableNames = builder.sourceSimpleTables(Seq.of(1, 2));
+            builder.scan(tableNames.get(0));
+            var project = builder.genericProjectionOp("project", new RelType.VarType("PROJECT", joinType == JoinRelType.INNER));
+            builder.project(builder.call(project, builder.fields()));
+            builder.scan(tableNames.get(1));
+            var join = builder.genericPredicateOp("join", true);
+            builder.join(joinType, builder.call(join, builder.joinFields()));
+            var before = builder.build();
+            tableNames.forEach(builder::scan);
+            builder.join(joinType, builder.call(join,
+                    builder.call(project, builder.fields(2, 0)),
+                    builder.field(2, 1, 0)
+            ));
+            builder.project(builder.call(project, builder.field(0)), builder.field(1));
+            var after = builder.build();
+            return Tuple.of(before, after);
+        });
+    }
+
+    public static Seq<Tuple2<RelNode, RelNode>> joinProjectRightTranspose() {
+        return Seq.of(JoinRelType.INNER, JoinRelType.FULL).map(joinType -> {
+            var builder = RuleBuilder.create();
+            var tableNames = builder.sourceSimpleTables(Seq.of(1, 2));
+            tableNames.forEach(builder::scan);
+            var project = builder.genericProjectionOp("project", new RelType.VarType("PROJECT", joinType == JoinRelType.INNER));
+            builder.project(builder.call(project, builder.fields()));
+            var join = builder.genericPredicateOp("join", true);
+            builder.join(joinType, builder.call(join, builder.joinFields()));
+            var before = builder.build();
+            tableNames.forEach(builder::scan);
+            builder.join(joinType, builder.call(join,
+                    builder.field(2, 0, 0),
+                    builder.call(project, builder.fields(2, 1))
+            ));
+            builder.project(builder.field(0), builder.call(project, builder.field(1)));
+            var after = builder.build();
+            return Tuple.of(before, after);
+        });
+    }
+
+    public static Seq<Tuple2<RelNode, RelNode>> joinPushExpressions() {
+        return joinTypes.map(joinType -> {
+           var builder = RuleBuilder.create();
+            var tableNames = builder.sourceSimpleTables(Seq.of(1, 2));
+            tableNames.forEach(builder::scan);
+            var projectA = builder.genericProjectionOp("projectA", new RelType.VarType("PROJECT_A", true));
+            var projectB = builder.genericProjectionOp("projectB", new RelType.VarType("PROJECT_B", true));
+            var join = builder.genericPredicateOp("join", true);
+            builder.join(joinType, builder.call(join,
+                    builder.call(projectA, builder.fields(2, 0)),
+                    builder.call(projectB, builder.fields(2, 1))
+            ));
+            var before = builder.build();
+            builder.scan(tableNames.get(0));
+            builder.project(builder.call(projectA, builder.fields()));
+            builder.scan(tableNames.get(1));
+            builder.project(builder.call(projectB, builder.fields()));
+            builder.join(joinType, builder.call(join, builder.joinFields()));
+            var after = builder.build();
+           return Tuple.of(before, after);
+        });
+    }
+
 //    public static Tuple2<RelNode, RelNode> joinPushTransitivePredicates() {
 //        return null;
 //    }
@@ -401,6 +494,7 @@ public class ElevatedCoreRules {
         Files.createDirectories(dumpFolder);
         Seq.of(ElevatedCoreRules.class.getMethods())
                 .filter(method -> Modifier.isStatic(method.getModifiers()))
+                .sorted(Comparator.comparing(Method::getName))
                 .forEachUnchecked(method -> {
                     switch (method.getReturnType().getSimpleName()) {
                         case "Tuple2" -> {
