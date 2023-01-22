@@ -18,6 +18,10 @@ import java.util.List;
 
 public class ElevatedCoreRules {
 
+    public static final Seq<JoinRelType> joinTypes = Seq.of(
+            JoinRelType.INNER, JoinRelType.LEFT, JoinRelType.RIGHT, JoinRelType.FULL
+    );
+
     public static Tuple2<RelNode, RelNode> calcMerge() {
         // A Calc is equivalent to a project above a filter
         var builder = RuleBuilder.create();
@@ -180,7 +184,7 @@ public class ElevatedCoreRules {
     }
 
     public static Seq<Tuple2<RelNode, RelNode>> projectJoinTranspose() {
-        return Seq.of(JoinRelType.INNER, JoinRelType.LEFT, JoinRelType.RIGHT, JoinRelType.FULL).map(joinType -> {
+        return joinTypes.map(joinType -> {
             var builder = RuleBuilder.create();
             var leftTable = builder.createCosetteTable(Seq.of(
                     Tuple.of(new RelType.VarType("Type_1", true), false),
@@ -243,14 +247,67 @@ public class ElevatedCoreRules {
         return Tuple.of(before, after);
     }
 
-//    public static Tuple2<RelNode, RelNode> joinAddRedundantSemiJoin() {
-//        return null;
-//    }
-//
-//    public static Tuple2<RelNode, RelNode> joinAssociate() {
-//        return null;
-//    }
-//
+    public static Tuple2<RelNode, RelNode> joinAddRedundantSemiJoin() {
+        // Test which types of join works?
+        var builder = RuleBuilder.create();
+        var tableNames = builder.sourceSimpleTables(Seq.of(1, 2));
+        tableNames.forEach(builder::scan);
+        var join = builder.genericPredicateOp("join", true);
+        builder.join(JoinRelType.INNER, builder.call(join, builder.joinFields()));
+        var before = builder.build();
+        tableNames.forEach(builder::scan);
+        builder.semiJoin(builder.call(join, builder.joinFields()));
+        builder.scan(tableNames.get(1));
+        builder.join(JoinRelType.INNER, builder.call(join, builder.joinFields()));
+        var after = builder.build();
+        return Tuple.of(before, after);
+    }
+
+    public static Tuple2<RelNode, RelNode> joinAssociate() {
+        // Test which types of join works?
+        var builder = RuleBuilder.create();
+        var tableNames = builder.sourceSimpleTables(Seq.of(1, 2, 3));
+        builder.scan(tableNames.get(0)).scan(tableNames.get(1));
+        var joinA = builder.genericPredicateOp("joinA", true);
+        var joinB = builder.genericPredicateOp("joinB", true);
+        var joinAB = builder.genericPredicateOp("joinAB", true);
+        var joinCond = builder.call(SqlStdOperatorTable.AND,
+                builder.call(joinA, builder.fields(2, 0)),
+                builder.call(joinB, builder.fields(2, 1)),
+                builder.call(joinAB, builder.fields())
+        );
+        builder.join(JoinRelType.INNER, joinCond);
+        builder.scan(tableNames.get(2));
+        var joinC = builder.genericPredicateOp("joinC", true);
+        var joinAC = builder.genericPredicateOp("joinAC", true);
+        var joinBC = builder.genericPredicateOp("joinBC", true);
+        var joinABC = builder.genericPredicateOp("joinABC", true);
+        joinCond = builder.call(SqlStdOperatorTable.AND,
+                builder.call(joinC, builder.fields(2, 1)),
+                builder.call(joinAC, builder.field(2, 0, 0), builder.field(2, 1, 0)),
+                builder.call(joinBC, builder.field(2, 0, 1), builder.field(2, 1, 0)),
+                builder.call(joinABC, builder.joinFields())
+        );
+        builder.join(JoinRelType.INNER, joinCond);
+        var before = builder.build();
+        tableNames.forEach(builder::scan);
+        joinCond = builder.call(SqlStdOperatorTable.AND,
+                builder.call(joinB, builder.fields(2, 0)),
+                builder.call(joinC, builder.fields(2, 1)),
+                builder.call(joinBC, builder.fields())
+        );
+        builder.join(JoinRelType.INNER, joinCond);
+        joinCond = builder.call(SqlStdOperatorTable.AND,
+                builder.call(joinA, builder.fields(2, 1)),
+                builder.call(joinAB, builder.field(2, 0, 0), builder.field(2, 1, 0)),
+                builder.call(joinAC, builder.field(2, 0, 0), builder.field(2, 1, 1)),
+                builder.call(joinABC, builder.joinFields())
+        );
+        builder.join(JoinRelType.INNER, joinCond);
+        var after = builder.build();
+        return Tuple.of(before, after);
+    }
+
 //    public static Tuple2<RelNode, RelNode> joinCommute() {
 //        // Inner/Outer joins
 //        return null;
