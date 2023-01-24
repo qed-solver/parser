@@ -276,7 +276,7 @@ public class ElevatedCoreRules {
         var joinCond = builder.call(SqlStdOperatorTable.AND,
                 builder.call(joinA, builder.fields(2, 0)),
                 builder.call(joinB, builder.fields(2, 1)),
-                builder.call(joinAB, builder.fields())
+                builder.call(joinAB, builder.joinFields())
         );
         builder.join(JoinRelType.INNER, joinCond);
         builder.scan(tableNames.get(2));
@@ -296,11 +296,11 @@ public class ElevatedCoreRules {
         joinCond = builder.call(SqlStdOperatorTable.AND,
                 builder.call(joinB, builder.fields(2, 0)),
                 builder.call(joinC, builder.fields(2, 1)),
-                builder.call(joinBC, builder.fields())
+                builder.call(joinBC, builder.joinFields())
         );
         builder.join(JoinRelType.INNER, joinCond);
         joinCond = builder.call(SqlStdOperatorTable.AND,
-                builder.call(joinA, builder.fields(2, 1)),
+                builder.call(joinA, builder.fields(2, 0)),
                 builder.call(joinAB, builder.field(2, 0, 0), builder.field(2, 1, 0)),
                 builder.call(joinAC, builder.field(2, 0, 0), builder.field(2, 1, 1)),
                 builder.call(joinABC, builder.joinFields())
@@ -345,12 +345,12 @@ public class ElevatedCoreRules {
             var builder = RuleBuilder.create();
             var tableNames = builder.sourceSimpleTables(Seq.of(1, 2));
             builder.scan(tableNames.get(0));
-            var projectA = builder.genericProjectionOp("projectA", new RelType.VarType("PROJECT_A", joinType == JoinRelType.INNER));
+            var projectA = builder.genericProjectionOp("projectA", new RelType.VarType("PROJECT_A", true));
             builder.project(builder.call(projectA, builder.fields()));
             builder.scan(tableNames.get(1));
-            var projectB = builder.genericProjectionOp("projectB", new RelType.VarType("PROJECT_B", joinType == JoinRelType.INNER));
-            builder.project(builder.call(projectA, builder.fields()));
-            var join = builder.genericPredicateOp("join", true);
+            var projectB = builder.genericProjectionOp("projectB", new RelType.VarType("PROJECT_B", true));
+            builder.project(builder.call(projectB, builder.fields()));
+            var join = builder.genericPredicateOp("join", joinType == JoinRelType.INNER);
             builder.join(joinType, builder.call(join, builder.joinFields()));
             var before = builder.build();
             tableNames.forEach(builder::scan);
@@ -369,10 +369,10 @@ public class ElevatedCoreRules {
             var builder = RuleBuilder.create();
             var tableNames = builder.sourceSimpleTables(Seq.of(1, 2));
             builder.scan(tableNames.get(0));
-            var project = builder.genericProjectionOp("project", new RelType.VarType("PROJECT", joinType == JoinRelType.INNER));
+            var project = builder.genericProjectionOp("project", new RelType.VarType("PROJECT", true));
             builder.project(builder.call(project, builder.fields()));
             builder.scan(tableNames.get(1));
-            var join = builder.genericPredicateOp("join", true);
+            var join = builder.genericPredicateOp("join", joinType == JoinRelType.INNER);
             builder.join(joinType, builder.call(join, builder.joinFields()));
             var before = builder.build();
             tableNames.forEach(builder::scan);
@@ -391,9 +391,9 @@ public class ElevatedCoreRules {
             var builder = RuleBuilder.create();
             var tableNames = builder.sourceSimpleTables(Seq.of(1, 2));
             tableNames.forEach(builder::scan);
-            var project = builder.genericProjectionOp("project", new RelType.VarType("PROJECT", joinType == JoinRelType.INNER));
+            var project = builder.genericProjectionOp("project", new RelType.VarType("PROJECT", true));
             builder.project(builder.call(project, builder.fields()));
-            var join = builder.genericPredicateOp("join", true);
+            var join = builder.genericPredicateOp("join", joinType == JoinRelType.INNER);
             builder.join(joinType, builder.call(join, builder.joinFields()));
             var before = builder.build();
             tableNames.forEach(builder::scan);
@@ -428,6 +428,7 @@ public class ElevatedCoreRules {
                     builder.field(2, 0, 1),
                     builder.field(2, 1, 1)
             ));
+            builder.project(builder.field(0), builder.field(2));
             var after = builder.build();
             return Tuple.of(before, after);
         });
@@ -435,13 +436,21 @@ public class ElevatedCoreRules {
 
     public static Tuple2<RelNode, RelNode> joinDeriveIsNotNullFilter() {
         var builder = RuleBuilder.create();
-        var tableNames = builder.sourceSimpleTables(Seq.of(1, 2));
-        tableNames.forEach(builder::scan);
+        var leftTable = builder.createCosetteTable(Seq.of(
+                Tuple.of(new RelType.VarType("Type_1", false), false),
+                Tuple.of(new RelType.VarType("Type_2", true), false)
+        ));
+        var rightTable = builder.createCosetteTable(Seq.of(
+                Tuple.of(new RelType.VarType("Type_3", false), false),
+                Tuple.of(new RelType.VarType("Type_4", true), false)
+        ));
+        builder.addTable(leftTable).addTable(rightTable);
+        builder.scan(leftTable.getName()).scan(rightTable.getName());
         var join = builder.genericPredicateOp("join", true);
         builder.join(JoinRelType.INNER, builder.call(join, builder.joinFields()));
         var before = builder.build();
-        builder.scan(tableNames.get(0)).filter(builder.call(SqlStdOperatorTable.IS_NOT_NULL, builder.fields()));
-        builder.scan(tableNames.get(1)).filter(builder.call(SqlStdOperatorTable.IS_NOT_NULL, builder.fields()));
+        builder.scan(leftTable.getName()).filter(builder.call(SqlStdOperatorTable.IS_NOT_NULL, builder.field(0)));
+        builder.scan(rightTable.getName()).filter(builder.call(SqlStdOperatorTable.IS_NOT_NULL, builder.field(0)));
         builder.join(JoinRelType.INNER, builder.call(join, builder.joinFields()));
         var after = builder.build();
         return Tuple.of(before, after);
