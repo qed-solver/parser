@@ -409,7 +409,7 @@ public class ElevatedCoreRules {
 
     public static Seq<Tuple2<RelNode, RelNode>> joinPushExpressions() {
         return joinTypes.map(joinType -> {
-           var builder = RuleBuilder.create();
+            var builder = RuleBuilder.create();
             var tableNames = builder.sourceSimpleTables(Seq.of(1, 2));
             tableNames.forEach(builder::scan);
             var projectA = builder.genericProjectionOp("projectA", new RelType.VarType("PROJECT_A", true));
@@ -421,39 +421,84 @@ public class ElevatedCoreRules {
             ));
             var before = builder.build();
             builder.scan(tableNames.get(0));
-            builder.project(builder.call(projectA, builder.fields()));
+            builder.project(builder.field(0), builder.call(projectA, builder.fields()));
             builder.scan(tableNames.get(1));
-            builder.project(builder.call(projectB, builder.fields()));
-            builder.join(joinType, builder.call(join, builder.joinFields()));
+            builder.project(builder.field(0), builder.call(projectB, builder.fields()));
+            builder.join(joinType, builder.call(join,
+                    builder.field(2, 0, 1),
+                    builder.field(2, 1, 1)
+            ));
             var after = builder.build();
-           return Tuple.of(before, after);
+            return Tuple.of(before, after);
         });
     }
 
-//    public static Tuple2<RelNode, RelNode> joinPushTransitivePredicates() {
-//        return null;
-//    }
-//
-//    public static Tuple2<RelNode, RelNode> joinDeriveIsNotNullFilter() {
-//        return null;
-//    }
-//
-//    public static Tuple2<RelNode, RelNode> joinToCorrelate() {
-//        return null;
-//    }
-//
-//    public static Tuple2<RelNode, RelNode> joinToSemiJoin() {
-//        return null;
-//    }
-//
-//    public static Tuple2<RelNode, RelNode> joinLeftUnionTranspose() {
-//        return null;
-//    }
-//
-//    public static Tuple2<RelNode, RelNode> joinRightUnionTranspose() {
-//        return null;
-//    }
-//
+    public static Tuple2<RelNode, RelNode> joinDeriveIsNotNullFilter() {
+        var builder = RuleBuilder.create();
+        var tableNames = builder.sourceSimpleTables(Seq.of(1, 2));
+        tableNames.forEach(builder::scan);
+        var join = builder.genericPredicateOp("join", true);
+        builder.join(JoinRelType.INNER, builder.call(join, builder.joinFields()));
+        var before = builder.build();
+        builder.scan(tableNames.get(0)).filter(builder.call(SqlStdOperatorTable.IS_NOT_NULL, builder.fields()));
+        builder.scan(tableNames.get(1)).filter(builder.call(SqlStdOperatorTable.IS_NOT_NULL, builder.fields()));
+        builder.join(JoinRelType.INNER, builder.call(join, builder.joinFields()));
+        var after = builder.build();
+        return Tuple.of(before, after);
+    }
+
+    public static Tuple2<RelNode, RelNode> joinToCorrelate() {
+        var builder = RuleBuilder.create();
+        var tableNames = builder.sourceSimpleTables(Seq.of(1, 2));
+        tableNames.forEach(builder::scan);
+        var join = builder.genericPredicateOp("join", true);
+        builder.join(JoinRelType.INNER, builder.call(join, builder.joinFields()));
+        var before = builder.build();
+        tableNames.forEach(builder::scan);
+        builder.correlate(JoinRelType.INNER, new CorrelationId(0), builder.fields(2, 0));
+        builder.filter(builder.call(join, builder.fields()));
+        var after = builder.build();
+        return Tuple.of(before, after);
+    }
+
+    public static Seq<Tuple2<RelNode, RelNode>> joinLeftUnionTranspose() {
+        return joinTypes.map(joinType -> {
+            var builder = RuleBuilder.create();
+            var tableNames = builder.sourceSimpleTables(Seq.of(1, 1, 2));
+            builder.scan(tableNames.get(0)).scan(tableNames.get(1)).union(true);
+            builder.scan(tableNames.get(2));
+            var join = builder.genericPredicateOp("join", true);
+            builder.join(joinType, builder.call(join, builder.joinFields()));
+            var before = builder.build();
+            builder.scan(tableNames.get(0)).scan(tableNames.get(2));
+            builder.join(joinType, builder.call(join, builder.joinFields()));
+            builder.scan(tableNames.get(1)).scan(tableNames.get(2));
+            builder.join(joinType, builder.call(join, builder.joinFields()));
+            builder.union(true);
+            var after = builder.build();
+            return Tuple.of(before, after);
+        });
+    }
+
+    public static Seq<Tuple2<RelNode, RelNode>> joinRightUnionTranspose() {
+        return joinTypes.map(joinType -> {
+            var builder = RuleBuilder.create();
+            var tableNames = builder.sourceSimpleTables(Seq.of(1, 2, 2));
+            tableNames.forEach(builder::scan);
+            builder.union(true);
+            var join = builder.genericPredicateOp("join", true);
+            builder.join(joinType, builder.call(join, builder.joinFields()));
+            var before = builder.build();
+            builder.scan(tableNames.get(0)).scan(tableNames.get(1));
+            builder.join(joinType, builder.call(join, builder.joinFields()));
+            builder.scan(tableNames.get(0)).scan(tableNames.get(2));
+            builder.join(joinType, builder.call(join, builder.joinFields()));
+            builder.union(true);
+            var after = builder.build();
+            return Tuple.of(before, after);
+        });
+    }
+
 //    public static Tuple2<RelNode, RelNode> semiJoinFilterTranspose() {
 //        return null;
 //    }
@@ -528,6 +573,7 @@ public class ElevatedCoreRules {
      *   - ProjectAggregateMerge
      *   - ProjectToSemiJoin
      *   - Aggregate values
+     *   - JoinToSemiJoin
      * - Multi-join related rules: unsupported for now:
      *   - FilterMultiJoinRule
      *   - ProjectMultiJoinMerge
@@ -572,6 +618,7 @@ public class ElevatedCoreRules {
      * - ProjectWindowTranspose: window not supported
      * - JoinCommuteOuter: special case of JoinCommute
      * - JoinProject*TransposeIncludeOuter: special cases of JoinProject*Transpose
+     * - JoinPushTransitivePredicates: special case of JoinConditionPush
      * - JoinReduceExpressions: constant reduction is trivial
      * - UnionRemove: trivially true
      * - UnionPullUpConstants: trivially true
