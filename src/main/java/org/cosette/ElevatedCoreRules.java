@@ -508,29 +508,64 @@ public class ElevatedCoreRules {
         });
     }
 
-//    public static Tuple2<RelNode, RelNode> semiJoinFilterTranspose() {
-//        return null;
-//    }
-//
-//    public static Tuple2<RelNode, RelNode> semiJoinProjectTranspose() {
-//        return null;
-//    }
-//
-//    public static Tuple2<RelNode, RelNode> semiJoinJoinTranspose() {
-//        return null;
-//    }
-//
-//    public static Tuple2<RelNode, RelNode> semiJoinRemove() {
-//        return null;
-//    }
-//
-//    public static Tuple2<RelNode, RelNode> unionMerge() {
-//        return null;
-//    }
-//
-//    public static Tuple2<RelNode, RelNode> projectFilterValueMerge() {
-//        return null;
-//    }
+    public static Tuple2<RelNode, RelNode> semiJoinFilterTranspose() {
+        var builder = RuleBuilder.create();
+        var tableNames = builder.sourceSimpleTables(Seq.of(1, 2));
+        builder.scan(tableNames.get(0));
+        var filter = builder.genericPredicateOp("filter", true);
+        builder.filter(builder.call(filter, builder.fields()));
+        builder.scan(tableNames.get(1));
+        var semi = builder.genericPredicateOp("semi", true);
+        builder.semiJoin(builder.call(semi, builder.joinFields()));
+        var before = builder.build();
+        tableNames.forEach(builder::scan);
+        builder.semiJoin(builder.call(semi, builder.joinFields()));
+        builder.filter(builder.call(filter, builder.fields()));
+        var after = builder.build();
+        return Tuple.of(before, after);
+    }
+
+    public static Tuple2<RelNode, RelNode> semiJoinProjectTranspose() {
+        var builder = RuleBuilder.create();
+        var tableNames = builder.sourceSimpleTables(Seq.of(1, 2));
+        builder.scan(tableNames.get(0));
+        var project = builder.genericProjectionOp("project", new RelType.VarType("PROJECT", true));
+        builder.project(builder.call(project, builder.fields()));
+        builder.scan(tableNames.get(1));
+        var semi = builder.genericPredicateOp("semi", true);
+        builder.semiJoin(builder.call(semi, builder.joinFields()));
+        var before = builder.build();
+        tableNames.forEach(builder::scan);
+        builder.semiJoin(builder.call(semi, builder.call(project, builder.fields(2, 0)), builder.field(2, 1, 0)));
+        builder.project(builder.call(project, builder.fields()));
+        var after = builder.build();
+        return Tuple.of(before, after);
+    }
+
+    public static Seq<Tuple2<RelNode, RelNode>> semiJoinJoinTranspose() {
+        return joinTypes.map(joinType -> {
+            var builder = RuleBuilder.create();
+            var tableNames = builder.sourceSimpleTables(Seq.of(1, 2, 3));
+            builder.scan(tableNames.get(0)).scan(tableNames.get(1));
+            var join = builder.genericPredicateOp("join", true);
+            builder.join(joinType, builder.call(join, builder.joinFields()));
+            builder.scan(tableNames.get(2));
+            var semiAC = builder.genericPredicateOp("semiAC", true);
+            var semiBC = builder.genericPredicateOp("semiBC", true);
+            builder.semiJoin(builder.call(SqlStdOperatorTable.AND,
+                    builder.call(semiAC, builder.field(2, 0, 0), builder.field(2, 1, 0)),
+                    builder.call(semiBC, builder.field(2, 0, 1), builder.field(2, 1, 0))
+            ));
+            var before = builder.build();
+            builder.scan(tableNames.get(0)).scan(tableNames.get(2));
+            builder.semiJoin(builder.call(semiAC, builder.joinFields()));
+            builder.scan(tableNames.get(1)).scan(tableNames.get(2));
+            builder.semiJoin(builder.call(semiBC, builder.joinFields()));
+            builder.join(joinType, builder.call(join, builder.joinFields()));
+            var after = builder.build();
+            return Tuple.of(before, after);
+        });
+    }
 
     public static void dumpTransformedRule(RelNode before, RelNode after, boolean verbose, Path dumpPath) throws IOException {
         if (verbose) {
@@ -629,11 +664,14 @@ public class ElevatedCoreRules {
      * - JoinProject*TransposeIncludeOuter: special cases of JoinProject*Transpose
      * - JoinPushTransitivePredicates: special case of JoinConditionPush
      * - JoinReduceExpressions: constant reduction is trivial
+     * - SemiJoinRemove: advisory semi-join not supported
+     * - UnionMerge: Set operator cannot take more than two arguments
      * - UnionRemove: trivially true
      * - UnionPullUpConstants: trivially true
      * - UnionToDistinct: trivially true
      * - FilterValuesMerge: special case of ProjectFilterValuesMerge
      * - ProjectValuesMerge: special case of ProjectFilterValuesMerge
+     * - ProjectFilterValuesMerge: constant reduction is trivial
      * - WindowReduceExpressions: constant reduction is trivial
      */
 
