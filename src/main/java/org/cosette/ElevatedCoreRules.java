@@ -67,15 +67,12 @@ public class ElevatedCoreRules {
     public static Tuple2<RelNode, RelNode> filterProjectTranspose() {
         var builder = RuleBuilder.create();
         var tableName = builder.sourceSimpleTables(Seq.of(0)).get(0);
-        builder.scan(tableName);
         var project = builder.genericProjectionOp("select", new RelType.VarType("PROJECT", true));
-        builder.project(builder.call(project, builder.fields()));
         var filter = builder.genericPredicateOp("filter", true);
-        builder.filter(builder.call(filter, builder.fields()));
-        var before = builder.build();
         builder.scan(tableName).filter(builder.call(filter, builder.call(project, builder.fields())));
         builder.project(builder.call(project, builder.fields()));
-        var after = builder.build();
+        var before = builder.build();
+        var after = builder.scan(tableName).project(builder.call(project, builder.fields())).filter(builder.call(filter, builder.fields())).build();
         return Tuple.of(before, after);
     }
 

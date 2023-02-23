@@ -88,5 +88,10 @@
             <artifactId>kala-common</artifactId>
             <version>0.46.0</version>
         </dependency>
+        <dependency>
+            <groupId>io.github.p-org.solvers</groupId>
+            <artifactId>cvc5</artifactId>
+            <version>0.0.7-v5</version>
+        </dependency>
     </dependencies>
 </project>
