@@ -240,7 +240,7 @@ class CosetteSchema extends AbstractSchema {
                         throw new RuntimeException("Unsupported declaration type " + column.getKind() + " in table " + createTable.name);
             }
         }
-        var cosetteTable = new CosetteTable(createTable.name.toString(), names.zip(types.zip(nullabilities).map(type -> new RelType.BaseType(type._1, type._2))).toImmutableMap(), ImmutableSet.from(keys), ImmutableSet.from(checkConstraints));
+        var cosetteTable = new CosetteTable(createTable.name.toString(), names.zip(types.zip(nullabilities).map(type -> new RelType.BaseType(type.component1(), type.component2()))).toImmutableMap(), ImmutableSet.from(keys), ImmutableSet.from(checkConstraints));
         tables.put(createTable.name.toString(), cosetteTable);
     }
 

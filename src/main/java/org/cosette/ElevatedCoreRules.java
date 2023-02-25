@@ -586,13 +586,13 @@ public class ElevatedCoreRules {
                         case "Tuple2" -> {
                             var ruleName = method.getName();
                             var rewrite = (Tuple2<RelNode, RelNode>) method.invoke(null);
-                            dumpTransformedRule(rewrite._1, rewrite._2, verbose,
+                            dumpTransformedRule(rewrite.component1(), rewrite.component2(), verbose,
                                     Paths.get(dumpFolder.toAbsolutePath().toString(), ruleName + ".json"));
                         }
                         case "Seq" -> {
                             var ruleName = method.getName();
                             var rewrites = (Seq<Tuple2<RelNode, RelNode>>) method.invoke(null);
-                            rewrites.forEachIndexedUnchecked((index, rewrite) -> dumpTransformedRule(rewrite._1, rewrite._2, verbose,
+                            rewrites.forEachIndexedUnchecked((index, rewrite) -> dumpTransformedRule(rewrite.component1(), rewrite.component2(), verbose,
                                     Paths.get(dumpFolder.toAbsolutePath().toString(), ruleName + index + ".json")));
                         }
                     }

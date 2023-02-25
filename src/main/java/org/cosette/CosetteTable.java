@@ -39,7 +39,7 @@ public class CosetteTable extends AbstractTable {
 
     @Override
     public RelDataType getRowType(RelDataTypeFactory typeFactory) {
-        return typeFactory.createStructType(columnNames.zip(columnTypes).view().map(entry -> java.util.Map.entry(entry._1, entry._2)).toImmutableSeq().asJava());
+        return typeFactory.createStructType(columnNames.zip(columnTypes).view().map(entry -> java.util.Map.entry(entry.component1(), entry.component2())).toImmutableSeq().asJava());
     }
 
     @Override

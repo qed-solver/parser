@@ -52,8 +52,8 @@ public class RelPruner implements RelFolder {
             cache.put(table, Tuple.of(cosTable, rowType));
         } else {
             var p = cache.get(table);
-            cosTable = p._1;
-            rowType = p._2;
+            cosTable = p.component1();
+            rowType = p.component2();
         }
         var t = RelOptTableImpl.create(table.getRelOptSchema(), rowType, table.getQualifiedName(), cosTable, table::getExpression);
         return LogicalTableScan.create(scan.getCluster(), t, scan.getHints());
@@ -71,7 +71,7 @@ public class RelPruner implements RelFolder {
                 if (fin.sameElements(ids)) {
                     yield scan;
                 }
-                ImmutableSeq<RexNode> fields = ids.zip(project.getProjects()).map(p -> new RexInputRef(fin.indexOf(p._1), p._2.getType()));
+                ImmutableSeq<RexNode> fields = ids.zip(project.getProjects()).map(p -> new RexInputRef(fin.indexOf(p.component1()), p.component2().getType()));
                 yield project.copy(project.getTraitSet(), scan, fields.asJava(), project.getRowType());
             }
             case LogicalTableScan r -> {
