@@ -63,7 +63,7 @@ public class RelPruner implements RelFolder {
     public RelNode apply(RelNode rel) {
         return switch (rel) {
             case LogicalProject project
-                    && (project.getInput() instanceof LogicalTableScan r)
+                    when(project.getInput() instanceof LogicalTableScan r)
                     && Seq.from(project.getProjects()).allMatch(col -> col instanceof RexInputRef) -> {
                 var fin = usages.get(RelScanner.getName(r)).toSeq().sorted();
                 var ids = Seq.from(project.getProjects()).map(ref -> ((RexInputRef) ref).getIndex());
@@ -100,7 +100,7 @@ record RelScanner(MutableMap<String, ImmutableSet<Integer>> usages) {
         rel.accept(new RexScanner());
         switch (rel) {
             case LogicalProject project
-                    && (project.getInput() instanceof LogicalTableScan r)
+                    when(project.getInput() instanceof LogicalTableScan r)
                     && Seq.from(project.getProjects()).allMatch(col -> col instanceof RexInputRef) -> {
                 var ids = Seq.from(project.getProjects()).map(col -> ((RexInputRef) col).getIndex());
                 var name = getName(r);

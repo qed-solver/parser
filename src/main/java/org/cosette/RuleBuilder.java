@@ -10,8 +10,10 @@ import org.apache.calcite.plan.RelOptCluster;
 import org.apache.calcite.plan.RelOptSchema;
 import org.apache.calcite.rex.RexNode;
 import org.apache.calcite.schema.SchemaPlus;
-import org.apache.calcite.sql.*;
-import org.apache.calcite.sql.type.SqlReturnTypeInference;
+import org.apache.calcite.sql.SqlFunction;
+import org.apache.calcite.sql.SqlFunctionCategory;
+import org.apache.calcite.sql.SqlKind;
+import org.apache.calcite.sql.SqlOperator;
 import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.tools.Frameworks;
 import org.apache.calcite.tools.RelBuilder;
@@ -25,6 +27,7 @@ public class RuleBuilder extends RelBuilder {
     private final AtomicInteger TABLE_ID_GENERATOR = new AtomicInteger();
 
     private final SchemaPlus root;
+
     protected RuleBuilder(@Nullable Context context, RelOptCluster cluster, RelOptSchema relOptSchema, SchemaPlus schema) {
         super(context, cluster, relOptSchema);
         root = schema;
@@ -47,6 +50,7 @@ public class RuleBuilder extends RelBuilder {
 
     /**
      * Create a cosette table given the column types and whether they are unique (i.e. can be key)
+     *
      * @param schema the list of column types and they are unique
      * @return the table created from the given schema
      */
@@ -61,6 +65,7 @@ public class RuleBuilder extends RelBuilder {
 
     /**
      * Create and return the names of the created simple tables after registering them to the builder
+     *
      * @param typeIds the absolute value represents type id, while the sign indicates the uniqueness
      * @return the names for the created tables
      */
@@ -81,19 +86,28 @@ public class RuleBuilder extends RelBuilder {
     }
 
     public SqlOperator genericPredicateOp(String name, boolean nullable) {
-        return genericOp("Predicate-" + name, new RelType.BaseType(SqlTypeName.BOOLEAN, nullable));
+        return new CosetteFunction("Predicate-" + name, new RelType.BaseType(SqlTypeName.BOOLEAN, nullable));
     }
 
     public SqlOperator genericProjectionOp(String name, RelType projection) {
-        return genericOp("Projection-"+name, projection);
+        return new CosetteFunction("Projection-" + name, projection);
     }
 
-    public static SqlOperator genericOp(String name, RelType returnType) {
-        SqlReturnTypeInference returnTypeInference = opBinding -> {
-            var factory = opBinding.getTypeFactory();
-            return factory.createTypeWithNullability(returnType, returnType.isNullable());
-        };
-        return new SqlFunction(name, SqlKind.OTHER_FUNCTION, returnTypeInference, null, null, SqlFunctionCategory.USER_DEFINED_FUNCTION);
+    public static class CosetteFunction extends SqlFunction {
+
+        private final RelType codomain;
+
+        public CosetteFunction(String name, RelType returnType) {
+            super(name, SqlKind.OTHER_FUNCTION, opBinding -> {
+                var factory = opBinding.getTypeFactory();
+                return factory.createTypeWithNullability(returnType, returnType.isNullable());
+            }, null, null, SqlFunctionCategory.USER_DEFINED_FUNCTION);
+            codomain = returnType;
+        }
+
+        public RelType getReturnType() {
+            return codomain;
+        }
     }
 
 }

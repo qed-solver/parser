@@ -1,15 +1,12 @@
 package org.cosette;
 
 import kala.collection.Seq;
-import kala.control.Option;
 import kala.control.Result;
 import kala.tuple.Tuple;
 import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.logical.LogicalFilter;
-import org.apache.calcite.rel.logical.LogicalJoin;
 import org.apache.calcite.rel.logical.LogicalProject;
 import org.apache.calcite.rel.logical.LogicalTableScan;
-import org.apache.calcite.rex.RexNode;
 import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.tools.Frameworks;
 
@@ -22,17 +19,19 @@ public record RelMatcher() {
     private static Result<MatchEnv, String> relMatch(RelNode pattern, RelNode target) {
         return switch (pattern) {
             case LogicalTableScan scan -> {
-                yield Result.err("Scan not implemented.");
+                yield MatchEnv.empty().verify();
             }
-            case LogicalFilter filter && (target instanceof LogicalFilter node) ->
+            case LogicalFilter filter when target instanceof LogicalFilter node ->
                     relMatch(filter.getInput(), node.getInput()).flatMap(inputEnv ->
-                            rexMatch(filter.getCondition(), node.getCondition()));
-            default -> Result.err(String.format("Cannot match %s type pattern with %s target", pattern.getRelTypeName(), target.getRelTypeName()));
+                            inputEnv.rexTypeInfer(filter.getCondition(), Seq.of(node.getCondition())));
+            case LogicalProject project when target instanceof LogicalProject node ->
+                    relMatch(project.getInput(), node.getInput()).flatMap(inputEnv -> switch (project.getRowType().getFieldCount()) {
+                        case 1 -> inputEnv.rexTypeInfer(project.getProjects().get(0), Seq.from(node.getProjects()));
+                        default -> Result.err("TODO: Please extend project field matching mechanism");
+                    });
+            default ->
+                    Result.err(String.format("Cannot match %s type pattern with %s target", pattern.getRelTypeName(), target.getRelTypeName()));
         };
-    }
-
-    private static Result<MatchEnv, String> rexMatch(RexNode pattern, RexNode target) {
-        return Result.err("Not implemented.");
     }
 
     public static void main(String[] args) throws Exception {

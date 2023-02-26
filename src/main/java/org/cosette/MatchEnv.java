@@ -1,81 +1,83 @@
 package org.cosette;
 
-import kala.collection.Map;
 import kala.collection.Seq;
-import kala.collection.Set;
 import kala.collection.immutable.ImmutableMap;
+import kala.collection.immutable.ImmutableSeq;
 import kala.collection.immutable.ImmutableSet;
-import kala.control.Option;
 import kala.control.Result;
-import kala.tuple.Tuple;
-import kala.tuple.Tuple2;
 import org.apache.calcite.rel.type.RelDataType;
+import org.apache.calcite.rex.RexCall;
 import org.apache.calcite.rex.RexNode;
-import org.apache.calcite.sql.SqlOperator;
 
+/**
+ * A matching environment should contain all matching information between the pattern node and the target node
+ * >>> WARNING: Must have initial FieldReference, which should be introduced by variable table scan in pattern node <<<
+ *
+ * @param typeConstraints  the mapping between existing variable types and product types
+ * @param synthConstraints the sequence of constraints for SyGuS solver ordered by point of introduction
+ */
 public record MatchEnv(
-        Seq<Set<Integer>> reference,
-        Map<SqlOperator, Tuple2<RelDataType, Seq<RelDataType>>> declaration,
-        Set<Tuple2<RexNode, RexNode>> constraint
+        ImmutableMap<RelType.VarType, ImmutableSet<ProductType>> typeConstraints,
+        ImmutableSeq<SynthesisConstraint> synthConstraints
 
 ) {
 
     /**
      * Return an empty matching environment
+     *
      * @return empty matching environment
      */
     public static MatchEnv empty() {
-        return new MatchEnv(Seq.empty(), Map.empty(), Set.empty());
+        return new MatchEnv(ImmutableMap.empty(), ImmutableSeq.empty());
     }
 
     /**
-     * Update the column reference of the environment, which occurs when a pattern is successfully matched with a target
-     * @param result the column references (e.g. [{1, 2}, {0}] implies column 1 in pattern is column 0 in target)
-     * @return the updated matching environment
+     * Get the output column mapping between the pattern node and the target node
+     *
+     * @return the column mapping
      */
-    public MatchEnv elevate(Seq<Set<Integer>> result) {
-        return new MatchEnv(result, declaration, constraint);
+    public FieldReference outputReference() {
+        return synthConstraints.last().reference();
     }
 
-    /**
-     * Declare or verify a function declaration, which should occur in expression matching
-     * @param operator the function identifier
-     * @param result the function return type
-     * @param operands the function operand types
-     * @return the resulting environment, which contains the given function signature if there is no conflict
-     */
-    public Result<MatchEnv, String> declare(SqlOperator operator, RelDataType result, Seq<RelDataType> operands) {
-        return switch (declaration.getOption(operator)) {
-            case Option<Tuple2<RelDataType, Seq<RelDataType>>> registered && registered.isDefined() && (
-                    result != registered.get().component1() || operands.zip(registered.get().component2()).anyMatch(pair -> pair.component1() != pair.component2())) ->
-                Result.err(String.format("Function signature mismatch for %s", operator.toString()));
-            default -> Result.ok(new MatchEnv(reference, ImmutableMap.from(declaration).putted(operator, Tuple.of(result, operands)), constraint));
+    public Result<MatchEnv, String> rexTypeInfer(RexNode pattern, Seq<RexNode> targets) {
+        return switch (pattern) {
+            case RexCall call when call.getOperator() instanceof RuleBuilder.CosetteFunction operator ->
+                    switch (operator.getReturnType()) {
+                        case RelType.VarType varType ->
+                                Result.ok(updateTypeConstraint(varType, Seq.from(targets).map(RexNode::getType)));
+                        case RelType.BaseType baseType -> targets.map(RexNode::getType)
+                                .allMatch(target -> target.getSqlTypeName() == baseType.getSqlTypeName() && target.isNullable() == baseType.isNullable()) ?
+                                Result.ok(this) :
+                                Result.err(String.format("Type %s in pattern cannot be matched with targets", baseType.getSqlTypeName().getName()));
+                    };
+            case RexCall call when Seq.from(targets).allMatch(target -> target instanceof RexCall) -> Result.err("???");
+            default -> Result.err(String.format("%s is not supported in pattern", pattern.getClass().getName()));
         };
-    }
-
-    /**
-     * Declare a constraint that should be satisfied
-     * @param pattern the pattern node
-     * @param target the target node
-     * @return the updated matching environment
-     */
-    public MatchEnv restrict(RexNode pattern, RexNode target) {
-        return new MatchEnv(reference, declaration, ImmutableSet.from(constraint).added(Tuple.of(pattern, target)));
-    }
-
-    /**
-     * Join two matching environments, which is helpful in join operations
-     * @param other the other environment to be joined
-     * @return the merged matching environment
-     */
-    public Result<MatchEnv, String> join(MatchEnv other) {
-        return Seq.from(other.declaration().iterator()).foldLeft(
-                Result.<MatchEnv, String>ok(this), (register, decl) -> register.flatMap(env -> env.declare(decl.component1(), decl.component2().component1(), decl.component2().component2()))
-        ).map(env -> new MatchEnv(reference.appendedAll(other.reference), env.declaration, constraint));
     }
 
     public Result<MatchEnv, String> verify() {
         return Result.err("Have not implemented verification.");
+    }
+
+    /**
+     * Update the type constraint
+     *
+     * @param variable the spotted variable type
+     * @param unfold   the corresponding product type
+     * @return a new matching environment containing this type constraint
+     */
+    private MatchEnv updateTypeConstraint(RelType.VarType variable, Seq<RelDataType> unfold) {
+        return new MatchEnv(typeConstraints.putted(variable, typeConstraints.getOrDefault(variable, ImmutableSet.empty()).added(new ProductType(unfold.toImmutableSeq()))), synthConstraints);
+    }
+
+    public record FieldReference(ImmutableSeq<ImmutableSet<Integer>> correspondence) {
+    }
+
+    public record ProductType(ImmutableSeq<RelDataType> elements) {
+    }
+
+    public record SynthesisConstraint(RexNode pattern, RexNode target, FieldReference reference) {
     }
 
 }

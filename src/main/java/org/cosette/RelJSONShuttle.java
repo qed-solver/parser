@@ -149,9 +149,9 @@ public record RelJSONShuttle(Env env) {
                 var result = object(Map.of("union", array(Seq.from(union.getInputs()).map(this::visit))));
                 yield union.all ? result : object(Map.of("distinct", result));
             }
-            case LogicalIntersect intersect && !intersect.all ->
+            case LogicalIntersect intersect when!intersect.all ->
                     object(Map.of("intersect", array(Seq.from(intersect.getInputs()).map(this::visit))));
-            case LogicalMinus minus && !minus.all ->
+            case LogicalMinus minus when!minus.all ->
                     object(Map.of("except", array(Seq.from(minus.getInputs()).map(this::visit))));
             case LogicalSort sort -> {
                 var types = Seq.from(sort.getInput().getRowType().getFieldList())

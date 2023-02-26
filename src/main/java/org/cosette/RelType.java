@@ -18,8 +18,8 @@ public sealed interface RelType extends RelDataType {
         }
 
         /*
-        * Notice: All virtual types will be translated to integer for prover
-        **/
+         * Notice: All virtual types will be translated to integer for prover
+         **/
         @Override
         protected void generateTypeString(StringBuilder sb, boolean withDetail) {
             sb.append("INTEGER");
