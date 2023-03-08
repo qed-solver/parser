@@ -1,14 +1,19 @@
 package org.cosette;
 
 import kala.collection.Seq;
+import kala.collection.Set;
+import kala.collection.mutable.MutableSet;
 import kala.control.Result;
 import kala.tuple.Tuple;
+import kala.tuple.Tuple3;
 import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.logical.LogicalFilter;
 import org.apache.calcite.rel.logical.LogicalProject;
 import org.apache.calcite.rel.logical.LogicalTableScan;
 import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.tools.Frameworks;
+
+import java.util.stream.IntStream;
 
 public record RelMatcher() {
 
@@ -19,14 +24,19 @@ public record RelMatcher() {
     private static Result<MatchEnv, String> relMatch(RelNode pattern, RelNode target) {
         return switch (pattern) {
             case LogicalTableScan scan -> {
-                yield MatchEnv.empty().verify();
+                // (Typename, nullability, uniqueness)
+                Set<Tuple3<SqlTypeName, Boolean, Boolean>> witness = MutableSet.create();
+                // TODO: Properly handel column uniqueness
+                yield Result.err("Implementation in progress");
             }
             case LogicalFilter filter when target instanceof LogicalFilter node ->
                     relMatch(filter.getInput(), node.getInput()).flatMap(inputEnv ->
-                            inputEnv.rexTypeInfer(filter.getCondition(), Seq.of(node.getCondition())));
+                            inputEnv.assertConstraint(filter.getCondition(), Seq.of(node.getCondition())));
             case LogicalProject project when target instanceof LogicalProject node ->
                     relMatch(project.getInput(), node.getInput()).flatMap(inputEnv -> switch (project.getRowType().getFieldCount()) {
-                        case 1 -> inputEnv.rexTypeInfer(project.getProjects().get(0), Seq.from(node.getProjects()));
+                        case 1 ->
+                                inputEnv.assertConstraint(project.getProjects().get(0), Seq.from(node.getProjects())).map(env ->
+                                        env.updateFieldReference(Seq.of(Set.from(IntStream.range(0, node.getProjects().size()).iterator()))));
                         default -> Result.err("TODO: Please extend project field matching mechanism");
                     });
             default ->
