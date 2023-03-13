@@ -77,8 +77,39 @@ public class Main {
             parser.dumpOuput(outputPath);
             scanner.close();
         } catch (Exception e) {
-            System.err.println("In file:\n\t" + filename);
-            System.err.println(e.toString().trim() + "\n");
+            if (e instanceof org.apache.calcite.sql.validate.SqlValidatorException) {
+                String msg = e.getMessage();
+                Pattern p1 = Pattern.compile("Expression '([\\w_.]+)' is not being grouped");
+                Matcher m1 = p1.matcher(msg);
+                Pattern p2 = Pattern.compile("Column '(\\w+)' not found in any table");
+                Matcher m2 = p2.matcher(msg);
+
+                // Pattern p3 = Pattern.compile("");
+                String errorMessage = null;
+
+                if (m1.matches()) {
+                    errorMessage = "Used a GROUP BY without an aggregate";
+                } else if (m2.matches) {
+                    errorMessage = "Referenced an alias before creating it";
+                }
+            }
+            // In this implementation, we wish to append to a file
+            File error = new File(outputPath + ".error");
+            FileWriter fr;
+            if (error.exists()) {
+                fr = new FileWriter(error, true);
+            } else {
+                fr = new FileWriter(error);
+            }
+
+            // } else if (e instanceof org.apache.calcite.runtime.CalciteContextException) {
+
+            // }
+
+
+            // System.err.println("In file:\n\t" + filename);
+            // System.err.println(e.toString().trim() + "\n");
+
         }
     }
 
