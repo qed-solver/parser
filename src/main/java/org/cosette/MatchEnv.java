@@ -1,5 +1,7 @@
 package org.cosette;
 
+import io.github.cvc5.api.Solver;
+import io.github.cvc5.api.Term;
 import kala.collection.Seq;
 import kala.collection.Set;
 import kala.collection.immutable.ImmutableMap;
@@ -61,7 +63,13 @@ public record MatchEnv(
      * @return self if verification is successful
      */
     public Result<MatchEnv, String> verify() {
-        return Result.err("Have not implemented verification.");
+        return typeCheck().flatMap(typeDerivation -> {
+            try (var solver = new Solver()) {
+                solver.checkSynth();
+                // solver.getSynthSolution(solver.mkTerm());
+            }
+            return Result.err("Have not implemented verification.");
+        });
     }
 
     /**
@@ -109,6 +117,58 @@ public record MatchEnv(
      */
     private Result<MatchEnv, String> updateSynthConstraint(RexNode pattern, ImmutableSeq<RexNode> targets) {
         return fieldReference.map(ref -> new MatchEnv(fieldReference, typeConstraints, synthConstraints.appended(new SynthesisConstraint(pattern, targets, ref))));
+    }
+
+    /**
+     * Type check the given constraints
+     * @return the result mapping if the type check is successful
+     */
+    private Result<ImmutableMap<RelType.VarType, ProductType>, String> typeCheck() {
+        // TODO: Improve type checking capabilities
+        var proceed = true;
+        var derivation = ImmutableMap.<RelType.VarType, ProductType>empty();
+        while (proceed) {
+            proceed = false;
+            for (var vt: typeConstraints.keysView()) {
+                var opts = typeConstraints.get(vt);
+                for (var c: opts) {
+                    var pt = typeExpand(c, derivation);
+                    if (!pt.elements.anyMatch(t -> t instanceof RelType.VarType)) {
+                        if (!derivation.containsKey(vt)) {
+                            derivation = derivation.putted(vt, pt);
+                            proceed = true;
+                        }
+                    }
+                }
+            }
+        }
+        if (!derivation.keysView().containsAll(typeConstraints.keysView())) {
+            return Result.err("Cannot type check with insufficient type constraints");
+        }
+        return Result.ok(derivation);
+    }
+
+    /**
+     * Expand product type using information in the derivation
+     * @param product the given product type
+     * @param derivation the information about variable types
+     * @return the expanded product type
+     */
+    private ProductType typeExpand(ProductType product, ImmutableMap<RelType.VarType, ProductType> derivation) {
+        return new ProductType(product.elements.foldLeft(ImmutableSeq.empty(), (p, e) -> switch (e) {
+            case RelType.VarType v when derivation.containsKey(v) -> p.appendedAll(derivation.get(v).elements);
+            default -> p.appended(e);
+        }));
+    }
+
+    /**
+     * Translate the constraints to CVC5 SyGuS description
+     * @param typeDerivation
+     * @return
+     */
+    private boolean translate(ImmutableMap<RelType.VarType, ProductType> typeDerivation) {
+
+        return false;
     }
 
 
