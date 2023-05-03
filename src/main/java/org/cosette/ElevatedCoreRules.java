@@ -224,6 +224,17 @@ public class ElevatedCoreRules {
         return Tuple.of(before, after);
     }
 
+    public static Tuple2<RelNode, RelNode> projectReduction() {
+        var builder = RuleBuilder.create();
+        var tableName = builder.sourceSimpleTables(Seq.of(0)).get(0);
+        builder.scan(tableName);
+        builder.project(builder.fields());
+        var before = builder.build();
+        builder.scan(tableName);
+        var after = builder.build();
+        return Tuple.of(before, after);
+    }
+
     public static Tuple2<RelNode, RelNode> joinConditionPush() {
         var builder = RuleBuilder.create();
         var tableNames = builder.sourceSimpleTables(Seq.of(1, 2));
@@ -337,72 +348,72 @@ public class ElevatedCoreRules {
         return Tuple.of(before, after);
     }
 
-    public static Seq<Tuple2<RelNode, RelNode>> joinProjectBothTranspose() {
-        return Seq.of(JoinRelType.INNER, JoinRelType.FULL).map(joinType -> {
-            var builder = RuleBuilder.create();
-            var tableNames = builder.sourceSimpleTables(Seq.of(1, 2));
-            builder.scan(tableNames.get(0));
-            var projectA = builder.genericProjectionOp("projectA", new RelType.VarType("PROJECT_A", true));
-            builder.project(builder.call(projectA, builder.fields()));
-            builder.scan(tableNames.get(1));
-            var projectB = builder.genericProjectionOp("projectB", new RelType.VarType("PROJECT_B", true));
-            builder.project(builder.call(projectB, builder.fields()));
-            var join = builder.genericPredicateOp("join", joinType == JoinRelType.INNER);
-            builder.join(joinType, builder.call(join, builder.joinFields()));
-            var before = builder.build();
-            tableNames.forEach(builder::scan);
-            builder.join(joinType, builder.call(join,
-                    builder.call(projectA, builder.fields(2, 0)),
-                    builder.call(projectB, builder.fields(2, 1))
-            ));
-            builder.project(builder.call(projectA, builder.field(0)), builder.call(projectB, builder.field(1)));
-            var after = builder.build();
-            return Tuple.of(before, after);
-        });
-    }
+//    public static Seq<Tuple2<RelNode, RelNode>> joinProjectBothTranspose() {
+//        return Seq.of(JoinRelType.INNER, JoinRelType.FULL).map(joinType -> {
+//            var builder = RuleBuilder.create();
+//            var tableNames = builder.sourceSimpleTables(Seq.of(1, 2));
+//            builder.scan(tableNames.get(0));
+//            var projectA = builder.genericProjectionOp("projectA", new RelType.VarType("PROJECT_A", true));
+//            builder.project(builder.call(projectA, builder.fields()));
+//            builder.scan(tableNames.get(1));
+//            var projectB = builder.genericProjectionOp("projectB", new RelType.VarType("PROJECT_B", true));
+//            builder.project(builder.call(projectB, builder.fields()));
+//            var join = builder.genericPredicateOp("join", joinType == JoinRelType.INNER);
+//            builder.join(joinType, builder.call(join, builder.joinFields()));
+//            var before = builder.build();
+//            tableNames.forEach(builder::scan);
+//            builder.join(joinType, builder.call(join,
+//                    builder.call(projectA, builder.fields(2, 0)),
+//                    builder.call(projectB, builder.fields(2, 1))
+//            ));
+//            builder.project(builder.call(projectA, builder.field(0)), builder.call(projectB, builder.field(1)));
+//            var after = builder.build();
+//            return Tuple.of(before, after);
+//        });
+//    }
 
-    public static Seq<Tuple2<RelNode, RelNode>> joinProjectLeftTranspose() {
-        return Seq.of(JoinRelType.INNER, JoinRelType.FULL).map(joinType -> {
-            var builder = RuleBuilder.create();
-            var tableNames = builder.sourceSimpleTables(Seq.of(1, 2));
-            builder.scan(tableNames.get(0));
-            var project = builder.genericProjectionOp("project", new RelType.VarType("PROJECT", true));
-            builder.project(builder.call(project, builder.fields()));
-            builder.scan(tableNames.get(1));
-            var join = builder.genericPredicateOp("join", joinType == JoinRelType.INNER);
-            builder.join(joinType, builder.call(join, builder.joinFields()));
-            var before = builder.build();
-            tableNames.forEach(builder::scan);
-            builder.join(joinType, builder.call(join,
-                    builder.call(project, builder.fields(2, 0)),
-                    builder.field(2, 1, 0)
-            ));
-            builder.project(builder.call(project, builder.field(0)), builder.field(1));
-            var after = builder.build();
-            return Tuple.of(before, after);
-        });
-    }
+//    public static Seq<Tuple2<RelNode, RelNode>> joinProjectLeftTranspose() {
+//        return Seq.of(JoinRelType.INNER, JoinRelType.FULL).map(joinType -> {
+//            var builder = RuleBuilder.create();
+//            var tableNames = builder.sourceSimpleTables(Seq.of(1, 2));
+//            builder.scan(tableNames.get(0));
+//            var project = builder.genericProjectionOp("project", new RelType.VarType("PROJECT", true));
+//            builder.project(builder.call(project, builder.fields()));
+//            builder.scan(tableNames.get(1));
+//            var join = builder.genericPredicateOp("join", joinType == JoinRelType.INNER);
+//            builder.join(joinType, builder.call(join, builder.joinFields()));
+//            var before = builder.build();
+//            tableNames.forEach(builder::scan);
+//            builder.join(joinType, builder.call(join,
+//                    builder.call(project, builder.fields(2, 0)),
+//                    builder.field(2, 1, 0)
+//            ));
+//            builder.project(builder.call(project, builder.field(0)), builder.field(1));
+//            var after = builder.build();
+//            return Tuple.of(before, after);
+//        });
+//    }
 
-    public static Seq<Tuple2<RelNode, RelNode>> joinProjectRightTranspose() {
-        return Seq.of(JoinRelType.INNER, JoinRelType.FULL).map(joinType -> {
-            var builder = RuleBuilder.create();
-            var tableNames = builder.sourceSimpleTables(Seq.of(1, 2));
-            tableNames.forEach(builder::scan);
-            var project = builder.genericProjectionOp("project", new RelType.VarType("PROJECT", true));
-            builder.project(builder.call(project, builder.fields()));
-            var join = builder.genericPredicateOp("join", joinType == JoinRelType.INNER);
-            builder.join(joinType, builder.call(join, builder.joinFields()));
-            var before = builder.build();
-            tableNames.forEach(builder::scan);
-            builder.join(joinType, builder.call(join,
-                    builder.field(2, 0, 0),
-                    builder.call(project, builder.fields(2, 1))
-            ));
-            builder.project(builder.field(0), builder.call(project, builder.field(1)));
-            var after = builder.build();
-            return Tuple.of(before, after);
-        });
-    }
+//    public static Seq<Tuple2<RelNode, RelNode>> joinProjectRightTranspose() {
+//        return Seq.of(JoinRelType.INNER, JoinRelType.FULL).map(joinType -> {
+//            var builder = RuleBuilder.create();
+//            var tableNames = builder.sourceSimpleTables(Seq.of(1, 2));
+//            tableNames.forEach(builder::scan);
+//            var project = builder.genericProjectionOp("project", new RelType.VarType("PROJECT", true));
+//            builder.project(builder.call(project, builder.fields()));
+//            var join = builder.genericPredicateOp("join", joinType == JoinRelType.INNER);
+//            builder.join(joinType, builder.call(join, builder.joinFields()));
+//            var before = builder.build();
+//            tableNames.forEach(builder::scan);
+//            builder.join(joinType, builder.call(join,
+//                    builder.field(2, 0, 0),
+//                    builder.call(project, builder.fields(2, 1))
+//            ));
+//            builder.project(builder.field(0), builder.call(project, builder.field(1)));
+//            var after = builder.build();
+//            return Tuple.of(before, after);
+//        });
+//    }
 
     public static Seq<Tuple2<RelNode, RelNode>> joinPushExpressions() {
         return joinTypes.map(joinType -> {
@@ -468,7 +479,7 @@ public class ElevatedCoreRules {
     }
 
     public static Seq<Tuple2<RelNode, RelNode>> joinLeftUnionTranspose() {
-        return joinTypes.map(joinType -> {
+        return Seq.of(JoinRelType.INNER, JoinRelType.LEFT).map(joinType -> {
             var builder = RuleBuilder.create();
             var tableNames = builder.sourceSimpleTables(Seq.of(1, 1, 2));
             builder.scan(tableNames.get(0)).scan(tableNames.get(1)).union(true);
@@ -487,7 +498,7 @@ public class ElevatedCoreRules {
     }
 
     public static Seq<Tuple2<RelNode, RelNode>> joinRightUnionTranspose() {
-        return joinTypes.map(joinType -> {
+        return Seq.of(JoinRelType.INNER, JoinRelType.RIGHT).map(joinType -> {
             var builder = RuleBuilder.create();
             var tableNames = builder.sourceSimpleTables(Seq.of(1, 2, 2));
             tableNames.forEach(builder::scan);
@@ -539,25 +550,39 @@ public class ElevatedCoreRules {
         return Tuple.of(before, after);
     }
 
-    public static Seq<Tuple2<RelNode, RelNode>> semiJoinJoinTranspose() {
-        return joinTypes.map(joinType -> {
+    public static Seq<Tuple2<RelNode, RelNode>> semiJoinJoinLeftTranspose() {
+        return Seq.of(JoinRelType.INNER, JoinRelType.LEFT).map(joinType -> {
             var builder = RuleBuilder.create();
             var tableNames = builder.sourceSimpleTables(Seq.of(1, 2, 3));
             builder.scan(tableNames.get(0)).scan(tableNames.get(1));
             var join = builder.genericPredicateOp("join", true);
             builder.join(joinType, builder.call(join, builder.joinFields()));
             builder.scan(tableNames.get(2));
-            var semiAC = builder.genericPredicateOp("semiAC", true);
-            var semiBC = builder.genericPredicateOp("semiBC", true);
-            builder.semiJoin(builder.call(SqlStdOperatorTable.AND,
-                    builder.call(semiAC, builder.field(2, 0, 0), builder.field(2, 1, 0)),
-                    builder.call(semiBC, builder.field(2, 0, 1), builder.field(2, 1, 0))
-            ));
+            var semi = builder.genericPredicateOp("semi", true);
+            builder.semiJoin(builder.call(semi, builder.field(2, 0, 0), builder.field(2, 1, 0)));
             var before = builder.build();
             builder.scan(tableNames.get(0)).scan(tableNames.get(2));
-            builder.semiJoin(builder.call(semiAC, builder.joinFields()));
-            builder.scan(tableNames.get(1)).scan(tableNames.get(2));
-            builder.semiJoin(builder.call(semiBC, builder.joinFields()));
+            builder.semiJoin(builder.call(semi, builder.joinFields()));
+            builder.scan(tableNames.get(1));
+            builder.join(joinType, builder.call(join, builder.joinFields()));
+            var after = builder.build();
+            return Tuple.of(before, after);
+        });
+    }
+
+    public static Seq<Tuple2<RelNode, RelNode>> semiJoinJoinRightTranspose() {
+        return Seq.of(JoinRelType.INNER, JoinRelType.RIGHT).map(joinType -> {
+            var builder = RuleBuilder.create();
+            var tableNames = builder.sourceSimpleTables(Seq.of(1, 2, 3));
+            builder.scan(tableNames.get(0)).scan(tableNames.get(1));
+            var join = builder.genericPredicateOp("join", true);
+            builder.join(joinType, builder.call(join, builder.joinFields()));
+            builder.scan(tableNames.get(2));
+            var semi = builder.genericPredicateOp("semi", true);
+            builder.semiJoin(builder.call(semi, builder.field(2, 0, 1), builder.field(2, 1, 0)));
+            var before = builder.build();
+            builder.scan(tableNames.get(0)).scan(tableNames.get(1)).scan(tableNames.get(2));
+            builder.semiJoin(builder.call(semi, builder.joinFields()));
             builder.join(joinType, builder.call(join, builder.joinFields()));
             var after = builder.build();
             return Tuple.of(before, after);
