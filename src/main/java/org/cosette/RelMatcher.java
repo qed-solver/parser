@@ -1,5 +1,9 @@
 package org.cosette;
 
+import io.github.cvc5.Kind;
+import io.github.cvc5.Solver;
+import io.github.cvc5.Sort;
+import io.github.cvc5.Term;
 import kala.collection.Seq;
 import kala.collection.Set;
 import kala.collection.immutable.ImmutableSet;
@@ -93,27 +97,29 @@ public record RelMatcher() {
     }
 
     public static void main(String[] args) throws Exception {
-        // Get rule
-        var rule = ElevatedCoreRules.filterProjectTranspose();
-        var pattern = rule.component1();
-        var transform = rule.component2();
-        // Create table schema and query
-        var schema = Frameworks.createRootSchema(true);
-        var table = RuleBuilder.create().createCosetteTable(Seq.of(
-                Tuple.of(new RelType.BaseType(SqlTypeName.INTEGER, true), true),
-                Tuple.of(new RelType.BaseType(SqlTypeName.VARCHAR, true), false)
-        ));
-        schema.add(table.getName(), table);
-        var planner = new RawPlanner(schema);
-        var target = planner.rel(planner.parse(String.format(
-                "SELECT %s FROM %s WHERE %s > 1", table.getColumnNames().get(0), table.getName(), table.getColumnNames().get(0)
-        )));
-        System.out.println(pattern.explain());
-        System.out.println(transform.explain());
-        System.out.println(target.explain());
-        var mapping = RelMatcher.check(pattern, target);
-        System.out.println(mapping.get());
+        var solver = new Solver();
+        solver.setOption("produce-models", "true");
+        solver.setOption("produce-unsat-cores", "true");
+        solver.setLogic("ALL");
+        var intSort = solver.getIntegerSort();
+        var x = solver.mkConst(intSort, "x");
+        var y = solver.mkConst(intSort, "y");
+        var xpy = solver.mkTerm(Kind.ADD, x, y);
+        var three = solver.mkInteger(3);
+        var xlt = solver.mkTerm(Kind.LT, x, three);
+        solver.assertFormula(xlt);
+        var ylt = solver.mkTerm(Kind.LT, y, three);
+        solver.assertFormula(ylt);
+        var six = solver.mkInteger(6);
+        var ses = solver.mkTerm(Kind.EQUAL, xpy, six);
+        solver.assertFormula(ses);
+        var res = solver.checkSat();
+        System.out.println(res);
+        if (res.isUnsat()) {
+            for (var t : solver.getUnsatCore()) {
+                System.out.println(t);
+            }
+        }
     }
-
 }
 

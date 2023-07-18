@@ -1,7 +1,5 @@
 package org.cosette;
 
-import io.github.cvc5.api.Solver;
-import io.github.cvc5.api.Term;
 import kala.collection.Seq;
 import kala.collection.Set;
 import kala.collection.immutable.ImmutableMap;
@@ -64,10 +62,6 @@ public record MatchEnv(
      */
     public Result<MatchEnv, String> verify() {
         return typeCheck().flatMap(typeDerivation -> {
-            try (var solver = new Solver()) {
-                solver.checkSynth();
-                // solver.getSynthSolution(solver.mkTerm());
-            }
             return Result.err("Have not implemented verification.");
         });
     }

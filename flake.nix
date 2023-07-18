@@ -51,7 +51,8 @@
             jdk
             jetbrains.idea-community
           ];
-          CVC5_JAVA="${cvc5-java}/share/java/${cvc5-pname}.jar";
+          CVC5_JAVA = "${cvc5-java}/share/java/${cvc5-pname}.jar";
+          LD_LIBRARY_PATH = pkgs.lib.strings.makeLibraryPath [ cvc5-java ];
         };
       });
 }
