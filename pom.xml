@@ -89,9 +89,11 @@
             <version>0.64.0</version>
         </dependency>
         <dependency>
-            <groupId>io.github.p-org.solvers</groupId>
+            <groupId>io.github</groupId>
             <artifactId>cvc5</artifactId>
-            <version>0.0.7-v5</version>
+            <version>1.0.5</version>
+            <scope>system</scope>
+            <systemPath>${env.CVC5_JAVA}</systemPath>
         </dependency>
     </dependencies>
 </project>

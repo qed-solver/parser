@@ -12,9 +12,9 @@
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = nixpkgs.legacyPackages.${system};
+        cvc5-pname = "cvc5-1.0.5";
         cvc5-java = pkgs.stdenv.mkDerivation {
-          name = "cvc5-java";
-          version = "unstable";
+          name = cvc5-pname;
           src = cvc5-src;
 
           nativeBuildInputs = with pkgs; [ pkg-config cmake flex ];
@@ -51,6 +51,7 @@
             jdk
             jetbrains.idea-community
           ];
+          CVC5_JAVA="${cvc5-java}/share/java/${cvc5-pname}.jar";
         };
       });
 }
