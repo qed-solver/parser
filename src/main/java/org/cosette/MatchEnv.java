@@ -12,27 +12,16 @@ import org.apache.calcite.rex.RexNode;
 
 /**
  * A matching environment should contain all matching information between the pattern node and the target node
- * >>> WARNING: Must have initial FieldReference, which should be introduced by variable table scan in pattern node <<<
  *
  * @param fieldReference   the output column mapping between the pattern node and the target node
  * @param typeConstraints  the mapping between existing variable types and product types
  * @param synthConstraints the sequence of constraints for SyGuS solver ordered by point of introduction
  */
 public record MatchEnv(
-        Result<FieldReference, String> fieldReference,
+        FieldReference fieldReference,
         ImmutableMap<RelType.VarType, ImmutableSet<ProductType>> typeConstraints,
         ImmutableSeq<SynthesisConstraint> synthConstraints
-
 ) {
-
-    /**
-     * Return an empty matching environment
-     *
-     * @return empty matching environment
-     */
-    public static MatchEnv empty() {
-        return new MatchEnv(Result.err("Undefined field reference"), ImmutableMap.empty(), ImmutableSeq.empty());
-    }
 
     /**
      * Update the field reference
@@ -41,7 +30,7 @@ public record MatchEnv(
      * @return a new matching environment with updated field reference
      */
     public MatchEnv updateFieldReference(Seq<Set<Integer>> mapping) {
-        return new MatchEnv(Result.ok(new FieldReference(mapping.map(ImmutableSet::from))), typeConstraints, synthConstraints);
+        return new MatchEnv(new FieldReference(mapping.map(ImmutableSet::from)), typeConstraints, synthConstraints);
     }
 
     /**
@@ -52,7 +41,7 @@ public record MatchEnv(
      * @return the updated matching environment if successful
      */
     public Result<MatchEnv, String> assertConstraint(RexNode pattern, Seq<RexNode> targets) {
-        return rexTypeInfer(pattern, targets).flatMap(env -> env.updateSynthConstraint(pattern, targets.toImmutableSeq()));
+        return rexTypeInfer(pattern, targets).map(env -> env.updateSynthConstraint(pattern, targets.toImmutableSeq()));
     }
 
     /**
@@ -79,10 +68,11 @@ public record MatchEnv(
                     switch (operator.getReturnType()) {
                         case RelType.VarType varType ->
                                 Result.ok(updateTypeConstraint(varType, Seq.from(targets).map(RexNode::getType)));
-                        case RelType.BaseType baseType -> targets.map(RexNode::getType)
-                                .allMatch(target -> target.getSqlTypeName() == baseType.getSqlTypeName() && target.isNullable() == baseType.isNullable()) ?
-                                Result.ok(this) :
-                                Result.err(String.format("Type %s in pattern cannot be matched with targets", baseType.getSqlTypeName().getName()));
+                        case RelType.BaseType baseType when targets.map(RexNode::getType)
+                                .allMatch(target -> target.getSqlTypeName() == baseType.getSqlTypeName() && target.isNullable() == baseType.isNullable()) ->
+                                Result.ok(this);
+                        default ->
+                                Result.err(String.format("Type %s in pattern cannot be matched with targets", operator.getReturnType()));
                     };
             case RexCall call when Seq.from(targets).allMatch(target -> target instanceof RexCall node && node.getOperator() == call.getOperator() && node.getOperands().size() == call.getOperands().size()) ->
                     Seq.from(call.getOperands()).foldLeftIndexed(Result.<MatchEnv, String>ok(this), (i, res, p) ->
@@ -109,8 +99,8 @@ public record MatchEnv(
      * @param targets the nodes to be matched
      * @return a new matching environment containing this synth constraint
      */
-    private Result<MatchEnv, String> updateSynthConstraint(RexNode pattern, ImmutableSeq<RexNode> targets) {
-        return fieldReference.map(ref -> new MatchEnv(fieldReference, typeConstraints, synthConstraints.appended(new SynthesisConstraint(pattern, targets, ref))));
+    private MatchEnv updateSynthConstraint(RexNode pattern, ImmutableSeq<RexNode> targets) {
+        return new MatchEnv(fieldReference, typeConstraints, synthConstraints.appended(new SynthesisConstraint(pattern, targets, fieldReference)));
     }
 
     /**
@@ -161,7 +151,6 @@ public record MatchEnv(
      * @return
      */
     private boolean translate(ImmutableMap<RelType.VarType, ProductType> typeDerivation) {
-
         return false;
     }
 
