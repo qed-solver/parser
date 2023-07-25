@@ -1,5 +1,7 @@
 package org.cosette;
 
+import io.github.cvc5.Solver;
+import io.github.cvc5.Term;
 import kala.collection.Seq;
 import kala.collection.Set;
 import kala.collection.immutable.ImmutableMap;
@@ -140,18 +142,34 @@ public record MatchEnv(
      */
     private ProductType typeExpand(ProductType product, ImmutableMap<RelType.VarType, ProductType> derivation) {
         return new ProductType(product.elements.foldLeft(ImmutableSeq.empty(), (p, e) -> switch (e) {
-            case RelType.VarType v when derivation.containsKey(v) -> p.appendedAll(derivation.get(v).elements);
+            case RelType.VarType v when derivation.containsKey(v) -> p.appendedAll(typeExpand(derivation.get(v), derivation).elements);
             default -> p.appended(e);
         }));
     }
 
     /**
-     * Translate the constraints to CVC5 SyGuS description
-     * @param typeDerivation
-     * @return
+     * Encode the constraints to CVC5 SyGuS description
+     *
+     * @param typeDerivation the derived types
+     * @return a solver containing the encoded constraints
      */
-    private boolean translate(ImmutableMap<RelType.VarType, ProductType> typeDerivation) {
-        return false;
+    private Result<Solver, String> encode(ImmutableMap<RelType.VarType, ProductType> typeDerivation) {
+        try {
+            var solver = new Solver();
+            solver.setOption("produce-models", "true");
+            solver.setOption("sygus", "true");
+            solver.setLogic("ALL");
+            for (var constraint : synthConstraints) {
+
+            }
+            return Result.ok(solver);
+        } catch (Exception e) {
+            return Result.err(e.toString());
+        }
+    }
+
+    private Term translate(RexNode rexNode, ImmutableMap<RelType.VarType, ProductType> typeDerivation) {
+        return null;
     }
 
 

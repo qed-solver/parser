@@ -2,6 +2,8 @@ package org.cosette;
 
 import io.github.cvc5.Kind;
 import io.github.cvc5.Solver;
+import io.github.cvc5.Sort;
+import io.github.cvc5.Term;
 import kala.collection.Seq;
 import kala.collection.Set;
 import kala.collection.immutable.ImmutableMap;
@@ -74,26 +76,18 @@ public record RelMatcher() {
     public static void main(String[] args) throws Exception {
         var solver = new Solver();
         solver.setOption("produce-models", "true");
-        solver.setOption("produce-unsat-cores", "true");
+        solver.setOption("sygus", "true");
         solver.setLogic("ALL");
-        var intSort = solver.getIntegerSort();
-        var x = solver.mkConst(intSort, "x");
-        var y = solver.mkConst(intSort, "y");
-        var xpy = solver.mkTerm(Kind.ADD, x, y);
-        var three = solver.mkInteger(3);
-        var xlt = solver.mkTerm(Kind.LT, x, three);
-        solver.assertFormula(xlt);
-        var ylt = solver.mkTerm(Kind.LT, y, three);
-        solver.assertFormula(ylt);
-        var six = solver.mkInteger(6);
-        var ses = solver.mkTerm(Kind.EQUAL, xpy, six);
-        solver.assertFormula(ses);
-        var res = solver.checkSat();
-        System.out.println(res);
-        if (res.isUnsat()) {
-            for (var t : solver.getUnsatCore()) {
-                System.out.println(t);
-            }
+        var i = solver.mkVar(solver.getIntegerSort(), "i");
+        var f = solver.synthFun("f", new Term[]{i}, solver.getIntegerSort());
+        var x = solver.declareSygusVar("x", solver.getIntegerSort());
+        var fc = solver.mkTerm(Kind.APPLY_UF, f, x);
+        var constraint = solver.mkTerm(Kind.GT, fc, x);
+        solver.addSygusConstraint(constraint);
+        var res = solver.checkSynth();
+        if (res.hasSolution()) {
+            var synth = solver.getSynthSolution(f);
+            System.out.println(synth);
         }
     }
 }
