@@ -3,7 +3,6 @@ package org.cosette;
 import io.github.cvc5.Solver;
 import io.github.cvc5.Term;
 import kala.collection.Seq;
-import kala.collection.Set;
 import kala.collection.immutable.ImmutableMap;
 import kala.collection.immutable.ImmutableSeq;
 import kala.collection.immutable.ImmutableSet;
@@ -31,8 +30,8 @@ public record MatchEnv(
      * @param mapping the given field reference
      * @return a new matching environment with updated field reference
      */
-    public MatchEnv updateFieldReference(Seq<Set<Integer>> mapping) {
-        return new MatchEnv(new FieldReference(mapping.map(ImmutableSet::from)), typeConstraints, synthConstraints);
+    public MatchEnv updateFieldReference(Seq<Seq<Integer>> mapping) {
+        return new MatchEnv(new FieldReference(mapping.map(ImmutableSeq::from)), typeConstraints, synthConstraints);
     }
 
     /**
@@ -173,7 +172,7 @@ public record MatchEnv(
     }
 
 
-    public record FieldReference(ImmutableSeq<ImmutableSet<Integer>> correspondence) {
+    public record FieldReference(ImmutableSeq<ImmutableSeq<Integer>> correspondence) {
     }
 
     public record ProductType(ImmutableSeq<RelDataType> elements) {

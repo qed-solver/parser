@@ -2,13 +2,11 @@ package org.cosette;
 
 import io.github.cvc5.Kind;
 import io.github.cvc5.Solver;
-import io.github.cvc5.Sort;
 import io.github.cvc5.Term;
 import kala.collection.Seq;
 import kala.collection.Set;
 import kala.collection.immutable.ImmutableMap;
 import kala.collection.immutable.ImmutableSeq;
-import kala.collection.immutable.ImmutableSet;
 import kala.control.Result;
 import kala.tuple.Tuple;
 import kala.tuple.Tuple2;
@@ -40,12 +38,12 @@ public record RelMatcher() {
                     yield Result.err("Unable to match duplicate (nullability, uniqueness) pairs for generic types.\n\t" + vts);
                 }
                 var tts = Seq.from(target.getRowType().getFieldList()).map(RelDataTypeField::getType).mapIndexed(Tuple::of);
-                var cms = ImmutableSeq.<ImmutableSet<Integer>>empty();
+                var cms = ImmutableSeq.<ImmutableSeq<Integer>>empty();
                 for (var t : scanPattern) {
                     var matched = tts.filter(tt -> {
                         // TODO: Derive target column uniqueness
                         return (t.component3() || !tt.component2().isNullable()) && !t.component4();
-                    }).map(Tuple2::component1).toImmutableSet();
+                    }).map(Tuple2::component1);
                     cms = cms.appended(matched);
                 }
                 yield Result.ok(new MatchEnv(new MatchEnv.FieldReference(cms), ImmutableMap.empty(), ImmutableSeq.empty()));
@@ -63,7 +61,7 @@ public record RelMatcher() {
                             return Result.ok(inputEnv.updateFieldReference(fieldPattern.map(field -> inputEnv.fieldReference().correspondence().get(((RexInputRef) field).getIndex()))));
                         } else if (fieldPattern.size() == 1) {
                             return inputEnv.assertConstraint(project.getProjects().get(0), Seq.from(node.getProjects())).map(env ->
-                                    env.updateFieldReference(Seq.of(Set.from(IntStream.range(0, node.getProjects().size()).iterator()))));
+                                    env.updateFieldReference(Seq.of(Seq.from(IntStream.range(0, node.getProjects().size()).iterator()))));
                         } else {
                             return Result.err("TODO: Implement better field matching mechanism");
                         }

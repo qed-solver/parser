@@ -75,7 +75,7 @@ public class Main {
             }
             String outputPath = FilenameUtils.getFullPath(filename) + FilenameUtils.getBaseName(filename);
             var builder = RelBuilder.create(RawPlanner.generateConfig(generator.extractSchema()));
-            parser.dumpOuput(builder, outputPath);
+            parser.dumpOutput(builder, outputPath);
             scanner.close();
         } catch (Exception e) {
             System.err.println("In file:\n\t" + filename);

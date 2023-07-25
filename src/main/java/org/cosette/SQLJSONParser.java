@@ -48,7 +48,7 @@ public class SQLJSONParser {
      *
      * @param path The given file.
      */
-    public void dumpOuput(RelBuilder builder, String path) throws IOException {
+    public void dumpOutput(RelBuilder builder, String path) throws IOException {
         var trimmer = new RelFieldTrimmer(null, builder);
         var nodes = relNodes.map(trimmer::trim);
         var scanner = new RelScanner();
