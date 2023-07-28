@@ -28,19 +28,18 @@ public class RuleBuilder extends RelBuilder {
 
     private final SchemaPlus root;
 
-    protected RuleBuilder(@Nullable Context context, RelOptCluster cluster, RelOptSchema relOptSchema, SchemaPlus schema) {
+    protected RuleBuilder(@Nullable Context context, RelOptCluster cluster, RelOptSchema relOptSchema,
+                          SchemaPlus schema) {
         super(context, cluster, relOptSchema);
         root = schema;
     }
 
     public static RuleBuilder create() {
         var emptySchema = Frameworks.createRootSchema(true);
-        var config = Frameworks.newConfigBuilder()
-                .defaultSchema(emptySchema)
-                .build();
+        var config = Frameworks.newConfigBuilder().defaultSchema(emptySchema).build();
         return Frameworks.withPrepare(config,
-                (cluster, relOptSchema, rootSchema, statement) ->
-                        new RuleBuilder(config.getContext(), cluster, relOptSchema, emptySchema));
+                (cluster, relOptSchema, rootSchema, statement) -> new RuleBuilder(config.getContext(), cluster,
+                        relOptSchema, emptySchema));
     }
 
     public RuleBuilder addTable(CosetteTable table) {
@@ -56,11 +55,11 @@ public class RuleBuilder extends RelBuilder {
      */
     public CosetteTable createCosetteTable(Seq<Tuple2<RelType, Boolean>> schema) {
         var identifier = "Table_" + TABLE_ID_GENERATOR.getAndIncrement();
-        var cols = schema.mapIndexed((idx, tuple) -> Tuple.of(identifier + "_Column_" + idx, tuple.component1(), tuple.component2()));
+        var cols = schema.mapIndexed(
+                (idx, tuple) -> Tuple.of(identifier + "_Column_" + idx, tuple.component1(), tuple.component2()));
         return new CosetteTable(identifier,
                 cols.map(tuple -> Map.entry(tuple.component1(), tuple.component2())).toImmutableMap(),
-                Set.from(cols.filter(Tuple3::component3).map(tuple -> Set.of(tuple.component1()))),
-                Set.of());
+                Set.from(cols.filter(Tuple3::component3).map(tuple -> Set.of(tuple.component1()))), Set.of());
     }
 
     /**

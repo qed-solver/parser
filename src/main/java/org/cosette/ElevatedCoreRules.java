@@ -20,9 +20,8 @@ import java.util.List;
 
 public class ElevatedCoreRules {
 
-    public static final Seq<JoinRelType> joinTypes = Seq.of(
-            JoinRelType.INNER, JoinRelType.LEFT, JoinRelType.RIGHT, JoinRelType.FULL
-    );
+    public static final Seq<JoinRelType> joinTypes =
+            Seq.of(JoinRelType.INNER, JoinRelType.LEFT, JoinRelType.RIGHT, JoinRelType.FULL);
 
     public static Tuple2<RelNode, RelNode> calcMerge() {
         // A Calc is equivalent to a project above a filter
@@ -39,8 +38,7 @@ public class ElevatedCoreRules {
         builder.project(builder.call(topProject, builder.fields()));
         var before = builder.build();
         builder.scan(tableName);
-        builder.filter(builder.call(SqlStdOperatorTable.AND,
-                builder.call(bottomFilter, builder.fields()),
+        builder.filter(builder.call(SqlStdOperatorTable.AND, builder.call(bottomFilter, builder.fields()),
                 builder.call(topFilter, builder.call(bottomProject, builder.fields()))));
         builder.project(builder.call(topProject, builder.call(bottomProject, builder.fields())));
         var after = builder.build();
@@ -57,9 +55,9 @@ public class ElevatedCoreRules {
         builder.filter(builder.call(filter, builder.fields()));
         var before = builder.build();
         tableNames.forEach(builder::scan);
-        builder.join(JoinRelType.INNER, builder.call(SqlStdOperatorTable.AND,
-                builder.call(joinCond, builder.joinFields()),
-                builder.call(filter, builder.joinFields())));
+        builder.join(JoinRelType.INNER,
+                builder.call(SqlStdOperatorTable.AND, builder.call(joinCond, builder.joinFields()),
+                        builder.call(filter, builder.joinFields())));
         var after = builder.build();
         return Tuple.of(before, after);
     }
@@ -72,7 +70,8 @@ public class ElevatedCoreRules {
         builder.scan(tableName).filter(builder.call(filter, builder.call(project, builder.fields())));
         builder.project(builder.call(project, builder.fields()));
         var before = builder.build();
-        var after = builder.scan(tableName).project(builder.call(project, builder.fields())).filter(builder.call(filter, builder.fields())).build();
+        var after = builder.scan(tableName).project(builder.call(project, builder.fields()))
+                .filter(builder.call(filter, builder.fields())).build();
         return Tuple.of(before, after);
     }
 
@@ -85,11 +84,9 @@ public class ElevatedCoreRules {
             var filterLeft = builder.genericPredicateOp("filterLeft", true);
             var filterRight = builder.genericPredicateOp("filterRight", true);
             var filterBoth = builder.genericPredicateOp("filterBoth", true);
-            builder.filter(builder.and(
-                    builder.call(filterLeft, builder.field(0)),
-                    builder.call(filterRight, builder.field(1)),
-                    builder.call(filterBoth, builder.fields())
-            ));
+            builder.filter(
+                    builder.and(builder.call(filterLeft, builder.field(0)), builder.call(filterRight, builder.field(1)),
+                            builder.call(filterBoth, builder.fields())));
             var before = builder.build();
             builder.scan(tableNames.get(0)).filter(builder.call(filterLeft, builder.fields()));
             builder.scan(tableNames.get(1)).filter(builder.call(filterRight, builder.fields()));
@@ -101,45 +98,42 @@ public class ElevatedCoreRules {
     }
 
     public static Seq<Tuple2<RelNode, RelNode>> filterSetOpTranspose() {
-        return Seq.of(SqlStdOperatorTable.EXCEPT, SqlStdOperatorTable.INTERSECT, SqlStdOperatorTable.UNION_ALL).map(kind -> {
-            var builder = RuleBuilder.create();
-            var tableNames = builder.sourceSimpleTables(Seq.of(0, 0));
-            tableNames.forEach(builder::scan);
-            if (kind == SqlStdOperatorTable.EXCEPT) {
-                builder.minus(false);
-            } else if (kind == SqlStdOperatorTable.INTERSECT) {
-                builder.intersect(false);
-            } else if (kind == SqlStdOperatorTable.UNION_ALL) {
-                builder.union(true);
-            }
-            var filter = builder.genericPredicateOp("filter", true);
-            builder.filter(builder.call(filter, builder.fields()));
-            var before = builder.build();
-            builder.scan(tableNames.get(0)).filter(builder.call(filter, builder.fields()));
-            builder.scan(tableNames.get(1)).filter(builder.call(filter, builder.fields()));
-            if (kind == SqlStdOperatorTable.EXCEPT) {
-                builder.minus(false);
-            } else if (kind == SqlStdOperatorTable.INTERSECT) {
-                builder.intersect(false);
-            } else if (kind == SqlStdOperatorTable.UNION_ALL) {
-                builder.union(true);
-            }
-            var after = builder.build();
-            return Tuple.of(before, after);
-        });
+        return Seq.of(SqlStdOperatorTable.EXCEPT, SqlStdOperatorTable.INTERSECT, SqlStdOperatorTable.UNION_ALL)
+                .map(kind -> {
+                    var builder = RuleBuilder.create();
+                    var tableNames = builder.sourceSimpleTables(Seq.of(0, 0));
+                    tableNames.forEach(builder::scan);
+                    if (kind == SqlStdOperatorTable.EXCEPT) {
+                        builder.minus(false);
+                    } else if (kind == SqlStdOperatorTable.INTERSECT) {
+                        builder.intersect(false);
+                    } else if (kind == SqlStdOperatorTable.UNION_ALL) {
+                        builder.union(true);
+                    }
+                    var filter = builder.genericPredicateOp("filter", true);
+                    builder.filter(builder.call(filter, builder.fields()));
+                    var before = builder.build();
+                    builder.scan(tableNames.get(0)).filter(builder.call(filter, builder.fields()));
+                    builder.scan(tableNames.get(1)).filter(builder.call(filter, builder.fields()));
+                    if (kind == SqlStdOperatorTable.EXCEPT) {
+                        builder.minus(false);
+                    } else if (kind == SqlStdOperatorTable.INTERSECT) {
+                        builder.intersect(false);
+                    } else if (kind == SqlStdOperatorTable.UNION_ALL) {
+                        builder.union(true);
+                    }
+                    var after = builder.build();
+                    return Tuple.of(before, after);
+                });
     }
 
     public static Seq<Tuple2<RelNode, RelNode>> projectCorrelateTranspose() {
         return Seq.of(JoinRelType.INNER, JoinRelType.LEFT).map(joinType -> {
             var builder = RuleBuilder.create();
-            var leftTable = builder.createCosetteTable(Seq.of(
-                    Tuple.of(new RelType.VarType("Type_1", true), false),
-                    Tuple.of(new RelType.VarType("Type_2", true), false)
-            ));
-            var rightTable = builder.createCosetteTable(Seq.of(
-                    Tuple.of(new RelType.VarType("Type_3", true), false),
-                    Tuple.of(new RelType.VarType("Type_4", true), false)
-            ));
+            var leftTable = builder.createCosetteTable(Seq.of(Tuple.of(new RelType.VarType("Type_1", true), false),
+                    Tuple.of(new RelType.VarType("Type_2", true), false)));
+            var rightTable = builder.createCosetteTable(Seq.of(Tuple.of(new RelType.VarType("Type_3", true), false),
+                    Tuple.of(new RelType.VarType("Type_4", true), false)));
             builder.addTable(leftTable).addTable(rightTable);
             builder.scan(leftTable.getName()).scan(rightTable.getName());
             builder.correlate(joinType, new CorrelationId(0), builder.fields(2, 0));
@@ -158,24 +152,22 @@ public class ElevatedCoreRules {
     public static Seq<Tuple2<RelNode, RelNode>> projectJoinRemove() {
         var builder = RuleBuilder.create();
         var leftTableName = builder.sourceSimpleTables(Seq.of(0));
-        var rightTable = builder.createCosetteTable(Seq.of(
-                Tuple.of(new RelType.VarType("Type_1", true), true),
-                Tuple.of(new RelType.VarType("Type_2", true), false)
-        ));
+        var rightTable = builder.createCosetteTable(Seq.of(Tuple.of(new RelType.VarType("Type_1", true), true),
+                Tuple.of(new RelType.VarType("Type_2", true), false)));
         builder.addTable(rightTable);
         builder.scan(leftTableName).scan(rightTable.getName());
         var targetMap = builder.genericProjectionOp("target", new RelType.VarType("Type_1", true));
-        builder.join(JoinRelType.LEFT, builder.call(SqlStdOperatorTable.EQUALS,
-                builder.call(targetMap, builder.fields(2, 0)),
-                builder.field(2, 1, 0)));
+        builder.join(JoinRelType.LEFT,
+                builder.call(SqlStdOperatorTable.EQUALS, builder.call(targetMap, builder.fields(2, 0)),
+                        builder.field(2, 1, 0)));
         var project = builder.genericProjectionOp("project", new RelType.VarType("PROJECT", true));
         builder.project(builder.call(project, builder.field(0)));
         var leftBefore = builder.build();
         var leftAfter = builder.scan(leftTableName).project(builder.call(project, builder.fields())).build();
         builder.scan(rightTable.getName()).scan(leftTableName);
-        builder.join(JoinRelType.RIGHT, builder.call(SqlStdOperatorTable.EQUALS,
-                builder.call(targetMap, builder.fields(2, 1)),
-                builder.field(2, 0, 0)));
+        builder.join(JoinRelType.RIGHT,
+                builder.call(SqlStdOperatorTable.EQUALS, builder.call(targetMap, builder.fields(2, 1)),
+                        builder.field(2, 0, 0)));
         builder.project(builder.call(project, builder.field(2)));
         var rightBefore = builder.build();
         var rightAfter = builder.scan(leftTableName).project(builder.call(project, builder.fields())).build();
@@ -185,14 +177,10 @@ public class ElevatedCoreRules {
     public static Seq<Tuple2<RelNode, RelNode>> projectJoinTranspose() {
         return joinTypes.map(joinType -> {
             var builder = RuleBuilder.create();
-            var leftTable = builder.createCosetteTable(Seq.of(
-                    Tuple.of(new RelType.VarType("Type_1", true), false),
-                    Tuple.of(new RelType.VarType("Type_2", true), false)
-            ));
-            var rightTable = builder.createCosetteTable(Seq.of(
-                    Tuple.of(new RelType.VarType("Type_3", true), false),
-                    Tuple.of(new RelType.VarType("Type_4", true), false)
-            ));
+            var leftTable = builder.createCosetteTable(Seq.of(Tuple.of(new RelType.VarType("Type_1", true), false),
+                    Tuple.of(new RelType.VarType("Type_2", true), false)));
+            var rightTable = builder.createCosetteTable(Seq.of(Tuple.of(new RelType.VarType("Type_3", true), false),
+                    Tuple.of(new RelType.VarType("Type_4", true), false)));
             builder.addTable(leftTable).addTable(rightTable);
             builder.scan(leftTable.getName()).scan(rightTable.getName());
             var joinCond = builder.genericPredicateOp("join", true);
@@ -242,11 +230,9 @@ public class ElevatedCoreRules {
         var joinLeft = builder.genericPredicateOp("joinLeft", true);
         var joinRight = builder.genericPredicateOp("joinRight", true);
         var joinBoth = builder.genericPredicateOp("joinBoth", true);
-        var joinCond = builder.and(
-                builder.call(joinLeft, builder.fields(2, 0)),
-                builder.call(joinRight, builder.fields(2, 1)),
-                builder.call(joinBoth, builder.joinFields())
-        );
+        var joinCond =
+                builder.and(builder.call(joinLeft, builder.fields(2, 0)), builder.call(joinRight, builder.fields(2, 1)),
+                        builder.call(joinBoth, builder.joinFields()));
         builder.join(JoinRelType.INNER, joinCond);
         var before = builder.build();
         builder.scan(tableNames.get(0)).filter(builder.call(joinLeft, builder.fields()));
@@ -281,38 +267,28 @@ public class ElevatedCoreRules {
         var joinA = builder.genericPredicateOp("joinA", true);
         var joinB = builder.genericPredicateOp("joinB", true);
         var joinAB = builder.genericPredicateOp("joinAB", true);
-        var joinCond = builder.call(SqlStdOperatorTable.AND,
-                builder.call(joinA, builder.fields(2, 0)),
-                builder.call(joinB, builder.fields(2, 1)),
-                builder.call(joinAB, builder.joinFields())
-        );
+        var joinCond = builder.call(SqlStdOperatorTable.AND, builder.call(joinA, builder.fields(2, 0)),
+                builder.call(joinB, builder.fields(2, 1)), builder.call(joinAB, builder.joinFields()));
         builder.join(JoinRelType.INNER, joinCond);
         builder.scan(tableNames.get(2));
         var joinC = builder.genericPredicateOp("joinC", true);
         var joinAC = builder.genericPredicateOp("joinAC", true);
         var joinBC = builder.genericPredicateOp("joinBC", true);
         var joinABC = builder.genericPredicateOp("joinABC", true);
-        joinCond = builder.call(SqlStdOperatorTable.AND,
-                builder.call(joinC, builder.fields(2, 1)),
+        joinCond = builder.call(SqlStdOperatorTable.AND, builder.call(joinC, builder.fields(2, 1)),
                 builder.call(joinAC, builder.field(2, 0, 0), builder.field(2, 1, 0)),
                 builder.call(joinBC, builder.field(2, 0, 1), builder.field(2, 1, 0)),
-                builder.call(joinABC, builder.joinFields())
-        );
+                builder.call(joinABC, builder.joinFields()));
         builder.join(JoinRelType.INNER, joinCond);
         var before = builder.build();
         tableNames.forEach(builder::scan);
-        joinCond = builder.call(SqlStdOperatorTable.AND,
-                builder.call(joinB, builder.fields(2, 0)),
-                builder.call(joinC, builder.fields(2, 1)),
-                builder.call(joinBC, builder.joinFields())
-        );
+        joinCond = builder.call(SqlStdOperatorTable.AND, builder.call(joinB, builder.fields(2, 0)),
+                builder.call(joinC, builder.fields(2, 1)), builder.call(joinBC, builder.joinFields()));
         builder.join(JoinRelType.INNER, joinCond);
-        joinCond = builder.call(SqlStdOperatorTable.AND,
-                builder.call(joinA, builder.fields(2, 0)),
+        joinCond = builder.call(SqlStdOperatorTable.AND, builder.call(joinA, builder.fields(2, 0)),
                 builder.call(joinAB, builder.field(2, 0, 0), builder.field(2, 1, 0)),
                 builder.call(joinAC, builder.field(2, 0, 0), builder.field(2, 1, 1)),
-                builder.call(joinABC, builder.joinFields())
-        );
+                builder.call(joinABC, builder.joinFields()));
         builder.join(JoinRelType.INNER, joinCond);
         var after = builder.build();
         return Tuple.of(before, after);
@@ -423,19 +399,14 @@ public class ElevatedCoreRules {
             var projectA = builder.genericProjectionOp("projectA", new RelType.VarType("PROJECT_A", true));
             var projectB = builder.genericProjectionOp("projectB", new RelType.VarType("PROJECT_B", true));
             var join = builder.genericPredicateOp("join", true);
-            builder.join(joinType, builder.call(join,
-                    builder.call(projectA, builder.fields(2, 0)),
-                    builder.call(projectB, builder.fields(2, 1))
-            ));
+            builder.join(joinType, builder.call(join, builder.call(projectA, builder.fields(2, 0)),
+                    builder.call(projectB, builder.fields(2, 1))));
             var before = builder.build();
             builder.scan(tableNames.get(0));
             builder.project(builder.field(0), builder.call(projectA, builder.fields()));
             builder.scan(tableNames.get(1));
             builder.project(builder.field(0), builder.call(projectB, builder.fields()));
-            builder.join(joinType, builder.call(join,
-                    builder.field(2, 0, 1),
-                    builder.field(2, 1, 1)
-            ));
+            builder.join(joinType, builder.call(join, builder.field(2, 0, 1), builder.field(2, 1, 1)));
             builder.project(builder.field(0), builder.field(2));
             var after = builder.build();
             return Tuple.of(before, after);
@@ -444,14 +415,10 @@ public class ElevatedCoreRules {
 
     public static Tuple2<RelNode, RelNode> joinDeriveIsNotNullFilter() {
         var builder = RuleBuilder.create();
-        var leftTable = builder.createCosetteTable(Seq.of(
-                Tuple.of(new RelType.VarType("Type_1", false), false),
-                Tuple.of(new RelType.VarType("Type_2", true), false)
-        ));
-        var rightTable = builder.createCosetteTable(Seq.of(
-                Tuple.of(new RelType.VarType("Type_3", false), false),
-                Tuple.of(new RelType.VarType("Type_4", true), false)
-        ));
+        var leftTable = builder.createCosetteTable(Seq.of(Tuple.of(new RelType.VarType("Type_1", false), false),
+                Tuple.of(new RelType.VarType("Type_2", true), false)));
+        var rightTable = builder.createCosetteTable(Seq.of(Tuple.of(new RelType.VarType("Type_3", false), false),
+                Tuple.of(new RelType.VarType("Type_4", true), false)));
         builder.addTable(leftTable).addTable(rightTable);
         builder.scan(leftTable.getName()).scan(rightTable.getName());
         var join = builder.genericPredicateOp("join", true);
@@ -589,7 +556,8 @@ public class ElevatedCoreRules {
         });
     }
 
-    public static void dumpTransformedRule(RelNode before, RelNode after, boolean verbose, Path dumpPath) throws IOException {
+    public static void dumpTransformedRule(RelNode before, RelNode after, boolean verbose, Path dumpPath)
+            throws IOException {
         if (verbose) {
             System.out.println(">>>>>> " + dumpPath.getFileName().toString() + " <<<<<<");
             System.out.println("Before:");
@@ -603,10 +571,8 @@ public class ElevatedCoreRules {
 
     public static void dumpElevatedRules(Path dumpFolder, boolean verbose) throws IOException {
         Files.createDirectories(dumpFolder);
-        Seq.of(ElevatedCoreRules.class.getMethods())
-                .filter(method -> Modifier.isStatic(method.getModifiers()))
-                .sorted(Comparator.comparing(Method::getName))
-                .forEachUnchecked(method -> {
+        Seq.of(ElevatedCoreRules.class.getMethods()).filter(method -> Modifier.isStatic(method.getModifiers()))
+                .sorted(Comparator.comparing(Method::getName)).forEachUnchecked(method -> {
                     switch (method.getReturnType().getSimpleName()) {
                         case "Tuple2" -> {
                             var ruleName = method.getName();
@@ -617,8 +583,9 @@ public class ElevatedCoreRules {
                         case "Seq" -> {
                             var ruleName = method.getName();
                             var rewrites = (Seq<Tuple2<RelNode, RelNode>>) method.invoke(null);
-                            rewrites.forEachIndexedUnchecked((index, rewrite) -> dumpTransformedRule(rewrite.component1(), rewrite.component2(), verbose,
-                                    Paths.get(dumpFolder.toAbsolutePath().toString(), ruleName + index + ".json")));
+                            rewrites.forEachIndexedUnchecked(
+                                    (index, rewrite) -> dumpTransformedRule(rewrite.component1(), rewrite.component2(), verbose,
+                                            Paths.get(dumpFolder.toAbsolutePath().toString(), ruleName + index + ".json")));
                         }
                     }
                 });

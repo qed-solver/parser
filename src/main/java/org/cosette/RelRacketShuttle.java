@@ -18,8 +18,7 @@ public record RelRacketShuttle(Env env) {
     public static void dumpToRacket(List<RelNode> relNodes, Path path) throws IOException {
         assert relNodes.size() == 2;
         var env = Env.empty();
-        var rels = Seq.from(relNodes)
-                .mapIndexed((i, rel) -> SExpr.def("r" + i, new RelRacketShuttle(env).visit(rel)));
+        var rels = Seq.from(relNodes).mapIndexed((i, rel) -> SExpr.def("r" + i, new RelRacketShuttle(env).visit(rel)));
         Seq<SExpr> tabs = env.tables().toSeq().map(t -> {
             var table = t.unwrap(CosetteTable.class);
             assert table != null;
@@ -45,22 +44,28 @@ public record RelRacketShuttle(Env env) {
             case TableScan scan -> SExpr.app("r-scan", SExpr.integer(env.resolve(scan.getTable())));
             case LogicalValues values -> {
                 var visitor = new RexRacketVisitor(env);
-                Seq<SExpr> tuples = Seq.from(values.getTuples()).map(tuple -> SExpr.app("list", Seq.from(tuple).map(visitor::visit)));
-                yield SExpr.app("r-values", SExpr.integer(values.getRowType().getFieldCount()), SExpr.app("list", tuples));
+                Seq<SExpr> tuples = Seq.from(values.getTuples())
+                        .map(tuple -> SExpr.app("list", Seq.from(tuple).map(visitor::visit)));
+                yield SExpr.app("r-values", SExpr.integer(values.getRowType().getFieldCount()),
+                        SExpr.app("list", tuples));
             }
             case LogicalFilter filter -> {
-                var condition = new RexRacketVisitor(env.advanced(filter.getInput().getRowType().getFieldCount()).recorded(filter.getVariablesSet())).visit(filter.getCondition());
+                var condition = new RexRacketVisitor(env.advanced(filter.getInput().getRowType().getFieldCount())
+                        .recorded(filter.getVariablesSet())).visit(filter.getCondition());
                 yield SExpr.app("r-filter", condition, visit(filter.getInput()));
             }
             case LogicalProject project -> {
-                var visitor = new RexRacketVisitor(env.advanced(project.getInput().getRowType().getFieldCount()).recorded(project.getVariablesSet()));
+                var visitor = new RexRacketVisitor(env.advanced(project.getInput().getRowType().getFieldCount())
+                        .recorded(project.getVariablesSet()));
                 var targets = Seq.from(project.getProjects()).map(visitor::visit);
                 yield SExpr.app("r-project", SExpr.app("list", targets), visit(project.getInput()));
             }
             case LogicalJoin join -> {
                 var left = join.getLeft();
                 var right = join.getRight();
-                var visitor = new RexRacketVisitor(env.advanced(left.getRowType().getFieldCount() + right.getRowType().getFieldCount()).recorded(join.getVariablesSet()));
+                var visitor = new RexRacketVisitor(
+                        env.advanced(left.getRowType().getFieldCount() + right.getRowType().getFieldCount())
+                                .recorded(join.getVariablesSet()));
                 var kind = SExpr.quoted(switch (join.getJoinType()) {
                     case INNER -> "inner";
                     case LEFT -> "left";
@@ -74,14 +79,14 @@ public record RelRacketShuttle(Env env) {
             case LogicalAggregate aggregate -> {
                 var aggs = SExpr.app("list", Seq.from(aggregate.getAggCallList()).map(agg -> {
                     var name = SExpr.quoted(switch (agg.getAggregation().getName().toLowerCase()) {
-                        case "count" ->
-                                "aggr-count" + (agg.isDistinct() ? "-distinct" : "") + (agg.ignoreNulls() ? "-all" : "");
+                        case "count" -> "aggr-count" + (agg.isDistinct() ? "-distinct" : "") +
+                                (agg.ignoreNulls() ? "-all" : "");
                         case "sum" -> "aggr-sum";
                         case "max" -> "aggr-max";
                         case "min" -> "aggr-min";
                         case "avg" -> "aggr-avg";
-                        default ->
-                                throw new UnsupportedOperationException("Not supported aggregation function: " + agg.getAggregation().getName());
+                        default -> throw new UnsupportedOperationException(
+                                "Not supported aggregation function: " + agg.getAggregation().getName());
                     });
                     var cols = SExpr.app("list", Seq.from(agg.getArgList()).map(SExpr::integer));
                     return SExpr.app("v-agg", name, cols);
@@ -140,10 +145,12 @@ public record RelRacketShuttle(Env env) {
                 }
                 case RexCall call -> {
                     var operands = Seq.from(call.getOperands()).map(this::visit);
-                    yield SExpr.app("v-op", SExpr.quoted(call.op.getName().replace(" ", "-").toLowerCase()), SExpr.app("list", operands));
+                    yield SExpr.app("v-op", SExpr.quoted(call.op.getName().replace(" ", "-").toLowerCase()),
+                            SExpr.app("list", operands));
                 }
                 case RexFieldAccess access -> {
-                    var id = SExpr.integer(env.resolve(((RexCorrelVariable) access.getReferenceExpr()).id) + access.getField().getIndex());
+                    var id = SExpr.integer(env.resolve(((RexCorrelVariable) access.getReferenceExpr()).id) +
+                            access.getField().getIndex());
                     yield SExpr.app("v-var", id);
                 }
                 default -> throw new UnsupportedOperationException("Unsupported value: " + rex.getKind());

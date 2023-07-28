@@ -69,7 +69,8 @@ public class Main {
                             parser.parseDML(generator.extractSchema(), statement);
                         }
                     } catch (Exception e) {
-                        throw new Exception("In statement:\n" + statement.replaceAll("(?m)^", "\t") + "\n" + e.getMessage());
+                        throw new Exception(
+                                "In statement:\n" + statement.replaceAll("(?m)^", "\t") + "\n" + e.getMessage());
                     }
                 }
             }

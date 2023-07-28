@@ -21,7 +21,8 @@ public class CosetteTable extends AbstractTable {
     private final Set<ImmutableBitSet> keys;
     private final Set<RexNode> constraints;
 
-    public CosetteTable(String identifier, Map<String, RelDataType> columns, Set<Set<String>> eligibleKeys, Set<RexNode> checkConstraints) {
+    public CosetteTable(String identifier, Map<String, RelDataType> columns, Set<Set<String>> eligibleKeys,
+                        Set<RexNode> checkConstraints) {
         name = identifier;
         columnNames = columns.keysView().toImmutableSeq().sorted();
         columnTypes = columnNames.map(columns::get);
@@ -29,7 +30,8 @@ public class CosetteTable extends AbstractTable {
         constraints = checkConstraints;
     }
 
-    protected CosetteTable(String identifier, Map<String, RelDataType> columns, ImmutableSet<ImmutableBitSet> eligibleKeys, Set<RexNode> checkConstraints) {
+    protected CosetteTable(String identifier, Map<String, RelDataType> columns,
+                           ImmutableSet<ImmutableBitSet> eligibleKeys, Set<RexNode> checkConstraints) {
         name = identifier;
         columnNames = columns.keysView().toImmutableSeq().sorted();
         columnTypes = columnNames.map(columns::get);
@@ -39,7 +41,8 @@ public class CosetteTable extends AbstractTable {
 
     @Override
     public RelDataType getRowType(RelDataTypeFactory typeFactory) {
-        return typeFactory.createStructType(columnNames.zip(columnTypes).view().map(entry -> java.util.Map.entry(entry.component1(), entry.component2())).toImmutableSeq().asJava());
+        return typeFactory.createStructType(columnNames.zip(columnTypes).view()
+                .map(entry -> java.util.Map.entry(entry.component1(), entry.component2())).toImmutableSeq().asJava());
     }
 
     @Override

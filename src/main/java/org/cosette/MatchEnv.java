@@ -1,7 +1,5 @@
 package org.cosette;
 
-import io.github.cvc5.Solver;
-import io.github.cvc5.Term;
 import kala.collection.Seq;
 import kala.collection.immutable.ImmutableMap;
 import kala.collection.immutable.ImmutableSeq;
@@ -10,6 +8,7 @@ import kala.control.Result;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rex.RexCall;
 import org.apache.calcite.rex.RexNode;
+import org.apache.calcite.sql.type.SqlTypeName;
 
 /**
  * A matching environment should contain all matching information between the pattern node and the target node
@@ -18,11 +17,9 @@ import org.apache.calcite.rex.RexNode;
  * @param typeConstraints  the mapping between existing variable types and product types
  * @param synthConstraints the sequence of constraints for SyGuS solver ordered by point of introduction
  */
-public record MatchEnv(
-        FieldReference fieldReference,
-        ImmutableMap<RelType.VarType, ImmutableSet<ProductType>> typeConstraints,
-        ImmutableSeq<SynthesisConstraint> synthConstraints
-) {
+public record MatchEnv(FieldReference fieldReference,
+                       ImmutableMap<RelType.VarType, ImmutableSet<ProductType>> typeConstraints,
+                       ImmutableSeq<SynthesisConstraint> synthConstraints) {
 
     /**
      * Update the field reference
@@ -30,8 +27,10 @@ public record MatchEnv(
      * @param mapping the given field reference
      * @return a new matching environment with updated field reference
      */
-    public MatchEnv updateFieldReference(Seq<Seq<Integer>> mapping) {
-        return new MatchEnv(new FieldReference(mapping.map(ImmutableSeq::from)), typeConstraints, synthConstraints);
+    public MatchEnv updateFieldReference(Seq<Seq<Integer>> mapping, Seq<RelDataType> sourceTypes) {
+        return new MatchEnv(
+                new FieldReference(mapping.map(ImmutableSeq::from), new ProductType(sourceTypes.toImmutableSeq())),
+                typeConstraints, synthConstraints);
     }
 
     /**
@@ -50,10 +49,10 @@ public record MatchEnv(
      *
      * @return self if verification is successful
      */
-    public Result<MatchEnv, String> verify() {
-        return typeCheck().flatMap(typeDerivation -> {
-            return Result.err("Have not implemented verification.");
-        });
+    public Result<RexTranslator, String> verify() {
+        return typeCheck().flatMap(RexTranslator::createTranslator).flatMap(
+                translator -> synthConstraints.foldLeft(Result.ok(translator),
+                        (res, cst) -> res.flatMap(t -> t.encode(cst))));
     }
 
     /**
@@ -69,16 +68,27 @@ public record MatchEnv(
                     switch (operator.getReturnType()) {
                         case RelType.VarType varType ->
                                 Result.ok(updateTypeConstraint(varType, Seq.from(targets).map(RexNode::getType)));
-                        case RelType.BaseType baseType when targets.map(RexNode::getType)
-                                .allMatch(target -> target.getSqlTypeName() == baseType.getSqlTypeName() && target.isNullable() == baseType.isNullable()) ->
-                                Result.ok(this);
-                        default ->
-                                Result.err(String.format("Type %s in pattern cannot be matched with targets", operator.getReturnType()));
+                        case RelType.BaseType baseType when targets.map(RexNode::getType).allMatch(
+                                target -> target.getSqlTypeName() == baseType.getSqlTypeName() &&
+                                        target.isNullable() == baseType.isNullable()) -> Result.ok(this);
+                        default -> Result.err(String.format("Type %s in pattern cannot be matched with targets",
+                                operator.getReturnType()));
                     };
-            case RexCall call when Seq.from(targets).allMatch(target -> target instanceof RexCall node && node.getOperator() == call.getOperator() && node.getOperands().size() == call.getOperands().size()) ->
-                    Seq.from(call.getOperands()).foldLeftIndexed(Result.<MatchEnv, String>ok(this), (i, res, p) ->
-                            res.flatMap(env -> env.rexTypeInfer(p, targets.map(c -> ((RexCall) c).getOperands().get(i)))));
-            default -> Result.err(String.format("%s is not supported in pattern", pattern.getClass().getName()));
+            case RexCall call -> {
+                if (call.getType().getSqlTypeName().equals(SqlTypeName.BOOLEAN) && targets.size() == 1 &&
+                        targets.get(0).getType().getSqlTypeName().equals(SqlTypeName.BOOLEAN)) {
+                    yield Result.ok(this);
+                } else if (Seq.from(targets).allMatch(
+                        target -> target instanceof RexCall node && node.getOperator() == call.getOperator() &&
+                                node.getOperands().size() == call.getOperands().size())) {
+                    yield Seq.from(call.getOperands()).foldLeftIndexed(Result.<MatchEnv, String>ok(this),
+                            (i, res, p) -> res.flatMap(
+                                    env -> env.rexTypeInfer(p, targets.map(c -> ((RexCall) c).getOperands().get(i)))));
+                } else {
+                    yield Result.err(String.format("Invalid call pattern: %s", call));
+                }
+            }
+            default -> Result.err(String.format("Unsupported expression pattern: %s", pattern));
         };
     }
 
@@ -90,7 +100,9 @@ public record MatchEnv(
      * @return a new matching environment containing this type constraint
      */
     private MatchEnv updateTypeConstraint(RelType.VarType variable, Seq<RelDataType> unfold) {
-        return new MatchEnv(fieldReference, typeConstraints.putted(variable, typeConstraints.getOrDefault(variable, ImmutableSet.empty()).added(new ProductType(unfold.toImmutableSeq()))), synthConstraints);
+        return new MatchEnv(fieldReference, typeConstraints.putted(variable,
+                typeConstraints.getOrDefault(variable, ImmutableSet.empty())
+                        .added(new ProductType(unfold.toImmutableSeq()))), synthConstraints);
     }
 
     /**
@@ -101,11 +113,13 @@ public record MatchEnv(
      * @return a new matching environment containing this synth constraint
      */
     private MatchEnv updateSynthConstraint(RexNode pattern, ImmutableSeq<RexNode> targets) {
-        return new MatchEnv(fieldReference, typeConstraints, synthConstraints.appended(new SynthesisConstraint(pattern, targets, fieldReference)));
+        return new MatchEnv(fieldReference, typeConstraints,
+                synthConstraints.appended(new SynthesisConstraint(pattern, targets, fieldReference)));
     }
 
     /**
      * Type check the given constraints
+     *
      * @return the result mapping if the type check is successful
      */
     private Result<ImmutableMap<RelType.VarType, ProductType>, String> typeCheck() {
@@ -114,9 +128,9 @@ public record MatchEnv(
         var derivation = ImmutableMap.<RelType.VarType, ProductType>empty();
         while (proceed) {
             proceed = false;
-            for (var vt: typeConstraints.keysView()) {
+            for (var vt : typeConstraints.keysView()) {
                 var opts = typeConstraints.get(vt);
-                for (var c: opts) {
+                for (var c : opts) {
                     var pt = typeExpand(c, derivation);
                     if (!pt.elements.anyMatch(t -> t instanceof RelType.VarType)) {
                         if (!derivation.containsKey(vt)) {
@@ -135,44 +149,20 @@ public record MatchEnv(
 
     /**
      * Expand product type using information in the derivation
-     * @param product the given product type
+     *
+     * @param product    the given product type
      * @param derivation the information about variable types
      * @return the expanded product type
      */
     private ProductType typeExpand(ProductType product, ImmutableMap<RelType.VarType, ProductType> derivation) {
         return new ProductType(product.elements.foldLeft(ImmutableSeq.empty(), (p, e) -> switch (e) {
-            case RelType.VarType v when derivation.containsKey(v) -> p.appendedAll(typeExpand(derivation.get(v), derivation).elements);
+            case RelType.VarType v when derivation.containsKey(v) ->
+                    p.appendedAll(typeExpand(derivation.get(v), derivation).elements);
             default -> p.appended(e);
         }));
     }
 
-    /**
-     * Encode the constraints to CVC5 SyGuS description
-     *
-     * @param typeDerivation the derived types
-     * @return a solver containing the encoded constraints
-     */
-    private Result<Solver, String> encode(ImmutableMap<RelType.VarType, ProductType> typeDerivation) {
-        try {
-            var solver = new Solver();
-            solver.setOption("produce-models", "true");
-            solver.setOption("sygus", "true");
-            solver.setLogic("ALL");
-            for (var constraint : synthConstraints) {
-
-            }
-            return Result.ok(solver);
-        } catch (Exception e) {
-            return Result.err(e.toString());
-        }
-    }
-
-    private Term translate(RexNode rexNode, ImmutableMap<RelType.VarType, ProductType> typeDerivation) {
-        return null;
-    }
-
-
-    public record FieldReference(ImmutableSeq<ImmutableSeq<Integer>> correspondence) {
+    public record FieldReference(ImmutableSeq<ImmutableSeq<Integer>> correspondence, ProductType sourceTypes) {
     }
 
     public record ProductType(ImmutableSeq<RelDataType> elements) {

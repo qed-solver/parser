@@ -41,45 +41,24 @@ import java.util.stream.Collectors;
  */
 public class SchemaGenerator {
 
-    private static final Map<String, Class<?>> toPrimitive = ImmutableMap.<String, Class<?>>builder()
-            .put("BINARY", String.class)
-            .put("CHAR", String.class)
-            .put("VARBINARY", String.class)
-            .put("VARCHAR", String.class)
-            .put("BLOB", String.class)
-            .put("TINYBLOB", String.class)
-            .put("MEDIUMBLOB", String.class)
-            .put("LONGBLOB", String.class)
-            .put("TEXT", String.class)
-            .put("TINYTEXT", String.class)
-            .put("MEDIUMTEXT", String.class)
-            .put("LONGTEXT", String.class)
-            .put("ENUM", String.class)
-            .put("SET", String.class)
-            .put("BOOL", boolean.class)
-            .put("BOOLEAN", boolean.class)
-            .put("DEC", double.class)
-            .put("DECIMAL", double.class)
-            .put("DOUBLE", double.class)
-            .put("DOUBLE PRECISION", double.class)
-            .put("FLOAT", float.class)
-            .put("DATE", int.class)
-            .put("DATETIME", int.class)
-            .put("TIMESTAMP", int.class)
-            .put("TIME", int.class)
-            .put("YEAR", int.class)
-            .put("INT", int.class)
-            .put("TINYINT", int.class)
-            .put("SMALLINT", int.class)
-            .put("MEDIUMINT", int.class)
-            .put("BIGINT", int.class)
-            .put("INTEGER", int.class)
-            .build();
-    private static final Pattern functionPattern = Pattern.compile("(?i)DECLARE\\s+(?<type>SCALAR|AGGREGATE)\\s+FUNCTION\\s+(?<identifier>\\w+)\\s*\\((?<source>.*)\\)\\s+RETURNS\\s+(?<target>.+)");
-    private static final SqlParser.Config schemaParserConfig = SqlParser.Config.DEFAULT
-            .withParserFactory(SqlDdlParserImpl.FACTORY)
-            .withLex(Lex.MYSQL)
-            .withQuoting(Quoting.DOUBLE_QUOTE);
+    private static final Map<String, Class<?>> toPrimitive =
+            ImmutableMap.<String, Class<?>>builder().put("BINARY", String.class).put("CHAR", String.class)
+                    .put("VARBINARY", String.class).put("VARCHAR", String.class).put("BLOB", String.class)
+                    .put("TINYBLOB", String.class).put("MEDIUMBLOB", String.class).put("LONGBLOB", String.class)
+                    .put("TEXT", String.class).put("TINYTEXT", String.class).put("MEDIUMTEXT", String.class)
+                    .put("LONGTEXT", String.class).put("ENUM", String.class).put("SET", String.class)
+                    .put("BOOL", boolean.class).put("BOOLEAN", boolean.class).put("DEC", double.class)
+                    .put("DECIMAL", double.class).put("DOUBLE", double.class).put("DOUBLE PRECISION", double.class)
+                    .put("FLOAT", float.class).put("DATE", int.class).put("DATETIME", int.class)
+                    .put("TIMESTAMP", int.class).put("TIME", int.class).put("YEAR", int.class).put("INT", int.class)
+                    .put("TINYINT", int.class).put("SMALLINT", int.class).put("MEDIUMINT", int.class)
+                    .put("BIGINT", int.class).put("INTEGER", int.class).build();
+    private static final Pattern functionPattern = Pattern.compile(
+            "(?i)DECLARE\\s+(?<type>SCALAR|AGGREGATE)\\s+FUNCTION\\s+(?<identifier>\\w+)\\s*\\((?<source>.*)\\)" +
+                    "\\s+RETURNS\\s+(?<target>.+)");
+    private static final SqlParser.Config schemaParserConfig =
+            SqlParser.Config.DEFAULT.withParserFactory(SqlDdlParserImpl.FACTORY).withLex(Lex.MYSQL)
+                    .withQuoting(Quoting.DOUBLE_QUOTE);
     private final CosetteSchema schema;
     private final Map<String, Function> declaredFunctions = new HashMap<>();
 
@@ -149,23 +128,30 @@ public class SchemaGenerator {
             parameters[i] = toPrimitive.get(arg);
         }
         Function customFunction;
-        Constructor<Method> methodConstructor = Method.class.getDeclaredConstructor(Class.class, String.class, Class[].class, Class.class, Class[].class, int.class, int.class, String.class, byte[].class, byte[].class, byte[].class);
+        Constructor<Method> methodConstructor =
+                Method.class.getDeclaredConstructor(Class.class, String.class, Class[].class, Class.class,
+                        Class[].class, int.class, int.class, String.class, byte[].class, byte[].class, byte[].class);
         methodConstructor.setAccessible(true);
         if (matcher.group("type").equalsIgnoreCase("SCALAR")) {
-            Method scalarFunction = methodConstructor.newInstance(SchemaGenerator.class, "cosetteFunction", parameters, toPrimitive.get(target), null, 0, 0, "", null, null, null);
+            Method scalarFunction = methodConstructor.newInstance(SchemaGenerator.class, "cosetteFunction", parameters,
+                    toPrimitive.get(target), null, 0, 0, "", null, null, null);
             customFunction = ScalarFunctionImpl.createUnsafe(scalarFunction);
         } else {
-            ReflectiveFunctionBase.ParameterListBuilder sourceParameters =
-                    ReflectiveFunctionBase.builder();
+            ReflectiveFunctionBase.ParameterListBuilder sourceParameters = ReflectiveFunctionBase.builder();
             ImmutableList.Builder<Class<?>> sourceTypes = ImmutableList.builder();
             for (Class<?> clazz : parameters) {
                 sourceParameters.add(clazz, clazz.getName(), false);
                 sourceTypes.add(clazz);
             }
-            Method nullFunction = methodConstructor.newInstance(SchemaGenerator.class, "cosetteFunction", parameters, toPrimitive.get(target), null, 0, 0, "", null, null, null);
-            Constructor<AggregateFunctionImpl> aggregateFunctionConstructor = AggregateFunctionImpl.class.getDeclaredConstructor(Class.class, List.class, List.class, Class.class, Class.class, Method.class, Method.class, Method.class, Method.class);
+            Method nullFunction = methodConstructor.newInstance(SchemaGenerator.class, "cosetteFunction", parameters,
+                    toPrimitive.get(target), null, 0, 0, "", null, null, null);
+            Constructor<AggregateFunctionImpl> aggregateFunctionConstructor =
+                    AggregateFunctionImpl.class.getDeclaredConstructor(Class.class, List.class, List.class, Class.class,
+                            Class.class, Method.class, Method.class, Method.class, Method.class);
             aggregateFunctionConstructor.setAccessible(true);
-            customFunction = aggregateFunctionConstructor.newInstance(SchemaGenerator.class, sourceParameters.build(), sourceTypes.build(), toPrimitive.get(target), toPrimitive.get(target), nullFunction, nullFunction, null, null);
+            customFunction = aggregateFunctionConstructor.newInstance(SchemaGenerator.class, sourceParameters.build(),
+                    sourceTypes.build(), toPrimitive.get(target), toPrimitive.get(target), nullFunction, nullFunction,
+                    null, null);
         }
         declaredFunctions.put(identifier, customFunction);
     }
@@ -236,11 +222,13 @@ class CosetteSchema extends AbstractSchema {
                     }
                     keys.append(ImmutableBitSet.of(key));
                 }
-                default ->
-                        throw new RuntimeException("Unsupported declaration type " + column.getKind() + " in table " + createTable.name);
+                default -> throw new RuntimeException(
+                        "Unsupported declaration type " + column.getKind() + " in table " + createTable.name);
             }
         }
-        var cosetteTable = new CosetteTable(createTable.name.toString(), names.zip(types.zip(nullabilities).map(type -> new RelType.BaseType(type.component1(), type.component2()))).toImmutableMap(), ImmutableSet.from(keys), ImmutableSet.from(checkConstraints));
+        var cosetteTable = new CosetteTable(createTable.name.toString(), names.zip(
+                        types.zip(nullabilities).map(type -> new RelType.BaseType(type.component1(), type.component2())))
+                .toImmutableMap(), ImmutableSet.from(keys), ImmutableSet.from(checkConstraints));
         tables.put(createTable.name.toString(), cosetteTable);
     }
 
@@ -254,22 +242,21 @@ class CosetteSchema extends AbstractSchema {
             throw new RuntimeException("Cannot extract definition of view " + sqlCreateView.name);
         }
         var rawQuery = matcher.group(1);
-        String fields = sqlCreateView.columnList
-                .getList()
-                .stream()
-                .filter(Objects::nonNull)
-                .map(SqlNode::toString)
+        String fields = sqlCreateView.columnList.getList().stream().filter(Objects::nonNull).map(SqlNode::toString)
                 .collect(Collectors.joining("\", \""));
         String wrapper = "SELECT * FROM (%s) AS \"_\" (\"%s\")".formatted(rawQuery, fields);
         Properties info = new Properties();
         info.setProperty(CalciteConnectionProperty.CASE_SENSITIVE.camelName(), "FALSE");
-        CalciteConnection connection = DriverManager.getConnection("jdbc:calcite:", info)
-                .unwrap(CalciteConnection.class);
+        CalciteConnection connection =
+                DriverManager.getConnection("jdbc:calcite:", info).unwrap(CalciteConnection.class);
         CalciteSchema calciteSchema = CalciteSchema.from(plus());
-        CalcitePrepare.AnalyzeViewResult parsed = Schemas.analyzeView(connection, calciteSchema, null, wrapper, null, false);
+        CalcitePrepare.AnalyzeViewResult parsed =
+                Schemas.analyzeView(connection, calciteSchema, null, wrapper, null, false);
         JavaTypeFactory typeFactory = (JavaTypeFactory) parsed.typeFactory;
         Type elementType = typeFactory.getJavaClass(parsed.rowType);
-        Table viewTable = new ViewTable(elementType, RelDataTypeImpl.proto(parsed.rowType), wrapper, calciteSchema.path(null), null);
+        Table viewTable =
+                new ViewTable(elementType, RelDataTypeImpl.proto(parsed.rowType), wrapper, calciteSchema.path(null),
+                        null);
         tables.put(sqlCreateView.name.toString(), viewTable);
     }
 
