@@ -141,11 +141,18 @@ public record RelMatcher() {
         System.out.println("Matcher:");
         System.out.println(matcher.explain());
         var matchEnv = RelMatcher.relMatch(matcher, query).get();
-        var solver = matchEnv.verify().get().solver();
+        var translator = matchEnv.verify().get();
+        var solver = translator.solver();
         for (var constraint : solver.getSygusConstraints()) {
             System.out.println(constraint);
         }
         System.out.println(solver.checkSynth().hasSolution());
+        System.out.println(
+                solver.getSynthSolution(translator.declaredFunctions().get("Predicate-joinLeft-C0").component1()));
+        System.out.println(
+                solver.getSynthSolution(translator.declaredFunctions().get("Predicate-joinRight-C0").component1()));
+        System.out.println(
+                solver.getSynthSolution(translator.declaredFunctions().get("Predicate-joinBoth-C0").component1()));
     }
 }
 

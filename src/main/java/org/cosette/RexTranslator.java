@@ -165,7 +165,8 @@ public record RexTranslator(Solver solver, MutableMap<String, Tuple3<Term, Immut
     public Result<Term, String> declareFunction(String name, Seq<Sort> inputSorts, Sort outputSort) {
         var entry = declaredFunctions.getOption(name);
         if (entry.isEmpty()) {
-            var synthFunc = solver.synthFun(name, inputSorts.map(solver::mkVar).toArray(new Term[]{}), outputSort);
+            var synthFunc = solver.synthFun(name,
+                    inputSorts.mapIndexed((i, s) -> solver.mkVar(s, "A" + i)).toArray(new Term[]{}), outputSort);
             declaredFunctions.put(name, Tuple.of(synthFunc, inputSorts.toImmutableSeq(), outputSort));
             return Result.ok(synthFunc);
         } else {
