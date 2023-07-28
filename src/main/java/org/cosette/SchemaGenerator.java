@@ -164,7 +164,7 @@ public class SchemaGenerator {
     }
 
     /**
-     * @return The declared custom functions.
+     * @return The declared custom store.
      */
     public Map<String, Function> customFunctions() {
         return declaredFunctions;

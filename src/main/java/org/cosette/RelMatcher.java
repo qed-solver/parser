@@ -123,36 +123,38 @@ public record RelMatcher() {
 //                                                   new RelType.BaseType(SqlTypeName.INTEGER, true)
 //        ), Set.empty(), Set.empty());
         var generator = new SchemaGenerator();
-        generator.applyCreate("CREATE TABLE R (x INTEGER, y INTEGER)");
-        generator.applyCreate("CREATE TABLE S (a INTEGER, b INTEGER)");
+        generator.applyCreate("CREATE TABLE R (x INTEGER)");
+        generator.applyCreate("CREATE TABLE S (a INTEGER)");
         var relBuilder = RuleBuilder.create(RawPlanner.generateConfig(generator.extractSchema()));
         var query = relBuilder.scan("R").scan("S").join(JoinRelType.INNER, relBuilder.call(SqlStdOperatorTable.AND,
                         relBuilder.call(SqlStdOperatorTable.EQUALS,
                                 relBuilder.call(SqlStdOperatorTable.PLUS, relBuilder.field(2, 0, 0), relBuilder.field(2, 1, 0)),
-                                relBuilder.literal(6)),
-                        relBuilder.call(SqlStdOperatorTable.LESS_THAN, relBuilder.field(2, 0, 0), relBuilder.field(2, 1, 0))))
+                                relBuilder.literal(0)),
+                        relBuilder.call(SqlStdOperatorTable.EQUALS, relBuilder.field(2, 0, 0), relBuilder.field(2, 1, 0))))
                 .build();
-        var joinConditionPush = ElevatedCoreRules.joinConditionPush();
-        var matcher = joinConditionPush.component1();
-        System.out.println("Example: SELECT * FROM R INNER JOIN S ON x + a = 6 AND x < a");
+        var joinConditionPushRule = new RuleBuilder.JoinConditionPush();
+        System.out.println("Example: SELECT * FROM R INNER JOIN S ON x + a = 0 AND x = a");
         System.out.println();
         System.out.println("Plan:");
         System.out.println(query.explain());
         System.out.println("Matcher:");
-        System.out.println(matcher.explain());
-        var matchEnv = RelMatcher.relMatch(matcher, query).get();
-        var translator = matchEnv.verify().get();
+        System.out.println(joinConditionPushRule.getPattern().explain());
+        var translator = joinConditionPushRule.match(query).get();
         var solver = translator.solver();
         for (var constraint : solver.getSygusConstraints()) {
             System.out.println(constraint);
         }
+        System.out.println();
+        System.out.println("Can synthesize functions:");
         System.out.println(solver.checkSynth().hasSolution());
-        System.out.println(
-                solver.getSynthSolution(translator.declaredFunctions().get("Predicate-joinLeft-C0").component1()));
-        System.out.println(
-                solver.getSynthSolution(translator.declaredFunctions().get("Predicate-joinRight-C0").component1()));
-        System.out.println(
-                solver.getSynthSolution(translator.declaredFunctions().get("Predicate-joinBoth-C0").component1()));
+        System.out.println();
+        for (var functionName : translator.declaredFunctions().store().keysView()) {
+            System.out.println("Synthesized function: " + functionName);
+            for (var functionComponent : translator.declaredFunctions().store().get(functionName).component1()) {
+                System.out.println(solver.getSynthSolution(functionComponent.component1()));
+            }
+            System.out.println();
+        }
     }
 }
 

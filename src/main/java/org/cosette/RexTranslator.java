@@ -4,13 +4,12 @@ import io.github.cvc5.Kind;
 import io.github.cvc5.Solver;
 import io.github.cvc5.Sort;
 import io.github.cvc5.Term;
-import kala.collection.Seq;
 import kala.collection.immutable.ImmutableMap;
 import kala.collection.immutable.ImmutableSeq;
 import kala.collection.mutable.MutableMap;
 import kala.control.Result;
 import kala.tuple.Tuple;
-import kala.tuple.Tuple3;
+import kala.tuple.Tuple2;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rex.RexCall;
 import org.apache.calcite.rex.RexInputRef;
@@ -20,19 +19,23 @@ import org.apache.calcite.sql.type.SqlTypeName;
 
 import java.util.Objects;
 
-public record RexTranslator(Solver solver, MutableMap<String, Tuple3<Term, ImmutableSeq<Sort>, Sort>> declaredFunctions,
+public record RexTranslator(Solver solver, Declarations declaredFunctions,
                             ImmutableMap<RelType.VarType, MatchEnv.ProductType> typeDerivation) {
     public static Result<RexTranslator, String> createTranslator(
             ImmutableMap<RelType.VarType, MatchEnv.ProductType> typeDerivation) {
         try {
             var solver = new Solver();
-            solver.setOption("produce-models", "true");
             solver.setOption("sygus", "true");
             solver.setLogic("ALL");
-            return Result.ok(new RexTranslator(solver, MutableMap.create(), typeDerivation));
+            return Result.ok(new RexTranslator(solver, new Declarations(MutableMap.create()), typeDerivation));
         } catch (Exception e) {
             return Result.err(String.format("Encountered error during CVC5 initialization: %s", e));
         }
+    }
+
+    public RexTranslator addConstraints(ImmutableSeq<Term> constraints) {
+        constraints.forEach(solver::addSygusConstraint);
+        return this;
     }
 
     public Result<RexTranslator, String> encode(MatchEnv.SynthesisConstraint constraint) {
@@ -84,7 +87,7 @@ public record RexTranslator(Solver solver, MutableMap<String, Tuple3<Term, Immut
 
     public Result<ImmutableSeq<Term>, String> makeCall(RexCall call, ImmutableSeq<ImmutableSeq<Term>> fields) {
         var func = call.getOperator();
-        var args = Seq.from(call.getOperands()).map(arg -> translate(arg, fields))
+        var args = ImmutableSeq.from(call.getOperands()).map(arg -> translate(arg, fields))
                 .foldLeft(Result.<ImmutableSeq<Term>, String>ok(ImmutableSeq.empty()),
                         (res, smtArg) -> res.flatMap(ats -> smtArg.map(ats::appendedAll)));
         if (args.isErr()) {
@@ -101,12 +104,9 @@ public record RexTranslator(Solver solver, MutableMap<String, Tuple3<Term, Immut
                         Result.ok(ImmutableSeq.of(SqlTypeName.BOOLEAN));
                 default -> Result.err(String.format("Unsupported function in pattern: %s", func.getName()));
             };
-            return actualRetType.flatMap(actualRetTypes -> actualRetTypes.mapIndexed(
-                            (i, rt) -> declareFunction(cosFun.getName() + "-C" + i, smtSorts, getSort(rt)))
-                    .foldLeft(Result.<ImmutableSeq<Term>, String>ok(ImmutableSeq.empty()),
-                            (res, fc) -> res.flatMap(fcs -> fc.map(fcs::appended))).map(fcs -> fcs.map(
-                            fc -> solver.mkTerm(Kind.APPLY_UF,
-                                    Seq.of(fc).appendedAll(smtArgs).toArray(new Term[]{})))));
+            return actualRetType.flatMap(rts -> declareFunction(cosFun.getName(), smtSorts, rts.map(this::getSort)).map(
+                    fns -> fns.map(f -> solver.mkTerm(Kind.APPLY_UF,
+                            ImmutableSeq.of(f).appendedAll(smtArgs).toArray(new Term[]{})))));
         } else {
             var funcKind = func.getKind();
             var retSort = getSort(call.getType().getSqlTypeName());
@@ -150,9 +150,9 @@ public record RexTranslator(Solver solver, MutableMap<String, Tuple3<Term, Immut
                 return switch (funcKind) {
                     case NOT_EQUALS ->
                             Result.ok(ImmutableSeq.of(solver.mkTerm(Kind.NOT, solver.mkTerm(Kind.EQUAL, arrArgs))));
-                    default -> declareFunction(func.getName() + "-U", smtSorts,
-                            getSort(call.getType().getSqlTypeName())).map(f -> ImmutableSeq.of(
-                            solver.mkTerm(Kind.APPLY_UF, Seq.of(f).appendedAll(smtArgs).toArray(new Term[]{}))));
+                    default -> declareFunction(func.getName(), smtSorts,
+                            ImmutableSeq.of(getSort(call.getType().getSqlTypeName()))).map(f -> ImmutableSeq.of(
+                            solver.mkTerm(Kind.APPLY_UF, f.appendedAll(smtArgs).toArray(new Term[]{}))));
                 };
             } else {
                 return Result.ok(ImmutableSeq.of(solver.mkTerm(smtKind, arrArgs)));
@@ -160,19 +160,23 @@ public record RexTranslator(Solver solver, MutableMap<String, Tuple3<Term, Immut
         }
     }
 
-    public Result<Term, String> declareFunction(String name, Seq<Sort> inputSorts, Sort outputSort) {
-        var entry = declaredFunctions.getOption(name);
+    public Result<ImmutableSeq<Term>, String> declareFunction(String name, ImmutableSeq<Sort> inputSorts,
+                                                              ImmutableSeq<Sort> outputSorts) {
+        var entry = declaredFunctions.store.getOption(name);
         if (entry.isEmpty()) {
-            var synthFunc = solver.synthFun(name,
-                    inputSorts.mapIndexed((i, s) -> solver.mkVar(s, "A" + i)).toArray(new Term[]{}), outputSort);
-            declaredFunctions.put(name, Tuple.of(synthFunc, inputSorts.toImmutableSeq(), outputSort));
-            return Result.ok(synthFunc);
+            var inputs = inputSorts.mapIndexed((i, s) -> solver.mkVar(s, "A" + i)).toArray(new Term[]{});
+            var functions = outputSorts.mapIndexed((i, s) -> Tuple.of(solver.synthFun(name + "-C" + i, inputs, s), s));
+            declaredFunctions.store.put(name, Tuple.of(functions, inputSorts));
+            return Result.ok(functions.map(Tuple2::component1));
         } else {
             var declared = entry.get();
-            return declared.component2().size() == inputSorts.size() &&
-                    declared.component2().mapIndexed((i, t) -> Tuple.of(t, inputSorts.get(i)))
-                            .allMatch(p -> p.component1().equals(p.component2())) &&
-                    declared.component3().equals(outputSort) ? Result.ok(declared.component1()) :
+            var declaredInputs = declared.component2();
+            var declaredOutputs = declared.component1();
+            return declaredInputs.size() == inputSorts.size() &&
+                    declaredInputs.zip(inputSorts).allMatch(t -> t.component1().equals(t.component2())) &&
+                    declaredOutputs.size() == outputSorts.size() && declaredOutputs.zip(outputSorts).stream()
+                    .allMatch(t -> t.component1().component2().equals(t.component2())) ?
+                    Result.ok(declaredOutputs.map(Tuple2::component1)) :
                     Result.err(String.format("Type signature mismatch for function: %s", name));
         }
     }
@@ -187,5 +191,8 @@ public record RexTranslator(Solver solver, MutableMap<String, Tuple3<Term, Immut
             // EVEN IF THEY HAVE THE SAME NAME!
             default -> solver.mkUninterpretedSort(sqlTypeName.getName());
         };
+    }
+
+    public record Declarations(MutableMap<String, Tuple2<ImmutableSeq<Tuple2<Term, Sort>>, ImmutableSeq<Sort>>> store) {
     }
 }
