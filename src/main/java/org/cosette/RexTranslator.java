@@ -114,6 +114,8 @@ public record RexTranslator(Solver solver, MutableMap<String, Tuple3<Term, Immut
             if (retSort.isBoolean()) {
                 smtKind = switch (funcKind) {
                     case EQUALS -> Kind.EQUAL;
+                    case AND -> Kind.AND;
+                    case OR -> Kind.OR;
                     case NOT -> Kind.NOT;
                     case GREATER_THAN -> Kind.GT;
                     case GREATER_THAN_OR_EQUAL -> Kind.GEQ;
@@ -146,10 +148,6 @@ public record RexTranslator(Solver solver, MutableMap<String, Tuple3<Term, Immut
             }
             if (smtKind.equals(Kind.UNDEFINED_KIND)) {
                 return switch (funcKind) {
-                    case AND -> Result.ok(ImmutableSeq.of(ImmutableSeq.from(smtArgs).reversed()
-                            .foldLeft(solver.mkBoolean(true), (as, a) -> solver.mkTerm(Kind.AND, a, as))));
-                    case OR -> Result.ok(ImmutableSeq.of(ImmutableSeq.from(smtArgs).reversed()
-                            .foldLeft(solver.mkBoolean(false), (as, a) -> solver.mkTerm(Kind.OR, a, as))));
                     case NOT_EQUALS ->
                             Result.ok(ImmutableSeq.of(solver.mkTerm(Kind.NOT, solver.mkTerm(Kind.EQUAL, arrArgs))));
                     default -> declareFunction(func.getName() + "-U", smtSorts,
