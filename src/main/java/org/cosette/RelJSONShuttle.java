@@ -239,7 +239,7 @@ public class RelJSONShuttle implements RelShuttle {
             ObjectNode leftColumn = environment.createNode().put("column", level + index).put("type", type);
             ObjectNode rightColumn = environment.createNode().put("column", level + groupCount + groups.get(index)).put("type", type);
             ObjectNode equivalence = environment.createNode();
-            equivalence.put("operator", "=");
+            equivalence.put("operator", "<=>");
             equivalence.putArray("operand").add(leftColumn).add(rightColumn);
             equivalence.put("type", "BOOLEAN");
             condition.add(equivalence);
@@ -265,6 +265,8 @@ public class RelJSONShuttle implements RelShuttle {
                 operands.add(column);
             }
             function.put("type", call.getType().getSqlTypeName().name());
+            function.put("distinct", call.isDistinct());
+            function.put("ignoreNulls", call.ignoreNulls());
             aggregationFunctions.add(function);
         }
         aggregationArguments.set("source", filter);
