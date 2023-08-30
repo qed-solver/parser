@@ -556,6 +556,25 @@ public class ElevatedCoreRules {
         });
     }
 
+    public static Tuple2<RelNode, RelNode> aggregateFilterTranspose() {
+        var builder = RuleBuilder.create();
+        var table = builder.sourceSimpleTables(Seq.of(1)).get(0);
+        builder.scan(table);
+        var group = builder.genericProjectionOp("group", new RelType.VarType("GROUP", true));
+        var groupKey = builder.groupKey(builder.call(group, builder.fields()));
+        var aggregate = builder.genericAggregateOp("aggregate",
+                (RelType) builder.peek().getRowType().getFieldList().get(0).getType());
+        builder.aggregate(groupKey, builder.aggregateCall(aggregate, builder.fields()));
+        var filter = builder.genericPredicateOp("filter", true);
+        builder.filter(builder.call(filter, builder.field(0)));
+        var before = builder.build();
+        builder.scan(table).filter(builder.call(filter, builder.call(group, builder.fields())));
+        groupKey = builder.groupKey(builder.call(group, builder.fields()));
+        builder.aggregate(groupKey, builder.aggregateCall(aggregate, builder.fields()));
+        var after = builder.build();
+        return Tuple.of(before, after);
+    }
+
     public static void dumpTransformedRule(RelNode before, RelNode after, boolean verbose, Path dumpPath)
             throws IOException {
         if (verbose) {

@@ -102,7 +102,7 @@ public record RelJSONShuttle(Env env) {
                     var leftCol = object(Map.of("column", new IntNode(level + i), "type", type));
                     var rightCol = object(Map.of("column", new IntNode(level + groupCount + key), "type", type));
                     return object(
-                            Map.of("operator", new TextNode("="), "operand", array(Seq.of(leftCol, rightCol)), "type",
+                            Map.of("operator", new TextNode("<=>"), "operand", array(Seq.of(leftCol, rightCol)), "type",
                                     new TextNode("BOOLEAN")));
                 }));
                 var condition = object(Map.of("operator", new TextNode("AND"), "operand", conditions, "type",

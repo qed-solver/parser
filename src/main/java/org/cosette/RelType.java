@@ -22,7 +22,7 @@ public sealed interface RelType extends RelDataType {
          **/
         @Override
         protected void generateTypeString(StringBuilder sb, boolean withDetail) {
-            sb.append("INTEGER");
+            sb.append(name);
             if (withDetail) {
                 sb.append(": ").append(nullable ? "nullable" : "");
             }

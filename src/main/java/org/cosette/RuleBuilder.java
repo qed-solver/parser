@@ -17,13 +17,11 @@ import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.core.JoinRelType;
 import org.apache.calcite.rex.RexNode;
 import org.apache.calcite.schema.SchemaPlus;
-import org.apache.calcite.sql.SqlFunction;
-import org.apache.calcite.sql.SqlFunctionCategory;
-import org.apache.calcite.sql.SqlKind;
-import org.apache.calcite.sql.SqlOperator;
+import org.apache.calcite.sql.*;
 import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.tools.Frameworks;
 import org.apache.calcite.tools.RelBuilder;
+import org.apache.calcite.util.Optionality;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.Map;
@@ -91,6 +89,11 @@ public class RuleBuilder extends RelBuilder {
         return Seq.from(fields(2, 0)).concat(fields(2, 1));
     }
 
+
+    public SqlAggFunction genericAggregateOp(String name, RelType aggregation) {
+        return new CosetteAggregateFunction(name, aggregation);
+    }
+
     public SqlOperator genericPredicateOp(String name, boolean nullable) {
         return new CosetteFunction(name, new RelType.BaseType(SqlTypeName.BOOLEAN, nullable));
     }
@@ -113,6 +116,16 @@ public class RuleBuilder extends RelBuilder {
 
         public RelType getReturnType() {
             return codomain;
+        }
+    }
+
+    public static class CosetteAggregateFunction extends SqlAggFunction {
+
+        public CosetteAggregateFunction(String name, RelType returnType) {
+            super(name, null, SqlKind.OTHER_FUNCTION, opBinding -> {
+                var factory = opBinding.getTypeFactory();
+                return factory.createTypeWithNullability(returnType, returnType.isNullable());
+            }, null, null, SqlFunctionCategory.USER_DEFINED_FUNCTION, false, false, Optionality.OPTIONAL);
         }
     }
 
