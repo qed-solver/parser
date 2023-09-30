@@ -39,4 +39,13 @@ public sealed interface RelType extends RelDataType {
             super(RelDataTypeSystem.DEFAULT, typeName, nullable);
         }
     }
+
+    static RelType fromString(String name, boolean nullable) {
+        for (var tn : SqlTypeName.values()) {
+            if (tn.getName().equals(name)) {
+                return new BaseType(tn, nullable);
+            }
+        }
+        return new VarType(name, nullable);
+    }
 }

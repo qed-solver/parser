@@ -21,6 +21,14 @@ public class CosetteTable extends AbstractTable {
     private final Set<ImmutableBitSet> keys;
     private final Set<RexNode> constraints;
 
+    public CosetteTable(String n, Seq<String> cn, Seq<RelDataType> ct, Set<ImmutableBitSet> k, Set<RexNode> cs) {
+        name = n;
+        columnNames = cn;
+        columnTypes = ct;
+        keys = k;
+        constraints = cs;
+    }
+
     public CosetteTable(String identifier, Map<String, RelDataType> columns, Set<Set<String>> eligibleKeys,
                         Set<RexNode> checkConstraints) {
         name = identifier;
@@ -30,8 +38,8 @@ public class CosetteTable extends AbstractTable {
         constraints = checkConstraints;
     }
 
-    protected CosetteTable(String identifier, Map<String, RelDataType> columns,
-                           ImmutableSet<ImmutableBitSet> eligibleKeys, Set<RexNode> checkConstraints) {
+    public CosetteTable(String identifier, Map<String, RelDataType> columns, ImmutableSet<ImmutableBitSet> eligibleKeys,
+                        Set<RexNode> checkConstraints) {
         name = identifier;
         columnNames = columns.keysView().toImmutableSeq().sorted();
         columnTypes = columnNames.map(columns::get);

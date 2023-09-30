@@ -7,7 +7,6 @@ import org.apache.calcite.schema.SchemaPlus;
 import org.apache.calcite.sql2rel.RelFieldTrimmer;
 import org.apache.calcite.tools.RelBuilder;
 
-import java.io.File;
 import java.io.IOException;
 import java.nio.file.Paths;
 import java.util.List;
@@ -55,7 +54,7 @@ public class SQLJSONParser {
         nodes.forEach(scanner::scan);
         var pruner = new RelPruner(scanner.usages().toImmutableMap());
         var rNodes = nodes.map(pruner).asJava();
-        RelJSONShuttle.dumpToJSON(rNodes, new File(path + ".json"));
+        RelJSONShuttle.serializeToJson(rNodes, Paths.get(path + ".json"));
         RelRacketShuttle.dumpToRacket(rNodes, Paths.get(path + ".rkt"));
     }
 }

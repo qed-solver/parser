@@ -22,7 +22,7 @@ public record RelRacketShuttle(Env env) {
         Seq<SExpr> tabs = env.tables().toSeq().map(t -> {
             var table = t.unwrap(CosetteTable.class);
             assert table != null;
-            var fullName = Seq.from(t.getQualifiedName()).joinToString(".");
+            var fullName = table.getName();
             Seq<SExpr> fields = table.getColumnNames().map(SExpr::string);
             return SExpr.app("table-info", SExpr.string(fullName), SExpr.app("list", fields));
         });
@@ -41,7 +41,8 @@ public record RelRacketShuttle(Env env) {
 
     public SExpr visit(RelNode rel) {
         return switch (rel) {
-            case TableScan scan -> SExpr.app("r-scan", SExpr.integer(env.resolve(scan.getTable())));
+            case TableScan scan ->
+                    SExpr.app("r-scan", SExpr.integer(env.resolve(scan.getTable().unwrap(CosetteTable.class))));
             case LogicalValues values -> {
                 var visitor = new RexRacketVisitor(env);
                 Seq<SExpr> tuples = Seq.from(values.getTuples())
