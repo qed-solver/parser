@@ -11,15 +11,16 @@ import kala.control.Result;
 import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.core.TableScan;
 import org.apache.calcite.rel.logical.*;
-import org.apache.calcite.rel.type.RelDataType;
+import org.apache.calcite.rel.type.*;
 import org.apache.calcite.rex.*;
+import org.apache.calcite.sql.SqlOperator;
+import org.apache.calcite.sql.fun.SqlStdOperatorTable;
 import org.apache.calcite.util.ImmutableBitSet;
 
 import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
-import java.util.NoSuchElementException;
 
 public record RelJSONShuttle(Env env) {
     private final static ObjectMapper mapper = new ObjectMapper();
@@ -32,7 +33,7 @@ public record RelJSONShuttle(Env env) {
     private static Result<ImmutableSeq<JsonNode>, String> array(JsonNode jsonNode, String field) {
         var arr = jsonNode.get(field);
         if (arr == null || !arr.isArray()) {
-            return Result.err(String.format("Missing array field %s in JSON", field));
+            return Result.err(String.format("Missing array field %s in:\n%s", field, jsonNode.toPrettyString()));
         }
         return Result.ok(ImmutableSeq.from(arr.elements()));
     }
@@ -44,7 +45,7 @@ public record RelJSONShuttle(Env env) {
     private static Result<JsonNode, String> object(JsonNode jsonNode, String field) {
         var obj = jsonNode.get(field);
         if (obj == null) {
-            return Result.err(String.format("Missing object field %s in JSON", field));
+            return Result.err(String.format("Missing object field %s in:\n%s", field, jsonNode.toPrettyString()));
         }
         return Result.ok(obj);
     }
@@ -53,10 +54,19 @@ public record RelJSONShuttle(Env env) {
         return b ? BooleanNode.TRUE : BooleanNode.FALSE;
     }
 
+    private static <T> T unwrap(Result<T, String> res) throws Exception {
+        if (res.isErr()) {
+            throw new Exception(res.getErr());
+        }
+        return res.get();
+    }
+
     public static void main(String[] args) throws IOException {
-        var res = RelJSONShuttle.deserializeFromJson(Paths.get("ExtractedCockroachTests/pushFilterIntoJoinLeft.json"));
+        var res = RelJSONShuttle.deserializeFromJson(Paths.get("ElevatedRules/filterProjectTranspose.json"));
         if (res.isErr()) {
             System.out.println(res.getErr());
+        } else {
+            res.get().forEach(r -> System.out.println(r.explain()));
         }
     }
 
@@ -86,11 +96,11 @@ public record RelJSONShuttle(Env env) {
             var collected = ImmutableSeq.<CosetteTable>empty();
             for (var schema : schemas) {
                 try {
-                    var tys = array(schema, "types").get();
-                    var nbs = array(schema, "nullable").get();
-                    var nm = object(schema, "name").get();
-                    var fds = array(schema, "fields").get().map(JsonNode::asText);
-                    var kys = array(schema, "key").get();
+                    var tys = unwrap(array(schema, "types"));
+                    var nbs = unwrap(array(schema, "nullable"));
+                    var nm = unwrap(object(schema, "name"));
+                    var fds = unwrap(array(schema, "fields")).map(JsonNode::asText);
+                    var kys = unwrap(array(schema, "key"));
                     var kgs = Set.from(kys.map(kg -> ImmutableBitSet.of(Seq.from(kg.elements()).map(JsonNode::asInt))));
                     if (tys.size() != nbs.size()) {
                         return Result.err("Expecting corresponding types and nullabilities");
@@ -98,8 +108,9 @@ public record RelJSONShuttle(Env env) {
                     var sts = tys.zip(nbs).map(tn -> (RelDataType) RelType.fromString(tn.component1().asText(),
                             tn.component2().asBoolean()));
                     collected = collected.appended(new CosetteTable(nm.asText(), fds, sts, kgs, Set.empty()));
-                } catch (NoSuchElementException e) {
-                    return Result.err("Broken table schemas");
+                } catch (Exception e) {
+                    return Result.err(
+                            String.format("Broken table schemas: %s in\n%s", e.getMessage(), schema.toPrettyString()));
                 }
             }
             return Result.ok(collected);
@@ -233,11 +244,61 @@ public record RelJSONShuttle(Env env) {
                     builder.scan(env.tables().get(content.asInt()).getName());
                     yield Result.ok(builder);
                 }
-                yield Result.err(String.format("No table with index %s", content));
+                yield Result.err(String.format("Missing table with index %s", content.toPrettyString()));
             }
-            case String k when k.equals("values") -> Result.err("Not implemented yet");
-            case String k when k.equals("filter") -> Result.err("Not implemented yet");
-            case String k when k.equals("project") -> Result.err("Not implemented yet");
+            case String k when k.equals("values") -> {
+                try {
+                    var et = unwrap(array(content, "schema"));
+                    var rt = new RelRecordType(StructKind.FULLY_QUALIFIED, et.mapIndexed(
+                            (i, t) -> (RelDataTypeField) new RelDataTypeFieldImpl(String.format("VALUES-%s", i), i,
+                                    RelType.fromString(t.asText(), true))).asJava());
+                    var vs = unwrap(array(content, "content"));
+                    var vals = ImmutableSeq.<List<RexLiteral>>empty();
+                    for (var v : vs) {
+                        var val = ImmutableSeq.<RexLiteral>empty();
+                        if (!v.isArray()) {
+                            yield Result.err("Expecting tuple (JSON list) as value");
+                        }
+                        for (var jl : Seq.from(v.elements())) {
+                            var l = unwrap(new RexJSONVisitor(env).deserialize(builder, jl));
+                            if (l instanceof RexLiteral) {
+                                val = val.appended((RexLiteral) l);
+                            } else {
+                                yield Result.err("Expecting literal expression");
+                            }
+                        }
+                        vals = vals.appended(val.asJava());
+                    }
+                    builder.values(vals.asJava(), rt);
+                    yield Result.ok(builder);
+                } catch (Exception e) {
+                    yield Result.err(e.getMessage());
+                }
+            }
+            case String k when k.equals("filter") -> {
+                try {
+                    var cond = unwrap(object(content, "condition"));
+                    var source = unwrap(object(content, "source"));
+                    var bs = unwrap(deserialize(builder, source));
+                    var c = unwrap(new RexJSONVisitor(env).deserialize(builder, cond));
+                    bs.filter(c);
+                    yield Result.ok(bs);
+                } catch (Exception e) {
+                    yield Result.err(e.getMessage());
+                }
+            }
+            case String k when k.equals("project") -> {
+                try {
+                    var target = unwrap(array(content, "target"));
+                    var source = unwrap(object(content, "source"));
+                    var bs = unwrap(deserialize(builder, source));
+                    var ps = target.mapChecked(t -> unwrap(new RexJSONVisitor(env).deserialize(builder, t)));
+                    bs.project(ps);
+                    yield Result.ok(bs);
+                } catch (Exception e) {
+                    yield Result.err(e.getMessage());
+                }
+            }
             case String k when k.equals("join") -> Result.err("Not implemented yet");
             case String k when k.equals("correlate") -> Result.err("Not implemented yet");
             default -> Result.err(String.format("Unrecognized node:\n%s", jsonNode.toPrettyString()));
@@ -270,7 +331,33 @@ public record RelJSONShuttle(Env env) {
         }
 
         public Result<RexNode, String> deserialize(RuleBuilder builder, JsonNode jsonNode) {
-            return Result.err("RexNode deserialization not implemented yet.");
+            if (jsonNode.has("column") && jsonNode.get("column").isInt()) {
+                // WARNING: THIS IS WRONG! NO ENVIRONMENT CONSIDERED!
+                return Result.ok(builder.field(jsonNode.get("column").asInt()));
+            } else if (jsonNode.has("operator") && jsonNode.get("operator").isTextual()) {
+                var op = jsonNode.get("operator").asText();
+                try {
+                    var args = unwrap(array(jsonNode, "operand"));
+                    var ty = RelType.fromString(unwrap(object(jsonNode, "type")).asText(), true);
+                    if (args.isEmpty()) {
+                        return Result.ok(RexLiteral.fromJdbcString(ty, ty.getSqlTypeName(), op));
+                    } else {
+                        var fields = args.mapChecked(expr -> unwrap(deserialize(builder, expr)));
+                        for (var refl : Seq.from(SqlStdOperatorTable.class.getDeclaredFields())
+                                .filter(f -> java.lang.reflect.Modifier.isPublic(f.getModifiers()) &&
+                                        java.lang.reflect.Modifier.isStatic(f.getModifiers()))) {
+                            var mist = refl.get(null);
+                            if (mist instanceof SqlOperator sqlOperator && sqlOperator.getName().equals(op)) {
+                                return Result.ok(builder.call(sqlOperator, fields));
+                            }
+                        }
+                        return Result.ok(builder.call(builder.genericProjectionOp(op, ty), fields));
+                    }
+                } catch (Exception e) {
+                    return Result.err(e.getMessage());
+                }
+            }
+            return Result.err(String.format("Unrecognized node:\n%s", jsonNode.toPrettyString()));
         }
     }
 }
