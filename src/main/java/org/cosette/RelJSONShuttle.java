@@ -1,525 +1,363 @@
 package org.cosette;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
-import org.apache.calcite.plan.RelOptTable;
-import org.apache.calcite.rel.RelFieldCollation;
+import com.fasterxml.jackson.databind.node.*;
+import kala.collection.Map;
+import kala.collection.Seq;
+import kala.collection.Set;
+import kala.collection.immutable.ImmutableSeq;
+import kala.control.Result;
 import org.apache.calcite.rel.RelNode;
-import org.apache.calcite.rel.RelReferentialConstraint;
-import org.apache.calcite.rel.RelShuttle;
-import org.apache.calcite.rel.core.AggregateCall;
-import org.apache.calcite.rel.core.CorrelationId;
-import org.apache.calcite.rel.core.TableFunctionScan;
 import org.apache.calcite.rel.core.TableScan;
 import org.apache.calcite.rel.logical.*;
-import org.apache.calcite.rel.type.RelDataTypeField;
-import org.apache.calcite.rex.RexLiteral;
-import org.apache.calcite.rex.RexNode;
-import org.apache.calcite.schema.ColumnStrategy;
+import org.apache.calcite.rel.type.*;
+import org.apache.calcite.rex.*;
+import org.apache.calcite.sql.SqlOperator;
+import org.apache.calcite.sql.fun.SqlStdOperatorTable;
 import org.apache.calcite.util.ImmutableBitSet;
-import org.apache.calcite.util.mapping.IntPair;
 
-import java.io.File;
 import java.io.IOException;
-import java.util.ArrayList;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.List;
-import java.util.Set;
 
-/**
- * AN implementation of RelShuttle interface that could convert a RelNode instance to a ObjectNode instance.
- */
-public class RelJSONShuttle implements RelShuttle {
+public record RelJSONShuttle(Env env) {
+    private final static ObjectMapper mapper = new ObjectMapper();
 
-    private final Environment environment;
-    private ObjectNode relNode;
-
-    /**
-     * Initialize the shuttle with a given environment.
-     *
-     * @param existing The given environment.
-     */
-    public RelJSONShuttle(Environment existing) {
-        environment = existing;
-        relNode = environment.createNode();
+    private static ArrayNode array(Seq<JsonNode> objs) {
+        return new ArrayNode(mapper.getNodeFactory(), objs.asJava());
     }
 
-    /**
-     * Dump a list of RelRoot to a file in JSON format .
-     *
-     * @param relNodes The given list of RelRoot.
-     * @param file     The given file.
-     */
-    public static void dumpToJSON(List<RelNode> relNodes, File file) throws IOException {
 
-        ObjectMapper mapper = new ObjectMapper();
-
-        ObjectNode mainObject = mapper.createObjectNode();
-
-        ArrayNode schemaArray = mainObject.putArray("schemas");
-
-        ArrayNode queryArray = mainObject.putArray("queries");
-
-        ArrayNode helpArray = mainObject.putArray("help");
-
-        List<RelOptTable> tableList = new ArrayList<>();
-
-        for (RelNode relNode : relNodes) {
-            Environment environment = new Environment(mapper, tableList);
-            RelJSONShuttle relJsonShuttle = new RelJSONShuttle(environment);
-
-            helpArray.add(relNode.explain());
-
-            relNode.accept(relJsonShuttle);
-            queryArray.add(relJsonShuttle.getRelNode());
-
-            tableList = environment.getRelOptTables();
+    private static Result<ImmutableSeq<JsonNode>, String> array(JsonNode jsonNode, String field) {
+        var arr = jsonNode.get(field);
+        if (arr == null || !arr.isArray()) {
+            return Result.err(String.format("Missing array field %s in:\n%s", field, jsonNode.toPrettyString()));
         }
+        return Result.ok(ImmutableSeq.from(arr.elements()));
+    }
 
-        List<List<String>> tableNames = new ArrayList<>();
-        int index = 0;
-        while (index < tableList.size()) {
-            RelOptTable table = tableList.get(index);
-            tableNames.add(table.getQualifiedName());
+    private static ObjectNode object(Map<String, JsonNode> fields) {
+        return new ObjectNode(mapper.getNodeFactory(), fields.asJava());
+    }
 
-            ObjectNode tableObject = mapper.createObjectNode();
+    private static Result<JsonNode, String> object(JsonNode jsonNode, String field) {
+        var obj = jsonNode.get(field);
+        if (obj == null) {
+            return Result.err(String.format("Missing object field %s in:\n%s", field, jsonNode.toPrettyString()));
+        }
+        return Result.ok(obj);
+    }
 
-            tableObject.put("name", table.getQualifiedName().get(table.getQualifiedName().size() - 1));
-            ArrayNode fieldArray = tableObject.putArray("fields");
-            for (String field : table.getRowType().getFieldNames()) {
-                fieldArray.add(field);
-            }
+    private static BooleanNode bool(boolean b) {
+        return b ? BooleanNode.TRUE : BooleanNode.FALSE;
+    }
 
-            ArrayNode typeArray = tableObject.putArray("types");
-            for (RelDataTypeField field : table.getRowType().getFieldList()) {
-                typeArray.add(field.getType().getSqlTypeName().name());
-            }
+    private static <T> T unwrap(Result<T, String> res) throws Exception {
+        if (res.isErr()) {
+            throw new Exception(res.getErr());
+        }
+        return res.get();
+    }
 
-            ArrayNode strategyArray = tableObject.putArray("strategy");
-            for (ColumnStrategy columnStrategy : table.getColumnStrategies()) {
-                strategyArray.add(columnStrategy.toString());
-            }
+    public static void main(String[] args) throws IOException {
+        var res = RelJSONShuttle.deserializeFromJson(Paths.get("ElevatedRules/filterProjectTranspose.json"));
+        if (res.isErr()) {
+            System.out.println(res.getErr());
+        } else {
+            res.get().forEach(r -> System.out.println(r.explain()));
+        }
+    }
 
-            ArrayNode keyArray = tableObject.putArray("key");
-            List<ImmutableBitSet> keys = table.getKeys();
-            if (keys != null) {
-                for (ImmutableBitSet key : keys) {
-                    ArrayNode components = keyArray.addArray();
-                    for (int unique : key) {
-                        components.add(unique);
+    public static void serializeToJson(List<RelNode> relNodes, Path path) throws IOException {
+        var shuttle = new RelJSONShuttle(Env.empty());
+        var helps = array(Seq.from(relNodes).map(rel -> new TextNode(rel.explain())));
+        var queries = array(Seq.from(relNodes).map(shuttle::serialize));
+
+        var tables = shuttle.env.tables();
+        var schemas = array(tables.map(table -> object(Map.of("name", new TextNode(table.getName()), "fields",
+                array(table.getColumnNames().map(TextNode::new)), "types",
+                array(table.getColumnTypes().map(type -> new TextNode(type.toString()))), "nullable",
+                array(table.getColumnTypes().map(RelDataType::isNullable).map(RelJSONShuttle::bool)), "key",
+                array(Seq.from(table.getKeys().map(key -> array(Seq.from(key).map(IntNode::new))))), "guaranteed",
+                array(table.getConstraints()
+                        .map(check -> new RexJSONVisitor(shuttle.env.advanced(table.getColumnNames().size())).serialize(
+                                check)).toImmutableSeq())))));
+
+        var main = object(Map.of("schemas", schemas, "queries", queries, "help", helps));
+        mapper.writerWithDefaultPrettyPrinter().writeValue(path.toFile(), main);
+    }
+
+    public static Result<ImmutableSeq<RelNode>, String> deserializeFromJson(Path path) throws IOException {
+        var node = mapper.readTree(path.toFile());
+        var env = Env.empty();
+        var tables = array(node, "schemas").flatMap(schemas -> {
+            var collected = ImmutableSeq.<CosetteTable>empty();
+            for (var schema : schemas) {
+                try {
+                    var tys = unwrap(array(schema, "types"));
+                    var nbs = unwrap(array(schema, "nullable"));
+                    var nm = unwrap(object(schema, "name"));
+                    var fds = unwrap(array(schema, "fields")).map(JsonNode::asText);
+                    var kys = unwrap(array(schema, "key"));
+                    var kgs = Set.from(kys.map(kg -> ImmutableBitSet.of(Seq.from(kg.elements()).map(JsonNode::asInt))));
+                    if (tys.size() != nbs.size()) {
+                        return Result.err("Expecting corresponding types and nullabilities");
                     }
+                    var sts = tys.zip(nbs).map(tn -> (RelDataType) RelType.fromString(tn.component1().asText(),
+                            tn.component2().asBoolean()));
+                    collected = collected.appended(new CosetteTable(nm.asText(), fds, sts, kgs, Set.empty()));
+                } catch (Exception e) {
+                    return Result.err(
+                            String.format("Broken table schemas: %s in\n%s", e.getMessage(), schema.toPrettyString()));
                 }
             }
+            return Result.ok(collected);
+        });
+        if (tables.isErr()) {
+            return Result.err(tables.getErr());
+        }
+        env.tables().appendAll(tables.get());
+        var queries = array(node, "queries");
+        if (queries.isErr()) {
+            return Result.err(queries.getErr());
+        }
+        var shuttle = new RelJSONShuttle(env);
+        return queries.get().map(q -> {
+            var builder = RuleBuilder.create();
+            tables.get().forEach(builder::addTable);
+            return shuttle.deserialize(builder, q);
+        }).foldLeft(Result.ok(ImmutableSeq.empty()), (qs, qb) -> qs.flatMap(s -> qb.map(b -> s.appended(b.build()))));
+    }
 
-            // TODO: Broken Foreign Key implementation for Cosette. to be fixed when Calcite supports foreign keys.
-            ArrayNode foreignArray = tableObject.putArray("foreign");
-            List<RelReferentialConstraint> constraints = table.getReferentialConstraints();
-            if (constraints != null) {
-                for (RelReferentialConstraint constraint : constraints) {
-                    // Potentially refer to undeclared tables.
-                    ArrayNode foreignMap = foreignArray.addArray();
-                    int source = tableNames.indexOf(constraint.getSourceQualifiedName());
-                    int target = tableNames.indexOf(constraint.getTargetQualifiedName());
-                    ArrayNode sourceArray = foreignMap.addArray();
-                    ArrayNode targetArray = foreignMap.addArray();
-                    foreignMap.addArray().add(source).add(target);
-                    for (IntPair intPair : constraint.getColumnPairs()) {
-                        sourceArray.add(intPair.source);
-                        targetArray.add(intPair.target);
+    public JsonNode serialize(RelNode rel) {
+        return switch (rel) {
+            case TableScan scan ->
+                    object(Map.of("scan", new IntNode(env.resolve(scan.getTable().unwrap(CosetteTable.class)))));
+            case LogicalValues values -> {
+                var visitor = new RexJSONVisitor(env);
+                var schema = array(Seq.from(values.getRowType().getFieldList())
+                        .map(field -> new TextNode(field.getType().toString())));
+                var records = array(Seq.from(values.getTuples())
+                        .map(tuple -> array(Seq.from(tuple).map(visitor::serialize))));
+                yield object(Map.of("values", object(Map.of("schema", schema, "content", records))));
+            }
+            case LogicalFilter filter -> {
+                var visitor = new RexJSONVisitor(env.advanced(filter.getInput().getRowType().getFieldCount())
+                        .recorded(filter.getVariablesSet()));
+                yield object(Map.of("filter",
+                        object(Map.of("condition", visitor.serialize(filter.getCondition()), "source",
+                                serialize(filter.getInput())))));
+            }
+            case LogicalProject project -> {
+                var visitor = new RexJSONVisitor(env.advanced(project.getInput().getRowType().getFieldCount())
+                        .recorded(project.getVariablesSet()));
+                var targets = array(Seq.from(project.getProjects()).map(visitor::serialize));
+                yield object(
+                        Map.of("project", object(Map.of("target", targets, "source", serialize(project.getInput())))));
+            }
+            case LogicalJoin join -> {
+                var left = join.getLeft();
+                var right = join.getRight();
+                var visitor = new RexJSONVisitor(
+                        env.advanced(left.getRowType().getFieldCount() + right.getRowType().getFieldCount())
+                                .recorded(join.getVariablesSet()));
+                yield object(Map.of("join",
+                        object(Map.of("kind", new TextNode(join.getJoinType().toString()), "condition",
+                                visitor.serialize(join.getCondition()), "left", serialize(left), "right",
+                                serialize(right)))));
+            }
+            case LogicalCorrelate correlate -> {
+                var rightShuttle = new RelJSONShuttle(env.advanced(correlate.getLeft().getRowType().getFieldCount())
+                        .recorded(correlate.getVariablesSet()).advanced(0));
+                yield object(Map.of("correlate",
+                        array(Seq.of(serialize(correlate.getLeft()), rightShuttle.serialize(correlate.getRight())))));
+            }
+            case LogicalAggregate aggregate -> {
+                var groupCount = aggregate.getGroupCount();
+                var level = env.base();
+                var types = Seq.from(aggregate.getInput().getRowType().getFieldList())
+                        .map(type -> new TextNode(type.getType().toString()));
+                var keyCols = array(Seq.from(aggregate.getGroupSet())
+                        .map(key -> object(Map.of("column", new IntNode(level + key), "type", types.get(key)))));
+                var keys = object(Map.of("project",
+                        object(Map.of("target", keyCols, "source", serialize(aggregate.getInput())))));
+                var conditions = array(Seq.from(aggregate.getGroupSet()).mapIndexed((i, key) -> {
+                    var type = types.get(key);
+                    var leftCol = object(Map.of("column", new IntNode(level + i), "type", type));
+                    var rightCol = object(Map.of("column", new IntNode(level + groupCount + key), "type", type));
+                    return object(
+                            Map.of("operator", new TextNode("<=>"), "operand", array(Seq.of(leftCol, rightCol)), "type",
+                                    new TextNode("BOOLEAN")));
+                }));
+                var condition = object(Map.of("operator", new TextNode("AND"), "operand", conditions, "type",
+                        new TextNode("BOOLEAN")));
+                var aggs = array(Seq.from(aggregate.getAggCallList()).map(call -> object(
+                        Map.of("operator", new TextNode(call.getAggregation().getName()), "operand",
+                                array(Seq.from(call.getArgList()).map(target -> object(
+                                        Map.of("column", new IntNode(level + groupCount + target), "type",
+                                                types.get(target))))), "distinct", bool(call.isDistinct()),
+                                "ignoreNulls", bool(call.ignoreNulls()), "type",
+                                new TextNode(call.getType().toString())))));
+                var aggregated = object(Map.of("aggregate", object(Map.of("function", aggs, "source",
+                        object(Map.of("filter", object(Map.of("condition", condition, "source",
+                                new RelJSONShuttle(env.lifted(groupCount)).serialize(aggregate.getInput())))))))));
+                yield object(Map.of("distinct", object(Map.of("correlate", array(Seq.of(keys, aggregated))))));
+            }
+            case LogicalUnion union -> {
+                var result = object(Map.of("union", array(Seq.from(union.getInputs()).map(this::serialize))));
+                yield union.all ? result : object(Map.of("distinct", result));
+            }
+            case LogicalIntersect intersect when !intersect.all ->
+                    object(Map.of("intersect", array(Seq.from(intersect.getInputs()).map(this::serialize))));
+            case LogicalMinus minus when !minus.all ->
+                    object(Map.of("except", array(Seq.from(minus.getInputs()).map(this::serialize))));
+            case LogicalSort sort -> {
+                var types = Seq.from(sort.getInput().getRowType().getFieldList())
+                        .map(type -> new TextNode(type.getType().toString()));
+                var collations = array(Seq.from(sort.collation.getFieldCollations()).map(collation -> {
+                    var index = collation.getFieldIndex();
+                    return array(Seq.of(new IntNode(index), types.get(index), new TextNode(collation.shortString())));
+                }));
+                var args = object(Map.of("collation", collations, "source", serialize(sort.getInput())));
+                var visitor = new RexJSONVisitor(env.advanced(sort.getInput().getRowType().getFieldCount()));
+                if (sort.offset != null) {
+                    args.set("offset", visitor.serialize(sort.offset));
+                }
+                if (sort.fetch != null) {
+                    args.set("limit", visitor.serialize(sort.fetch));
+                }
+                yield object(Map.of("sort", args));
+            }
+            default -> throw new RuntimeException("Not implemented: " + rel.getRelTypeName());
+        };
+    }
+
+    public Result<RuleBuilder, String> deserialize(RuleBuilder builder, JsonNode jsonNode) {
+        var entry = jsonNode.fields().next();
+        var kind = entry.getKey();
+        var content = entry.getValue();
+        return switch (kind) {
+            case String k when k.equals("scan") -> {
+                if (content.isInt() && 0 <= content.asInt() && content.asInt() < env.tables().size()) {
+                    builder.scan(env.tables().get(content.asInt()).getName());
+                    yield Result.ok(builder);
+                }
+                yield Result.err(String.format("Missing table with index %s", content.toPrettyString()));
+            }
+            case String k when k.equals("values") -> {
+                try {
+                    var et = unwrap(array(content, "schema"));
+                    var rt = new RelRecordType(StructKind.FULLY_QUALIFIED, et.mapIndexed(
+                            (i, t) -> (RelDataTypeField) new RelDataTypeFieldImpl(String.format("VALUES-%s", i), i,
+                                    RelType.fromString(t.asText(), true))).asJava());
+                    var vs = unwrap(array(content, "content"));
+                    var vals = ImmutableSeq.<List<RexLiteral>>empty();
+                    for (var v : vs) {
+                        var val = ImmutableSeq.<RexLiteral>empty();
+                        if (!v.isArray()) {
+                            yield Result.err("Expecting tuple (JSON list) as value");
+                        }
+                        for (var jl : Seq.from(v.elements())) {
+                            var l = unwrap(new RexJSONVisitor(env).deserialize(builder, jl));
+                            if (l instanceof RexLiteral) {
+                                val = val.appended((RexLiteral) l);
+                            } else {
+                                yield Result.err("Expecting literal expression");
+                            }
+                        }
+                        vals = vals.appended(val.asJava());
                     }
+                    builder.values(vals.asJava(), rt);
+                    yield Result.ok(builder);
+                } catch (Exception e) {
+                    yield Result.err(e.getMessage());
                 }
             }
-
-            CosetteTable raw = table.unwrap(CosetteTable.class);
-            if (raw != null) {
-                ArrayNode checkArray = tableObject.putArray("guaranteed");
-                for (RexNode check : raw.deriveCheckConstraint()) {
-                    Environment checkEnvironment = new Environment(mapper, tableList);
-                    RexJSONVisitor checkVisitor = new RexJSONVisitor(checkEnvironment, table.getRowType().getFieldCount());
-                    checkArray.add(check.accept(checkVisitor));
-                    tableList = checkEnvironment.getRelOptTables();
+            case String k when k.equals("filter") -> {
+                try {
+                    var cond = unwrap(object(content, "condition"));
+                    var source = unwrap(object(content, "source"));
+                    var bs = unwrap(deserialize(builder, source));
+                    var c = unwrap(new RexJSONVisitor(env).deserialize(builder, cond));
+                    bs.filter(c);
+                    yield Result.ok(bs);
+                } catch (Exception e) {
+                    yield Result.err(e.getMessage());
                 }
             }
-
-            schemaArray.add(tableObject);
-
-            index += 1;
-
-        }
-
-        mapper.writerWithDefaultPrettyPrinter().writeValue(file, mainObject);
-
-    }
-
-    /**
-     * @return The ObjectNode instance corresponding to the RelNode instance.
-     */
-    public ObjectNode getRelNode() {
-        return relNode;
-    }
-
-    /**
-     * Visit a RexNode instance with the given environment and input.
-     *
-     * @param rex     The RexNode instance to be visited.
-     * @param context The given environment.
-     * @param input   The number of columns in the input, which could be viewed as additional environment.
-     * @return A RexJSONVisitor instance that has visited the given RexNode.
-     */
-    private RexJSONVisitor visitRexNode(RexNode rex, Environment context, int input) {
-        RexJSONVisitor rexJSONVisitor = new RexJSONVisitor(context, input);
-        rex.accept(rexJSONVisitor);
-        return rexJSONVisitor;
-    }
-
-    /**
-     * Visit a RelNode instance with the given environment.
-     *
-     * @param child   The RelNode instance to be visited.
-     * @param context The given environment.
-     * @return A RelJSONShuttle that has traversed through the given RelNode instance.
-     */
-    private RelJSONShuttle visitChild(RelNode child, Environment context) {
-        RelJSONShuttle childShuttle = new RelJSONShuttle(context);
-        child.accept(childShuttle);
-        return childShuttle;
-    }
-
-    /**
-     * A placeholder indicating that the translation rules have not been implemented yet.
-     *
-     * @param node The given RelNode instance.
-     */
-    private void notImplemented(RelNode node) {
-        throw new RuntimeException("Not implemented: " + node.getRelTypeName());
-    }
-
-    /**
-     * Visit a RelVariable node. <br>
-     * Format: {relNode: id}
-     *
-     * @param variable The given RelNode instance.
-     * @return Null, a placeholder required by interface.
-     */
-    public RelNode visit(RelVariable variable) {
-        relNode.put("relNode", variable.getId());
-        return null;
-    }
-
-    /**
-     * Visit a LogicalAggregation node. <br>
-     * Format: {distinct: {correlate: [{project: {target: [group], source: {input}}},
-     * {aggregate: {function: [functions], source: {filter: {condition: {groups}, source: {inputCopy}}}}}]}}
-     *
-     * @param aggregate The given RelNode instance.
-     * @return Null, a placeholder required by interface.
-     */
-    @Override
-    public RelNode visit(LogicalAggregate aggregate) {
-
-        RelJSONShuttle childShuttle = visitChild(aggregate.getInput(), environment);
-        int groupCount = aggregate.getGroupCount();
-        int level = environment.getLevel();
-
-        ObjectNode inputProject = environment.createNode();
-        ObjectNode inputProjectArguments = environment.createNode();
-        ArrayNode inputProjectTargets = inputProjectArguments.putArray("target");
-
-        ObjectNode filter = environment.createNode();
-        ObjectNode filterArguments = environment.createNode();
-        ObjectNode and = environment.createNode();
-        and.put("operator", "AND");
-        ArrayNode condition = and.putArray("operand");
-        and.put("type", "BOOLEAN");
-        List<Integer> groups = new ArrayList<>(aggregate.getGroupSet().asList());
-        List<RelDataTypeField> types = aggregate.getInput().getRowType().getFieldList();
-        for (int index = 0; index < groups.size(); index++) {
-            String type = types.get(groups.get(index)).getType().getSqlTypeName().name();
-            inputProjectTargets.add(environment.createNode().put("column", level + groups.get(index)).put("type", type));
-            ObjectNode leftColumn = environment.createNode().put("column", level + index).put("type", type);
-            ObjectNode rightColumn = environment.createNode().put("column", level + groupCount + groups.get(index)).put("type", type);
-            ObjectNode equivalence = environment.createNode();
-            equivalence.put("operator", "<=>");
-            equivalence.putArray("operand").add(leftColumn).add(rightColumn);
-            equivalence.put("type", "BOOLEAN");
-            condition.add(equivalence);
-        }
-        inputProjectArguments.set("source", childShuttle.getRelNode());
-        inputProject.set("project", inputProjectArguments);
-        RelJSONShuttle filterChildShuttle = visitChild(aggregate.getInput(), environment.amend(null, groupCount));
-        filterArguments.set("condition", and);
-        filterArguments.set("source", filterChildShuttle.getRelNode());
-        filter.set("filter", filterArguments);
-
-        ObjectNode aggregation = environment.createNode();
-        ObjectNode aggregationArguments = environment.createNode();
-        ArrayNode aggregationFunctions = aggregationArguments.putArray("function");
-        for (AggregateCall call : aggregate.getAggCallList()) {
-            ObjectNode function = environment.createNode();
-            function.put("operator", call.getAggregation().toString());
-            ArrayNode operands = function.putArray("operand");
-            for (int target : call.getArgList()) {
-                ObjectNode column = environment.createNode();
-                column.put("column", level + groupCount + target);
-                column.put("type", types.get(target).getType().getSqlTypeName().name());
-                operands.add(column);
+            case String k when k.equals("project") -> {
+                try {
+                    var target = unwrap(array(content, "target"));
+                    var source = unwrap(object(content, "source"));
+                    var bs = unwrap(deserialize(builder, source));
+                    var ps = target.mapChecked(t -> unwrap(new RexJSONVisitor(env).deserialize(builder, t)));
+                    bs.project(ps);
+                    yield Result.ok(bs);
+                } catch (Exception e) {
+                    yield Result.err(e.getMessage());
+                }
             }
-            function.put("type", call.getType().getSqlTypeName().name());
-            function.put("distinct", call.isDistinct());
-            function.put("ignoreNulls", call.ignoreNulls());
-            aggregationFunctions.add(function);
+            case String k when k.equals("join") -> Result.err("Not implemented yet");
+            case String k when k.equals("correlate") -> Result.err("Not implemented yet");
+            default -> Result.err(String.format("Unrecognized node:\n%s", jsonNode.toPrettyString()));
+        };
+    }
+
+    public record RexJSONVisitor(Env env) {
+        public JsonNode serialize(RexNode rex) {
+            return switch (rex) {
+                case RexInputRef inputRef ->
+                        object(Map.of("column", new IntNode(inputRef.getIndex() + env.base()), "type",
+                                new TextNode(inputRef.getType().toString())));
+                case RexLiteral literal -> object(Map.of("operator",
+                        new TextNode(literal.getValue() == null ? "NULL" : literal.getValue().toString()), "operand",
+                        array(Seq.empty()), "type", new TextNode(literal.getType().toString())));
+                case RexSubQuery subQuery ->
+                        object(Map.of("operator", new TextNode(subQuery.getOperator().toString()), "operand",
+                                array(Seq.from(subQuery.getOperands()).map(this::serialize)), "query",
+                                new RelJSONShuttle(env.advanced(0)).serialize(subQuery.rel), "type",
+                                new TextNode(subQuery.getType().toString())));
+                case RexCall call -> object(Map.of("operator", new TextNode(call.getOperator().toString()), "operand",
+                        array(Seq.from(call.getOperands()).map(this::serialize)), "type",
+                        new TextNode(call.getType().toString())));
+                case RexFieldAccess fieldAccess -> object(Map.of("column", new IntNode(
+                                fieldAccess.getField().getIndex() +
+                                        env.resolve(((RexCorrelVariable) fieldAccess.getReferenceExpr()).id)), "type",
+                        new TextNode(fieldAccess.getType().toString())));
+                default -> throw new RuntimeException("Not implemented: " + rex.getKind());
+            };
         }
-        aggregationArguments.set("source", filter);
-        aggregation.set("aggregate", aggregationArguments);
 
-        relNode.putArray("correlate").add(inputProject).add(aggregation);
-        distinct();
-
-        return null;
-    }
-
-    /**
-     * Wrap the current ObjectNode with "distinct" keyword.
-     */
-    private void distinct() {
-        ObjectNode distinct = environment.createNode();
-        distinct.set("distinct", relNode);
-        relNode = distinct;
-    }
-
-    @Override
-    public RelNode visit(LogicalMatch match) {
-        notImplemented(match);
-        return null;
-    }
-
-    /**
-     * Visit a TableScan node. <br>
-     * Format: {scan: table}
-     *
-     * @param scan The given RelNode instance.
-     * @return Null, a placeholder required by interface.
-     */
-    @Override
-    public RelNode visit(TableScan scan) {
-        relNode.put("scan", environment.identifyTable(scan.getTable()));
-        return null;
-    }
-
-    @Override
-    public RelNode visit(TableFunctionScan scan) {
-        notImplemented(scan);
-        return null;
-    }
-
-    /**
-     * Visit a LogicalValues node. <br>
-     * Format: {value: {schema: [types], content: [[element]]}}
-     *
-     * @param values The given RelNode instance.
-     * @return Null, a placeholder required by interface.
-     */
-    @Override
-    public RelNode visit(LogicalValues values) {
-        ObjectNode value = environment.createNode();
-        ArrayNode schema = value.putArray("schema");
-        ArrayNode content = value.putArray("content");
-        for (RelDataTypeField relDataTypeField : values.getRowType().getFieldList()) {
-            schema.add(relDataTypeField.getType().getSqlTypeName().name());
-        }
-        for (List<RexLiteral> tuple : values.getTuples()) {
-            ArrayNode record = content.addArray();
-            for (RexLiteral rexLiteral : tuple) {
-                record.add(visitRexNode(rexLiteral, environment, 0).getRexNode());
+        public Result<RexNode, String> deserialize(RuleBuilder builder, JsonNode jsonNode) {
+            if (jsonNode.has("column") && jsonNode.get("column").isInt()) {
+                // WARNING: THIS IS WRONG! NO ENVIRONMENT CONSIDERED!
+                return Result.ok(builder.field(jsonNode.get("column").asInt()));
+            } else if (jsonNode.has("operator") && jsonNode.get("operator").isTextual()) {
+                var op = jsonNode.get("operator").asText();
+                try {
+                    var args = unwrap(array(jsonNode, "operand"));
+                    var ty = RelType.fromString(unwrap(object(jsonNode, "type")).asText(), true);
+                    if (args.isEmpty()) {
+                        return Result.ok(RexLiteral.fromJdbcString(ty, ty.getSqlTypeName(), op));
+                    } else {
+                        var fields = args.mapChecked(expr -> unwrap(deserialize(builder, expr)));
+                        for (var refl : Seq.from(SqlStdOperatorTable.class.getDeclaredFields())
+                                .filter(f -> java.lang.reflect.Modifier.isPublic(f.getModifiers()) &&
+                                        java.lang.reflect.Modifier.isStatic(f.getModifiers()))) {
+                            var mist = refl.get(null);
+                            if (mist instanceof SqlOperator sqlOperator && sqlOperator.getName().equals(op)) {
+                                return Result.ok(builder.call(sqlOperator, fields));
+                            }
+                        }
+                        return Result.ok(builder.call(builder.genericProjectionOp(op, ty), fields));
+                    }
+                } catch (Exception e) {
+                    return Result.err(e.getMessage());
+                }
             }
+            return Result.err(String.format("Unrecognized node:\n%s", jsonNode.toPrettyString()));
         }
-        relNode.set("values", value);
-        return null;
     }
-
-    /**
-     * Visit a LogicalFilter node. <br>
-     * Format: {filter: {condition: {condition}, source: {input}}}
-     *
-     * @param filter The given RelNode instance.
-     * @return Null, a placeholder required by interface.
-     */
-    @Override
-    public RelNode visit(LogicalFilter filter) {
-        ObjectNode arguments = environment.createNode();
-        RelJSONShuttle childShuttle = visitChild(filter.getInput(), environment);
-        Set<CorrelationId> variableSet = filter.getVariablesSet();
-        CorrelationId correlationId = environment.delta(variableSet);
-        Environment inputEnvironment = environment.amend(correlationId, 0);
-        arguments.set("condition", visitRexNode(filter.getCondition(), inputEnvironment, filter.getInput().getRowType().getFieldCount()).getRexNode());
-        arguments.set("source", childShuttle.getRelNode());
-        relNode.set("filter", arguments);
-        return null;
-    }
-
-    @Override
-    public RelNode visit(LogicalCalc calc) {
-        notImplemented(calc);
-        return null;
-    }
-
-    /**
-     * Visit a LogicalProject node. <br>
-     * Format: {project: {target: [columns], source: {input}}}
-     *
-     * @param project The given RelNode instance.
-     * @return Null, a placeholder required by interface.
-     */
-    @Override
-    public RelNode visit(LogicalProject project) {
-        // TODO: Correlation in targets?
-        ObjectNode arguments = environment.createNode();
-        ArrayNode parameters = arguments.putArray("target");
-        RelJSONShuttle childShuttle = visitChild(project.getInput(), environment);
-        List<RexNode> projects = project.getProjects();
-        for (RexNode projection : projects) {
-            parameters.add(visitRexNode(projection, environment, project.getInput().getRowType().getFieldCount()).getRexNode());
-        }
-        arguments.set("source", childShuttle.getRelNode());
-        relNode.set("project", arguments);
-        return null;
-    }
-
-    /**
-     * Visit a LogicalJoin node. <br>
-     * Format: {join: {kind: kind, condition: {condition}, left: {left}, right: {right}}}
-     *
-     * @param join The given RelNode instance.
-     * @return Null, a placeholder required by interface.
-     */
-
-    @Override
-    public RelNode visit(LogicalJoin join) {
-        // TODO: Correlation in condition?
-        ObjectNode arguments = environment.createNode();
-        arguments.put("kind", join.getJoinType().toString());
-        arguments.set("condition", visitRexNode(join.getCondition(), environment, join.getLeft().getRowType().getFieldCount() + join.getRight().getRowType().getFieldCount()).getRexNode());
-        arguments.set("left", visitChild(join.getLeft(), environment).getRelNode());
-        arguments.set("right", visitChild(join.getRight(), environment).getRelNode());
-        relNode.set("join", arguments);
-        return null;
-    }
-
-    /**
-     * Visit a LogicalCorrelate node. <br>
-     * Format: {correlate: [{left}, {right}]}
-     *
-     * @param correlate The given RelNode instance.
-     * @return Null, a placeholder required by interface.
-     */
-    @Override
-    public RelNode visit(LogicalCorrelate correlate) {
-        ArrayNode arguments = relNode.putArray("correlate");
-        RelJSONShuttle leftShuttle = visitChild(correlate.getLeft(), environment);
-        Environment correlateEnvironment = environment.amend(correlate.getCorrelationId(), correlate.getLeft().getRowType().getFieldCount());
-        RelJSONShuttle rightShuttle = visitChild(correlate.getRight(), correlateEnvironment);
-        arguments.add(leftShuttle.getRelNode());
-        arguments.add(rightShuttle.getRelNode());
-        return null;
-    }
-
-    /**
-     * Visit a LogicalUnion node. Will wrap with "distinct" if necessary. <br>
-     * Format: {union: [inputs]}
-     *
-     * @param union The given RelNode instance.
-     * @return Null, a placeholder required by interface.
-     */
-    @Override
-    public RelNode visit(LogicalUnion union) {
-        ArrayNode arguments = relNode.putArray("union");
-        for (RelNode input : union.getInputs()) {
-            arguments.add(visitChild(input, environment).getRelNode());
-        }
-        if (!union.all) {
-            distinct();
-        }
-        return null;
-    }
-
-    @Override
-    public RelNode visit(LogicalIntersect intersect) {
-        if (!intersect.all) {
-            ArrayNode arguments = relNode.putArray("intersect");
-            for (RelNode input : intersect.getInputs()) {
-                arguments.add(visitChild(input, environment).getRelNode());
-            }
-            return null;
-        }
-        notImplemented(intersect);
-        return null;
-    }
-
-    /**
-     * Visit a LogicalUnion node. Will wrap with "distinct" if necessary. <br>
-     * Format: {except: [inputs]}
-     *
-     * @param minus The given RelNode instance.
-     * @return Null, a placeholder required by interface.
-     */
-    @Override
-    public RelNode visit(LogicalMinus minus) {
-        ArrayNode arguments = relNode.putArray("except");
-        for (RelNode input : minus.getInputs()) {
-            arguments.add(visitChild(input, environment).getRelNode());
-        }
-        if (!minus.all) {
-            distinct();
-        }
-        return null;
-    }
-
-    /**
-     * Visit a LogicalSort node. <br>
-     * Format: {sort: {collation: [[column, type, order]], offset: count, limit: count, source: {input}}}
-     *
-     * @param sort The given RelNode instance.
-     * @return Null, a placeholder required by interface.
-     */
-    @Override
-    public RelNode visit(LogicalSort sort) {
-        // TODO: Correlations everywhere?
-        ObjectNode arguments = environment.createNode();
-        RelJSONShuttle childShuttle = visitChild(sort.getInput(), environment);
-        List<RelDataTypeField> types = sort.getRowType().getFieldList();
-        ArrayNode collations = arguments.putArray("collation");
-        for (RelFieldCollation collation : sort.collation.getFieldCollations()) {
-            ArrayNode column = collations.addArray();
-            int index = collation.getFieldIndex();
-            column.add(index).add(types.get(index).getType().getSqlTypeName().name()).add(collation.shortString());
-        }
-        if (sort.offset != null) {
-            arguments.set("offset", visitRexNode(sort.offset, environment, sort.getInput().getRowType().getFieldCount()).getRexNode());
-        }
-        if (sort.fetch != null) {
-            arguments.set("limit", visitRexNode(sort.fetch, environment, sort.getInput().getRowType().getFieldCount()).getRexNode());
-        }
-        arguments.set("source", childShuttle.getRelNode());
-        relNode.set("sort", arguments);
-        return null;
-    }
-
-    @Override
-    public RelNode visit(LogicalExchange exchange) {
-        notImplemented(exchange);
-        return null;
-    }
-
-    @Override
-    public RelNode visit(LogicalTableModify modify) {
-        notImplemented(modify);
-        return null;
-    }
-
-    @Override
-    public RelNode visit(RelNode other) {
-        notImplemented(other);
-        return null;
-    }
-
 }

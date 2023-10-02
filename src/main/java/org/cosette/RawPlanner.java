@@ -2,6 +2,7 @@ package org.cosette;
 
 import com.google.common.collect.ImmutableList;
 import org.apache.calcite.adapter.java.JavaTypeFactory;
+import org.apache.calcite.avatica.util.Quoting;
 import org.apache.calcite.config.*;
 import org.apache.calcite.jdbc.CalciteSchema;
 import org.apache.calcite.jdbc.JavaTypeFactoryImpl;
@@ -9,6 +10,7 @@ import org.apache.calcite.plan.*;
 import org.apache.calcite.plan.volcano.VolcanoPlanner;
 import org.apache.calcite.prepare.CalciteCatalogReader;
 import org.apache.calcite.rel.RelCollationTraitDef;
+import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.RelRoot;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeSystem;
@@ -67,24 +69,9 @@ public class RawPlanner implements RelOptTable.ViewExpander {
     private @Nullable RelOptPlanner planner;
     // set in STATE_4_VALIDATE
     private @Nullable SqlValidator validator;
-    private @Nullable SqlNode validatedSqlNode;
 
     public RawPlanner(SchemaPlus schema) {
-        SqlToRelConverter.Config converterConfig = SqlToRelConverter.config()
-                .withRelBuilderConfigTransform(c -> c.withPushJoinCondition(false)
-                        .withSimplify(false)
-                        .withSimplifyValues(false)
-                        .withBloat(-1)
-                        .withDedupAggregateCalls(false)
-                        .withPruneInputOfAggregate(false))
-                .withDecorrelationEnabled(false)
-                .withExpand(false)
-                .withTrimUnusedFields(false);
-        FrameworkConfig config = Frameworks.newConfigBuilder()
-                .defaultSchema(schema)
-                .parserConfig(SqlParser.Config.DEFAULT.withLex(Lex.MYSQL))
-                .sqlToRelConverterConfig(converterConfig)
-                .build();
+        var config = generateConfig(schema);
         this.costFactory = config.getCostFactory();
         this.defaultSchema = config.getDefaultSchema();
         this.operatorTable = config.getOperatorTable();
@@ -99,18 +86,25 @@ public class RawPlanner implements RelOptTable.ViewExpander {
         this.connectionConfig = connConfig(context, parserConfig);
     }
 
-    private static CalciteConnectionConfig connConfig(Context context,
-                                                      SqlParser.Config parserConfig) {
+    public static FrameworkConfig generateConfig(SchemaPlus schema) {
+        SqlToRelConverter.Config converterConfig = SqlToRelConverter.config().withRelBuilderConfigTransform(
+                        c -> c.withPushJoinCondition(false).withSimplify(false).withSimplifyValues(false).withBloat(-1)
+                                .withDedupAggregateCalls(false).withPruneInputOfAggregate(false))
+                .withDecorrelationEnabled(false).withExpand(false).withTrimUnusedFields(true);
+        var builderConfig = RelBuilder.Config.DEFAULT.withBloat(-1).withSimplify(false).withSimplifyValues(false);
+        return Frameworks.newConfigBuilder().defaultSchema(schema)
+                .parserConfig(SqlParser.Config.DEFAULT.withLex(Lex.MYSQL).withQuoting(Quoting.DOUBLE_QUOTE))
+                .sqlToRelConverterConfig(converterConfig).context(Contexts.of(builderConfig)).build();
+    }
+
+    private static CalciteConnectionConfig connConfig(Context context, SqlParser.Config parserConfig) {
         CalciteConnectionConfigImpl config =
-                context.maybeUnwrap(CalciteConnectionConfigImpl.class)
-                        .orElse(CalciteConnectionConfig.DEFAULT);
+                context.maybeUnwrap(CalciteConnectionConfigImpl.class).orElse(CalciteConnectionConfig.DEFAULT);
         if (!config.isSet(CalciteConnectionProperty.CASE_SENSITIVE)) {
-            config = config.set(CalciteConnectionProperty.CASE_SENSITIVE,
-                    String.valueOf(parserConfig.caseSensitive()));
+            config = config.set(CalciteConnectionProperty.CASE_SENSITIVE, String.valueOf(parserConfig.caseSensitive()));
         }
         if (!config.isSet(CalciteConnectionProperty.CONFORMANCE)) {
-            config = config.set(CalciteConnectionProperty.CONFORMANCE,
-                    String.valueOf(parserConfig.conformance()));
+            config = config.set(CalciteConnectionProperty.CONFORMANCE, String.valueOf(parserConfig.conformance()));
         }
         return config;
     }
@@ -126,13 +120,10 @@ public class RawPlanner implements RelOptTable.ViewExpander {
     }
 
     private void ready() {
-        RelDataTypeSystem typeSystem =
-                connectionConfig.typeSystem(RelDataTypeSystem.class,
-                        RelDataTypeSystem.DEFAULT);
+        RelDataTypeSystem typeSystem = connectionConfig.typeSystem(RelDataTypeSystem.class, RelDataTypeSystem.DEFAULT);
         typeFactory = new JavaTypeFactoryImpl(typeSystem);
         RelOptPlanner planner = this.planner = new VolcanoPlanner(costFactory, context);
-        RelOptUtil.registerDefaultRules(planner,
-                connectionConfig.materializationsEnabled(),
+        RelOptUtil.registerDefaultRules(planner, connectionConfig.materializationsEnabled(),
                 Hook.ENABLE_BINDABLE.get(false));
         planner.setExecutor(executor);
 
@@ -157,33 +148,25 @@ public class RawPlanner implements RelOptTable.ViewExpander {
         SqlNode sqlNode = parser.parseStmt();
         this.validator = createSqlValidator(createCatalogReader());
         try {
-            validatedSqlNode = validator.validate(sqlNode);
+            return validator.validate(sqlNode);
         } catch (RuntimeException e) {
             throw new ValidationException(e);
         }
-        return validatedSqlNode;
     }
 
     private SqlValidator createSqlValidator(CalciteCatalogReader catalogReader) {
-        final SqlOperatorTable opTab =
-                SqlOperatorTables.chain(operatorTable, catalogReader);
-        return new RawSqlValidator(opTab,
-                catalogReader,
-                getTypeFactory(),
-                sqlValidatorConfig
-                        .withDefaultNullCollation(connectionConfig.defaultNullCollation())
+        final SqlOperatorTable opTab = SqlOperatorTables.chain(operatorTable, catalogReader);
+        return new RawSqlValidator(opTab, catalogReader, getTypeFactory(),
+                sqlValidatorConfig.withDefaultNullCollation(connectionConfig.defaultNullCollation())
                         .withLenientOperatorLookup(connectionConfig.lenientOperatorLookup())
-                        .withSqlConformance(connectionConfig.conformance())
-                        .withIdentifierExpansion(true));
+                        .withConformance(connectionConfig.conformance()).withIdentifierExpansion(true));
     }
 
     private CalciteCatalogReader createCatalogReader() {
         SchemaPlus defaultSchema = requireNonNull(this.defaultSchema, "defaultSchema");
         final SchemaPlus rootSchema = rootSchema(defaultSchema);
 
-        return new CalciteCatalogReader(
-                CalciteSchema.from(rootSchema),
-                CalciteSchema.from(defaultSchema).path(null),
+        return new CalciteCatalogReader(CalciteSchema.from(rootSchema), CalciteSchema.from(defaultSchema).path(null),
                 getTypeFactory(), connectionConfig);
     }
 
@@ -191,19 +174,13 @@ public class RawPlanner implements RelOptTable.ViewExpander {
         return requireNonNull(typeFactory, "typeFactory");
     }
 
-    public RelRoot rel(SqlNode sql) {
-        SqlNode validatedSqlNode = requireNonNull(this.validatedSqlNode,
-                "validatedSqlNode is null. Need to call #validate() first");
+    public RelNode rel(SqlNode sqlNode) {
         final RexBuilder rexBuilder = createRexBuilder();
-        final RelOptCluster cluster = RelOptCluster.create(
-                requireNonNull(planner, "planner"),
-                rexBuilder);
-        final SqlToRelConverter.Config config =
-                sqlToRelConverterConfig.withTrimUnusedFields(false);
+        final RelOptCluster cluster = RelOptCluster.create(requireNonNull(planner, "planner"), rexBuilder);
         final SqlToRelConverter sqlToRelConverter =
-                new SqlToRelConverter(this, validator,
-                        createCatalogReader(), cluster, convertletTable, config);
-        return sqlToRelConverter.convertQuery(validatedSqlNode, false, true);
+                new SqlToRelConverter(this, validator, createCatalogReader(), cluster, convertletTable,
+                        sqlToRelConverterConfig);
+        return sqlToRelConverter.convertQuery(sqlNode, false, true).project();
     }
 
     private RexBuilder createRexBuilder() {
@@ -211,7 +188,8 @@ public class RawPlanner implements RelOptTable.ViewExpander {
     }
 
     @Override
-    public RelRoot expandView(RelDataType rowType, String queryString, List<String> schemaPath, @Nullable List<String> viewPath) {
+    public RelRoot expandView(RelDataType rowType, String queryString, List<String> schemaPath,
+                              @Nullable List<String> viewPath) {
         RelOptPlanner planner = this.planner;
         if (planner == null) {
             ready();
@@ -225,50 +203,38 @@ public class RawPlanner implements RelOptTable.ViewExpander {
             throw new RuntimeException("parse failed", e);
         }
 
-        final CalciteCatalogReader catalogReader =
-                createCatalogReader().withSchemaPath(schemaPath);
+        final CalciteCatalogReader catalogReader = createCatalogReader().withSchemaPath(schemaPath);
         final SqlValidator validator = createSqlValidator(catalogReader);
 
         final RexBuilder rexBuilder = createRexBuilder();
         final RelOptCluster cluster = RelOptCluster.create(planner, rexBuilder);
-        final SqlToRelConverter.Config config =
-                sqlToRelConverterConfig.withTrimUnusedFields(false);
         final SqlToRelConverter sqlToRelConverter =
-                new SqlToRelConverter(this, validator,
-                        catalogReader, cluster, convertletTable, config);
+                new SqlToRelConverter(this, validator, catalogReader, cluster, convertletTable,
+                        sqlToRelConverterConfig);
 
-        final RelRoot root =
-                sqlToRelConverter.convertQuery(sqlNode, true, false);
-        final RelRoot root2 =
-                root.withRel(sqlToRelConverter.flattenTypes(root.rel, true));
-        final RelBuilder relBuilder =
-                config.getRelBuilderFactory().create(cluster, null);
-        return root2.withRel(
-                RelDecorrelator.decorrelateQuery(root.rel, relBuilder));
+        final RelRoot root = sqlToRelConverter.convertQuery(sqlNode, true, false);
+        final RelRoot root2 = root.withRel(sqlToRelConverter.flattenTypes(root.rel, true));
+        final RelBuilder relBuilder = sqlToRelConverterConfig.getRelBuilderFactory().create(cluster, null);
+        return root2.withRel(RelDecorrelator.decorrelateQuery(root.rel, relBuilder));
     }
 }
 
 class RawSqlValidator extends SqlValidatorImpl {
 
-    RawSqlValidator(SqlOperatorTable opTab,
-                    CalciteCatalogReader catalogReader, JavaTypeFactory typeFactory,
+    RawSqlValidator(SqlOperatorTable opTab, CalciteCatalogReader catalogReader, JavaTypeFactory typeFactory,
                     Config config) {
         super(opTab, catalogReader, typeFactory, config);
     }
 
     @Override
-    protected RelDataType getLogicalSourceRowType(
-            RelDataType sourceRowType, SqlInsert insert) {
-        final RelDataType superType =
-                super.getLogicalSourceRowType(sourceRowType, insert);
+    protected RelDataType getLogicalSourceRowType(RelDataType sourceRowType, SqlInsert insert) {
+        final RelDataType superType = super.getLogicalSourceRowType(sourceRowType, insert);
         return ((JavaTypeFactory) typeFactory).toSql(superType);
     }
 
     @Override
-    protected RelDataType getLogicalTargetRowType(
-            RelDataType targetRowType, SqlInsert insert) {
-        final RelDataType superType =
-                super.getLogicalTargetRowType(targetRowType, insert);
+    protected RelDataType getLogicalTargetRowType(RelDataType targetRowType, SqlInsert insert) {
+        final RelDataType superType = super.getLogicalTargetRowType(targetRowType, insert);
         return ((JavaTypeFactory) typeFactory).toSql(superType);
     }
 }

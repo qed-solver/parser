@@ -1,5 +1,6 @@
 package org.cosette;
 
+import org.apache.calcite.tools.RelBuilder;
 import org.apache.commons.io.FilenameUtils;
 
 import java.io.BufferedWriter;
@@ -51,7 +52,7 @@ public class Main {
 
     private static void parseSQLFile(String filename) {
         try {
-            Pattern comment = Pattern.compile("--.*(\\n|$)");
+            Pattern comment = Pattern.compile("--.*(\\r?\\n|$)");
             Scanner scanner = new Scanner(new File(filename));
             SchemaGenerator generator = new SchemaGenerator();
             SQLJSONParser parser = new SQLJSONParser();
@@ -60,21 +61,22 @@ public class Main {
                 String statement = comment.matcher(scanner.next()).replaceAll("\n").trim();
                 if (!statement.isBlank()) {
                     try {
-                        if (statement.toUpperCase().startsWith("CREATE TABLE")) {
-                            generator.applyCreateTable(statement);
+                        if (statement.toUpperCase().startsWith("CREATE")) {
+                            generator.applyCreate(statement);
                         } else if (statement.toUpperCase().startsWith("DECLARE")) {
                             generator.applyDeclareFunction(statement);
                         } else {
                             parser.parseDML(generator.extractSchema(), statement);
                         }
                     } catch (Exception e) {
-                        throw new Exception("In statement:\n" + statement.replaceAll("(?m)^", "\t") + "\n" + e.getMessage());
+                        throw new Exception(
+                                "In statement:\n" + statement.replaceAll("(?m)^", "\t") + "\n" + e.getMessage());
                     }
                 }
             }
-            String outputPath = FilenameUtils.getFullPath(filename) + FilenameUtils.getBaseName(filename) + ".json";
-            File outputFile = new File(outputPath);
-            parser.dumpToJSON(outputFile);
+            String outputPath = FilenameUtils.getFullPath(filename) + FilenameUtils.getBaseName(filename);
+            var builder = RelBuilder.create(RawPlanner.generateConfig(generator.extractSchema()));
+            parser.dumpOutput(builder, outputPath);
             scanner.close();
         } catch (Exception e) {
             System.err.println("In file:\n\t" + filename);

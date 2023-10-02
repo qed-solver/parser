@@ -1,13 +1,14 @@
 package org.cosette;
 
+import kala.collection.mutable.MutableArrayList;
+import kala.collection.mutable.MutableList;
 import org.apache.calcite.rel.RelNode;
-import org.apache.calcite.rel.RelRoot;
 import org.apache.calcite.schema.SchemaPlus;
-import org.apache.calcite.sql.SqlNode;
+import org.apache.calcite.sql2rel.RelFieldTrimmer;
+import org.apache.calcite.tools.RelBuilder;
 
-import java.io.File;
 import java.io.IOException;
-import java.util.ArrayList;
+import java.nio.file.Paths;
 import java.util.List;
 
 /**
@@ -15,13 +16,20 @@ import java.util.List;
  */
 public class SQLJSONParser {
 
-    private final List<RelRoot> rootList;
+    private final MutableList<RelNode> relNodes;
 
     /**
-     * Create a new instance by setting up the SchemaGenerator instance and the list of RelRoot within.
+     * Create a new instance with no RelNodes.
      */
     public SQLJSONParser() {
-        rootList = new ArrayList<>();
+        relNodes = new MutableArrayList<>();
+    }
+
+    /**
+     * Create a new instance with the list of RelNodes within.
+     */
+    public SQLJSONParser(List<RelNode> nodes) {
+        relNodes = MutableArrayList.from(nodes);
     }
 
     /**
@@ -31,22 +39,22 @@ public class SQLJSONParser {
      */
     public void parseDML(SchemaPlus context, String dml) throws Exception {
         RawPlanner planner = new RawPlanner(context);
-        SqlNode sqlNode = planner.parse(dml);
-        RelRoot relRoot = planner.rel(sqlNode);
-        rootList.add(relRoot);
+        relNodes.append(planner.rel(planner.parse(dml)));
     }
 
     /**
      * Dump the parsed statements to a file.
      *
-     * @param file The given file.
+     * @param path The given file.
      */
-    public void dumpToJSON(File file) throws IOException {
-        ArrayList<RelNode> nodeList = new ArrayList<>();
-        for (RelRoot root : rootList) {
-            nodeList.add(root.project());
-        }
-        RelJSONShuttle.dumpToJSON(nodeList, file);
+    public void dumpOutput(RelBuilder builder, String path) throws IOException {
+        var trimmer = new RelFieldTrimmer(null, builder);
+        var nodes = relNodes.map(trimmer::trim);
+        var scanner = new RelScanner();
+        nodes.forEach(scanner::scan);
+        var pruner = new RelPruner(scanner.usages().toImmutableMap());
+        var rNodes = nodes.map(pruner).asJava();
+        RelJSONShuttle.serializeToJson(rNodes, Paths.get(path + ".json"));
+        RelRacketShuttle.dumpToRacket(rNodes, Paths.get(path + ".rkt"));
     }
-
 }
