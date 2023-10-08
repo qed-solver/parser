@@ -54,7 +54,7 @@ public class SQLJSONParser {
         nodes.forEach(scanner::scan);
         var pruner = new RelPruner(scanner.usages().toImmutableMap());
         var rNodes = nodes.map(pruner).asJava();
-        RelJSONShuttle.serializeToJson(rNodes, Paths.get(path + ".json"));
+        JSONSerializer.serialize(rNodes, Paths.get(path + ".json"));
         RelRacketShuttle.dumpToRacket(rNodes, Paths.get(path + ".rkt"));
     }
 }

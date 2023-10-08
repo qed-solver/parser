@@ -585,7 +585,7 @@ public class ElevatedCoreRules {
             System.out.println(after.explain());
             System.out.println(">>>>>> End of rule <<<<<<\n\n");
         }
-        RelJSONShuttle.serializeToJson(List.of(before, after), dumpPath);
+        JSONSerializer.serialize(List.of(before, after), dumpPath);
     }
 
     public static void dumpElevatedRules(Path dumpFolder, boolean verbose) throws IOException {

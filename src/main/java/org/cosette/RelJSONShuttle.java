@@ -76,14 +76,15 @@ public record RelJSONShuttle(Env env) {
         var queries = array(Seq.from(relNodes).map(shuttle::serialize));
 
         var tables = shuttle.env.tables();
-        var schemas = array(tables.map(table -> object(Map.of("name", new TextNode(table.getName()), "fields",
-                array(table.getColumnNames().map(TextNode::new)), "types",
-                array(table.getColumnTypes().map(type -> new TextNode(type.toString()))), "nullable",
-                array(table.getColumnTypes().map(RelDataType::isNullable).map(RelJSONShuttle::bool)), "key",
-                array(Seq.from(table.getKeys().map(key -> array(Seq.from(key).map(IntNode::new))))), "guaranteed",
-                array(table.getConstraints()
-                        .map(check -> new RexJSONVisitor(shuttle.env.advanced(table.getColumnNames().size())).serialize(
-                                check)).toImmutableSeq())))));
+        var schemas = array(tables.map(table -> object(Map.of(
+                "name", new TextNode(table.getName()),
+                "fields", array(table.getColumnNames().map(TextNode::new)),
+                "types", array(table.getColumnTypes().map(type -> new TextNode(type.toString()))),
+                "nullable", array(table.getColumnTypes().map(RelDataType::isNullable).map(RelJSONShuttle::bool)),
+                "key", array(Seq.from(table.getKeys().map(key -> array(Seq.from(key).map(IntNode::new))))),
+                "guaranteed", array(table.getConstraints()
+                        .map(check -> new RexJSONVisitor(shuttle.env.advanced(table.getColumnNames().size())).serialize(check)).toImmutableSeq())
+        ))));
 
         var main = object(Map.of("schemas", schemas, "queries", queries, "help", helps));
         mapper.writerWithDefaultPrettyPrinter().writeValue(path.toFile(), main);
