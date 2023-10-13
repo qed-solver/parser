@@ -7,11 +7,15 @@ import kala.collection.Map;
 import kala.collection.Seq;
 import kala.collection.immutable.ImmutableMap;
 import kala.collection.mutable.MutableList;
+import org.apache.calcite.plan.RelOptTable;
 import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.core.CorrelationId;
 import org.apache.calcite.rel.core.TableScan;
 import org.apache.calcite.rel.logical.*;
+import org.apache.calcite.rel.type.RelDataType;
+import org.apache.calcite.rel.type.RelDataTypeField;
 import org.apache.calcite.rex.*;
+import org.apache.calcite.util.ImmutableBitSet;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -26,7 +30,7 @@ public record JSONSerializer(Env env) {
             this(new Env(0, ImmutableMap.empty(), MutableList.create()));
         }
 
-        private record Env(int lvl, ImmutableMap<CorrelationId, Integer> globals, MutableList<CosetteTable> tables) {
+        private record Env(int lvl, ImmutableMap<CorrelationId, Integer> globals, MutableList<RelOptTable> tables) {
             Env recorded(Set<CorrelationId> ids) {
                 return new Env(lvl, Seq.from(ids).foldLeft(globals, (g, id) -> g.putted(id, lvl)), tables);
             }
@@ -35,7 +39,7 @@ public record JSONSerializer(Env env) {
                 return new Env(lvl + d, globals, tables);
             }
 
-            int resolve(CosetteTable table) {
+            int resolve(RelOptTable table) {
                 var idx = tables.indexOf(table);
                 if (idx == -1) {
                     idx = tables.size();
@@ -51,11 +55,10 @@ public record JSONSerializer(Env env) {
 
         public JsonNode serialize(RelNode rel) {
             return switch (rel) {
-                case TableScan scan -> object(Map.of("scan", integer(env.resolve(scan.getTable().unwrap(CosetteTable.class)))));
+                case TableScan scan -> object(Map.of("scan", integer(env.resolve(scan.getTable()))));
                 case LogicalValues values -> {
                     var visitor = new Rex(env.rex(0));
-                    var schema = array(Seq.from(values.getRowType().getFieldList())
-                            .map(field -> string(field.getType().toString())));
+                    var schema = array(Seq.from(values.getRowType().getFieldList()).map(field -> type(field.getType())));
                     var records = array(Seq.from(values.getTuples())
                             .map(tuple -> array(Seq.from(tuple).map(visitor::serialize))));
                     yield object(Map.of("values", object(Map.of("schema", schema, "content", records))));
@@ -92,7 +95,7 @@ public record JSONSerializer(Env env) {
                 case LogicalAggregate aggregate -> {
                     var level = env.lvl();
                     var input = aggregate.getInput();
-                    var inputTypes = Seq.from(input.getRowType().getFieldList()).map(type -> string(type.getType().toString()));
+                    var inputTypes = Seq.from(input.getRowType().getFieldList()).map(field -> type(field.getType()));
                     var keys = array(Seq.from(aggregate.getGroupSet()).map(col ->
                             object(Map.of("column", integer(level + col), "type", inputTypes.get(col)))));
                     var aggs = array(Seq.from(aggregate.getAggCallList()).map(call -> object(
@@ -101,14 +104,14 @@ public record JSONSerializer(Env env) {
                                             object(Map.of("column", integer(level + col), "type", inputTypes.get(col))))),
                                     "distinct", bool(call.isDistinct()),
                                     "ignoreNulls", bool(call.ignoreNulls()),
-                                    "type", string(call.getType().toString())))));
-                    yield object(Map.of("keys", keys, "function", aggs, "source", serialize(input)));
+                                    "type", type(call.getType())))));
+                    yield object(Map.of("group", object(Map.of("keys", keys, "function", aggs, "source", serialize(input)))));
                 }
 //                case LogicalAggregate aggregate -> {
 //                    var level = env.lvl();
 //                    var groupCount = aggregate.getGroupCount();
 //                    var input = aggregate.getInput();
-//                    var types = Seq.from(input.getRowType().getFieldList()).map(type -> string(type.getType().toString()));
+//                    var types = Seq.from(input.getRowType().getFieldList()).map(type -> type(type.getType())));
 //                    var keyCols = array(Seq.from(aggregate.getGroupSet())
 //                            .map(key -> object(Map.of("column", integer(level + key), "type", types.get(key)))));
 //                    var keys = object(Map.of("project", object(Map.of("target", keyCols, "source", serialize(input)))));
@@ -128,7 +131,7 @@ public record JSONSerializer(Env env) {
 //                                                    "type", types.get(target))))),
 //                                    "distinct", bool(call.isDistinct()),
 //                                    "ignoreNulls", bool(call.ignoreNulls()),
-//                                    "type", string(call.getType().toString())))));
+//                                    "type", type(call.getType()))))));
 //                    var aggregated = object(Map.of("aggregate", object(Map.of("function", aggs,
 //                            "source", object(Map.of("filter", object(Map.of("condition", condition,
 //                                    "source", new Rel(env.lifted(groupCount)).serialize(input)))))))));
@@ -144,7 +147,7 @@ public record JSONSerializer(Env env) {
                         object(Map.of("except", array(Seq.from(minus.getInputs()).map(this::serialize))));
                 case LogicalSort sort -> {
                     var input = sort.getInput();
-                    var types = Seq.from(input.getRowType().getFieldList()).map(type -> string(type.getType().toString()));
+                    var types = Seq.from(input.getRowType().getFieldList()).map(field -> type(field.getType()));
                     var collations = array(Seq.from(sort.collation.getFieldCollations()).map(collation -> {
                         var index = collation.getFieldIndex();
                         return array(Seq.of(integer(index), types.get(index), string(collation.shortString())));
@@ -160,7 +163,7 @@ public record JSONSerializer(Env env) {
     }
 
     private record Rex(Env env) {
-        private record Env(int base, int delta, ImmutableMap<CorrelationId, Integer> globals, MutableList<CosetteTable> tables) {
+        private record Env(int base, int delta, ImmutableMap<CorrelationId, Integer> globals, MutableList<RelOptTable> tables) {
             public Rel.Env rel() {
                 return new Rel.Env(base + delta, globals, tables);
             }
@@ -173,21 +176,21 @@ public record JSONSerializer(Env env) {
         public JsonNode serialize(RexNode rex) {
             return switch (rex) {
                 case RexInputRef inputRef -> object(Map.of("column", integer(inputRef.getIndex() + env.base()),
-                        "type", string(inputRef.getType().toString())));
+                        "type", type(inputRef.getType())));
                 case RexLiteral literal -> object(Map.of(
                         "operator", string(literal.getValue() == null ? "NULL" : literal.getValue().toString()),
-                        "operand", array(Seq.empty()), "type", string(literal.getType().toString())));
+                        "operand", array(Seq.empty()), "type", type(literal.getType())));
                 case RexSubQuery subQuery -> object(Map.of("operator", string(subQuery.getOperator().toString()),
                         "operand", array(Seq.from(subQuery.getOperands()).map(this::serialize)),
                         "query", new Rel(env.rel()).serialize(subQuery.rel),
-                        "type", string(subQuery.getType().toString())));
+                        "type", type(subQuery.getType())));
                 case RexCall call -> object(Map.of("operator", string(call.getOperator().toString()),
                         "operand", array(Seq.from(call.getOperands()).map(this::serialize)),
-                        "type", string(call.getType().toString())));
+                        "type", type(call.getType())));
                 case RexFieldAccess fieldAccess -> object(Map.of(
                         "column", integer(fieldAccess.getField().getIndex()
                                 + env.resolve(((RexCorrelVariable) fieldAccess.getReferenceExpr()).id)),
-                        "type", string(fieldAccess.getType().toString())));
+                        "type", type(fieldAccess.getType())));
                 default -> throw new RuntimeException("Not implemented: " + rex.getKind());
             };
         }
@@ -209,6 +212,10 @@ public record JSONSerializer(Env env) {
         return new TextNode(s);
     }
 
+    private static TextNode type(RelDataType type) {
+        return new TextNode(type.getSqlTypeName().getName());
+    }
+
     private static IntNode integer(int i) {
         return new IntNode(i);
     }
@@ -219,14 +226,25 @@ public record JSONSerializer(Env env) {
         var queries = array(Seq.from(relNodes).map(shuttle::serialize));
         var tables = shuttle.env.tables();
         var schemas = array(tables.map(table -> {
-            var visitor = new Rex(shuttle.env.rex(table.getColumnNames().size()));
-            return object(Map.of(
-                    "name", string(table.getName()),
-                    "fields", array(table.getColumnNames().map(JSONSerializer::string)),
-                    "types", array(table.getColumnTypes().map(type -> string(type.toString()))),
-                    "nullable", array(table.getColumnTypes().map(type -> bool(type.isNullable()))),
-                    "key", array(Seq.from(table.getKeys().map(key -> array(Seq.from(key).map(JSONSerializer::integer))))),
-                    "guaranteed", array(table.getConstraints().map(visitor::serialize).toImmutableSeq())
+            var visitor = new Rex(shuttle.env.rex(table.getRowType().getFieldCount()));
+            var cosette = table.unwrap(CosetteTable.class);
+            var fields = Seq.from(table.getRowType().getFieldList());
+            return cosette == null ?
+                    object(Map.of(
+                            "name", string(Seq.from(table.getQualifiedName()).joinToString(".")),
+                            "fields", array(fields.map(field -> string(field.getName()))),
+                            "types", array(fields.map(field -> type(field.getType()))),
+                            "nullable", array(fields.map(field -> bool(field.getType().isNullable()))),
+                            "key", array((table.getKeys() != null ? Seq.from(table.getKeys()) : Seq.<ImmutableBitSet>empty()).map(key -> array(Seq.from(key).map(JSONSerializer::integer)))),
+                            "guaranteed", array(Seq.empty())
+                    ))
+                    : object(Map.of(
+                    "name", string(cosette.getName()),
+                    "fields", array(cosette.getColumnNames().map(JSONSerializer::string)),
+                    "types", array(cosette.getColumnTypes().map(type -> string(type.toString()))),
+                    "nullable", array(cosette.getColumnTypes().map(type -> bool(type.isNullable()))),
+                    "key", array(Seq.from(cosette.getKeys().map(key -> array(Seq.from(key).map(JSONSerializer::integer))))),
+                    "guaranteed", array(cosette.getConstraints().map(visitor::serialize).toImmutableSeq())
             ));
         }));
 
