@@ -1,5 +1,6 @@
 package org.cosette;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import kala.collection.Seq;
 import kala.tuple.Tuple;
 import kala.tuple.Tuple2;
@@ -16,7 +17,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Comparator;
-import java.util.List;
 
 public class ElevatedCoreRules {
 
@@ -585,7 +585,8 @@ public class ElevatedCoreRules {
             System.out.println(after.explain());
             System.out.println(">>>>>> End of rule <<<<<<\n\n");
         }
-        JSONSerializer.serialize(List.of(before, after), dumpPath);
+        new ObjectMapper().writerWithDefaultPrettyPrinter()
+                .writeValue(dumpPath.toFile(), JSONSerializer.serialize(Seq.of(before, after)));
     }
 
     public static void dumpElevatedRules(Path dumpFolder, boolean verbose) throws IOException {

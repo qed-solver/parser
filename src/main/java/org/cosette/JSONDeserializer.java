@@ -34,13 +34,15 @@ import java.util.Objects;
 public record JSONDeserializer() {
     private final static ObjectMapper mapper = new ObjectMapper();
 
-    private record Rel(RuleBuilder builder, ImmutableSeq<RexNode> globals, ImmutableSeq<CosetteTable> tables) implements CheckedFunction<JsonNode, RelNode, Exception> {
+    private record Rel(RuleBuilder builder, ImmutableSeq<RexNode> globals, ImmutableSeq<CosetteTable> tables)
+            implements CheckedFunction<JsonNode, RelNode, Exception> {
         Rel(RuleBuilder builder) {
             this(builder, ImmutableSeq.empty(), ImmutableSeq.empty());
         }
 
         RexCorrelVariable corr(RelDataType type) {
-            return (RexCorrelVariable) builder().getRexBuilder().makeCorrel(type, builder().getCluster().createCorrel());
+            return (RexCorrelVariable) builder().getRexBuilder()
+                    .makeCorrel(type, builder().getCluster().createCorrel());
         }
 
         Rel lifted(RexNode corr) {
@@ -54,10 +56,9 @@ public record JSONDeserializer() {
         }
 
         Rex rex() {
-            var empty = (RexCorrelVariable) builder().getRexBuilder().makeCorrel(
-                    builder().getTypeFactory().createStructType(List.of()),
-                    builder().getCluster().createCorrel()
-            );
+            var empty = (RexCorrelVariable) builder().getRexBuilder()
+                    .makeCorrel(builder().getTypeFactory().createStructType(List.of()),
+                            builder().getCluster().createCorrel());
             return new Rex(builder(), globals(), empty, tables());
         }
 
@@ -80,9 +81,8 @@ public record JSONDeserializer() {
                     var rt = new RelRecordType(StructKind.FULLY_QUALIFIED, et.mapIndexedChecked(
                             (i, t) -> (RelDataTypeField) new RelDataTypeFieldImpl(String.format("VALUES-%s", i), i,
                                     RelType.fromString(string(t), true))).asJava());
-                    var tuples = array(content, "content").mapChecked(v ->
-                            array(v).mapChecked(jl -> (RexLiteral) rex().deserialize(jl)).asJava()
-                    );
+                    var tuples = array(content, "content").mapChecked(
+                            v -> array(v).mapChecked(jl -> (RexLiteral) rex().deserialize(jl)).asJava());
                     yield builder().values(tuples.asJava(), rt).build();
                 }
                 case "filter" -> {
@@ -95,7 +95,7 @@ public record JSONDeserializer() {
                     var input = deserialize(content.required("source"));
                     var corr = corr(input.getRowType());
                     var rex = rex(corr);
-                    var projections = array(content, "columns").mapChecked(rex);
+                    var projections = array(content, "target").mapChecked(rex);
                     yield builder().push(input).project(projections, Seq.empty(), false, Seq.of(corr.id)).build();
                 }
                 case "join" -> {
@@ -103,15 +103,18 @@ public record JSONDeserializer() {
                     var right = deserialize(content.required("right"));
                     var corr = corr(builder().getTypeFactory().createJoinType(left.getRowType(), right.getRowType()));
                     var cond = rex(corr).deserialize(content.required("condition"));
-                    yield LogicalJoin.create(left, right, ImmutableList.of(), cond, Set.of(corr.id).asJava(), kind(string(content, "kind")));
+                    yield LogicalJoin.create(left, right, ImmutableList.of(), cond, Set.of(corr.id).asJava(),
+                            kind(string(content, "kind")));
                 }
                 case "correlate" -> {
                     var left = deserialize(content.required("left"));
                     var corr = corr(left.getRowType());
                     var right = lifted(corr).deserialize(content.required("right"));
                     var rex = builder().getRexBuilder();
-                    var required = Seq.from(RelOptUtil.correlationColumns(corr.id, right)).map(i -> rex.makeInputRef(left, i));
-                    yield builder().push(left).push(right).correlate(kind(string(content, "kind")), corr.id, required).build();
+                    var required =
+                            Seq.from(RelOptUtil.correlationColumns(corr.id, right)).map(i -> rex.makeInputRef(left, i));
+                    yield builder().push(left).push(right).correlate(kind(string(content, "kind")), corr.id, required)
+                            .build();
                 }
                 case "union" -> {
                     var inputs = array(content).mapChecked(this::deserialize);
@@ -130,7 +133,8 @@ public record JSONDeserializer() {
                     var input = deserialize(content.required("source"));
                     var rex = rex(corr(input.getRowType()));
                     var keys = builder().groupKey(array(content, "keys").mapChecked(rex));
-                    yield builder().push(input).aggregate(keys, array(content, "function").mapChecked(rex::agg)).build();
+                    yield builder().push(input).aggregate(keys, array(content, "function").mapChecked(rex::agg))
+                            .build();
                 }
                 case "sort" -> {
                     var input = deserialize(content.required("source"));
@@ -142,17 +146,21 @@ public record JSONDeserializer() {
                     }).asJava());
                     var sorted = builder().push(input).sort(collations).build();
                     if (content.get("limit") == null) yield sorted;
-                    yield builder().push(sorted).sortLimit(rex().deserialize(content.required("offset")), rex().deserialize(content.required("limit")), Seq.empty()).build();
+                    yield builder().push(sorted).sortLimit(rex().deserialize(content.required("offset")),
+                            rex().deserialize(content.required("limit")), Seq.empty()).build();
                 }
                 default -> throw new Exception(String.format("Unrecognized node:\n%s", node.toPrettyString()));
             };
         }
     }
 
-    private record Rex(RuleBuilder builder, ImmutableSeq<RexNode> globals, RexCorrelVariable local, ImmutableSeq<CosetteTable> tables) implements CheckedFunction<JsonNode, RexNode, Exception> {
+    private record Rex(RuleBuilder builder, ImmutableSeq<RexNode> globals, RexCorrelVariable local,
+                       ImmutableSeq<CosetteTable> tables) implements CheckedFunction<JsonNode, RexNode, Exception> {
         public RexNode resolve(int lvl) {
             assert lvl < globals().size() + local().getType().getFieldCount();
-            return lvl < globals().size() ? globals().get(lvl) : builder().getRexBuilder().makeInputRef(local().getType(), lvl - globals().size());
+            return lvl < globals().size() ? globals().get(lvl) : builder().getRexBuilder()
+                    .makeInputRef(local().getType().getFieldList().get(lvl - globals().size()).getType(),
+                            lvl - globals().size());
         }
 
         public Rel rel() {
@@ -171,8 +179,7 @@ public record JSONDeserializer() {
 
         static Seq<SqlOperator> ops = Seq.from(SqlStdOperatorTable.class.getDeclaredFields())
                 .filter(f -> java.lang.reflect.Modifier.isPublic(f.getModifiers()) &&
-                        java.lang.reflect.Modifier.isStatic(f.getModifiers()))
-                .map(f -> {
+                        java.lang.reflect.Modifier.isStatic(f.getModifiers())).map(f -> {
                     var mist = Try.of(() -> f.get(null)).getOrNull();
                     if (mist == null) return null;
                     if (mist instanceof SqlOperator op) return op;
@@ -181,11 +188,15 @@ public record JSONDeserializer() {
 
         SqlOperator op(String name) throws Exception {
             switch (name) {
-                case "MINUS": return SqlStdOperatorTable.MINUS;
-                case "UNARY MINUS": return SqlStdOperatorTable.UNARY_MINUS;
-                case "PLUS": return SqlStdOperatorTable.PLUS;
-                case "UNARY PLUS": return SqlStdOperatorTable.UNARY_PLUS;
-            };
+                case "MINUS":
+                    return SqlStdOperatorTable.MINUS;
+                case "UNARY MINUS":
+                    return SqlStdOperatorTable.UNARY_MINUS;
+                case "PLUS":
+                    return SqlStdOperatorTable.PLUS;
+                case "UNARY PLUS":
+                    return SqlStdOperatorTable.UNARY_PLUS;
+            }
             var finalName = switch (name) {
                 case "EQ" -> "=";
                 case "GT" -> ">";
@@ -205,7 +216,8 @@ public record JSONDeserializer() {
         }
 
         RelBuilder.AggCall agg(JsonNode node) throws Exception {
-            return builder().aggregateCall((SqlAggFunction) op(string(node, "op")), array(node, "args").mapChecked(this::deserialize));
+            return builder().aggregateCall((SqlAggFunction) op(string(node, "op")),
+                    array(node, "args").mapChecked(this::deserialize));
         }
 
         public RexNode deserialize(JsonNode node) throws Exception {
@@ -223,18 +235,19 @@ public record JSONDeserializer() {
                     default -> throw new Exception(String.format("Unknown subquery %s", operator));
                 };
             } else {
-                var operator = string(node, "op");
-                var operands = array(node, "args");
+                var operator = string(node, "operator");
+                var operands = array(node, "operand");
                 var type = type(string(node, "type"));
                 if (operands.isEmpty()) {
                     return switch (operator.toLowerCase()) {
                         case "null" -> rex.makeNullLiteral(type);
-                        case String lit -> Try.of(() -> rex.makeLiteral(Boolean.parseBoolean(lit), type))
-                                .getOrElse(() -> Try.of(() -> rex.makeLiteral(NumberFormat.getInstance().parse(lit), type))
+                        case String lit -> Try.of(() -> rex.makeLiteral(Boolean.parseBoolean(lit), type)).getOrElse(
+                                () -> Try.of(() -> rex.makeLiteral(NumberFormat.getInstance().parse(lit), type))
                                         .getOrElse(() -> rex.makeLiteral(lit, type)));
                     };
                 } else {
-                    return builder().getRexBuilder().makeCall(type, op(operator), operands.mapChecked(this::deserialize).asJava());
+                    return builder().getRexBuilder()
+                            .makeCall(type, op(operator), operands.mapChecked(this::deserialize).asJava());
                 }
             }
         }
@@ -284,17 +297,20 @@ public record JSONDeserializer() {
         };
         return Enum.valueOf(SqlTypeName.class, name);
     }
+
     public ImmutableSeq<RelNode> deserialize(JsonNode node) throws Exception {
         var builder = RuleBuilder.create();
         var tables = array(node, "schemas").mapChecked(schema -> {
             var types = array(schema, "types").mapChecked(JSONDeserializer::string);
             var nullabilities = array(schema, "nullable").mapChecked(JSONDeserializer::bool);
             var name = schema.path("name").asText("DEFAULT_TABLE_NAME");
-            var fields = schema.get("fields") == null ? Seq.fill(types.size(), i -> String.format("DEFAULT_FIELD_NAME_%d", i))
-                    : array(schema, "fields").mapChecked(JSONDeserializer::string);
-            var keys = Set.from(array(schema, "key")
-                    .map(CheckedFunction.of(key -> ImmutableBitSet.of(array(key).mapChecked(JSONDeserializer::integer)))));
-            if (types.size() != nullabilities.size()) throw new Exception("Expecting corresponding types and nullabilities");
+            var fields = schema.get("fields") == null ?
+                    Seq.fill(types.size(), i -> String.format("DEFAULT_FIELD_NAME_%d", i)) :
+                    array(schema, "fields").mapChecked(JSONDeserializer::string);
+            var keys = Set.from(array(schema, "key").map(
+                    CheckedFunction.of(key -> ImmutableBitSet.of(array(key).mapChecked(JSONDeserializer::integer)))));
+            if (types.size() != nullabilities.size())
+                throw new Exception("Expecting corresponding types and nullabilities");
             var sts = types.zip(nullabilities).map(tn -> {
                 var type = builder.getTypeFactory().createSqlType(typeName(tn.component1()));
                 return builder.getTypeFactory().createTypeWithNullability(type, tn.component2());
@@ -309,6 +325,28 @@ public record JSONDeserializer() {
 
     public static ImmutableSeq<RelNode> load(File file) throws Exception {
         return new JSONDeserializer().deserialize(mapper.readTree(file));
+    }
+
+    public static void main(String[] args) throws Exception {
+        var refs = Seq.from(new File("RelOptRulesTest").listFiles());
+        for (var file : refs) {
+            try {
+                var store = mapper.readTree(file);
+                var ref = new JSONDeserializer().deserialize(store);
+                var dmp = JSONSerializer.serialize(ref);
+                var chk = new JSONDeserializer().deserialize(dmp);
+                ref.zip(chk).forEachChecked(t -> {
+                    if (!t.getKey().explain().equals(t.getValue().explain())) {
+                        throw new Exception(String.format("Asymmetrical serialization:\n%s\n%s", t.getKey().explain(),
+                                t.getValue().explain()));
+                    }
+                });
+            } catch (Exception e) {
+                System.err.println("===> " + file.getName() + " <===");
+                System.err.println(e.getMessage());
+                System.err.println();
+            }
+        }
     }
 }
 
