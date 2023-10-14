@@ -216,18 +216,18 @@ public record JSONDeserializer() {
         }
 
         RelBuilder.AggCall agg(JsonNode node) throws Exception {
-            return builder().aggregateCall((SqlAggFunction) op(string(node, "op")),
-                    array(node, "args").mapChecked(this::deserialize));
+            return builder().aggregateCall((SqlAggFunction) op(string(node, "operator")),
+                    array(node, "operand").mapChecked(this::deserialize));
         }
 
         public RexNode deserialize(JsonNode node) throws Exception {
             var rex = builder().getRexBuilder();
             if (node.has("column")) {
                 return resolve(integer(node, "column"));
-            } else if (node.has("rel")) {
-                var operator = string(node, "op");
-                var operands = array(node, "args").mapChecked(this);
-                var query = rel().deserialize(node.required("rel"));
+            } else if (node.has("query")) {
+                var operator = string(node, "operator");
+                var operands = array(node, "operand").mapChecked(this);
+                var query = rel().deserialize(node.required("query"));
                 return switch (operator.toLowerCase()) {
                     case "exists" -> RexSubQuery.exists(query);
                     case "unique" -> RexSubQuery.unique(query);
@@ -329,7 +329,7 @@ public record JSONDeserializer() {
 
     public static void main(String[] args) throws Exception {
         var refs = Seq.from(new File("RelOptRulesTest").listFiles());
-        for (var file : refs) {
+        for (var file : refs.filter(f -> f.getName().matches(".*testJoinDeriveIsNotNullFilterRule1.*"))) {
             try {
                 var store = mapper.readTree(file);
                 var ref = new JSONDeserializer().deserialize(store);
@@ -344,6 +344,8 @@ public record JSONDeserializer() {
             } catch (Exception e) {
                 System.err.println("===> " + file.getName() + " <===");
                 System.err.println(e.getMessage());
+                System.err.println(JSONSerializer.serialize(new JSONDeserializer().deserialize(mapper.readTree(file)))
+                        .toPrettyString());
                 System.err.println();
             }
         }

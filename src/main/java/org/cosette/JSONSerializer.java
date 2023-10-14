@@ -154,10 +154,10 @@ public record JSONSerializer(Env env) {
                         string(literal.getValue() == null ? "NULL" : literal.getValue().toString()), "operand",
                         array(Seq.empty()), "type", type(literal.getType())));
                 case RexSubQuery subQuery ->
-                        object(Map.of("operator", string(subQuery.getOperator().toString()), "operand",
+                        object(Map.of("operator", string(subQuery.getOperator().getName()), "operand",
                                 array(Seq.from(subQuery.getOperands()).map(this::serialize)), "query",
                                 new Rel(env.rel()).serialize(subQuery.rel), "type", type(subQuery.getType())));
-                case RexCall call -> object(Map.of("operator", string(call.getOperator().toString()), "operand",
+                case RexCall call -> object(Map.of("operator", string(call.getOperator().getName()), "operand",
                         array(Seq.from(call.getOperands()).map(this::serialize)), "type", type(call.getType())));
                 case RexFieldAccess fieldAccess -> object(Map.of("column", integer(fieldAccess.getField().getIndex() +
                                 env.resolve(((RexCorrelVariable) fieldAccess.getReferenceExpr()).id)), "type",
@@ -210,7 +210,7 @@ public record JSONSerializer(Env env) {
                                     key -> array(Seq.from(key).map(JSONSerializer::integer)))), "guaranteed",
                             array(Seq.empty()))) : object(Map.of("name", string(cosette.getName()), "fields",
                     array(cosette.getColumnNames().map(JSONSerializer::string)), "types",
-                    array(cosette.getColumnTypes().map(type -> string(type.toString()))), "nullable",
+                    array(cosette.getColumnTypes().map(JSONSerializer::type)), "nullable",
                     array(cosette.getColumnTypes().map(type -> bool(type.isNullable()))), "key",
                     array(Seq.from(cosette.getKeys().map(key -> array(Seq.from(key).map(JSONSerializer::integer))))),
                     "guaranteed", array(cosette.getConstraints().map(visitor::serialize).toImmutableSeq())));
