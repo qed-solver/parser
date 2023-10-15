@@ -121,7 +121,7 @@ public record JSONSerializer(Env env) {
                     var types = Seq.from(input.getRowType().getFieldList()).map(field -> type(field.getType()));
                     var collations = array(Seq.from(sort.collation.getFieldCollations()).map(collation -> {
                         var index = collation.getFieldIndex();
-                        return array(Seq.of(integer(index), types.get(index), string(collation.shortString())));
+                        return array(Seq.of(integer(index), types.get(index), string(collation.getDirection().name())));
                     }));
                     var visitor = new Rex(env.rex(0));
                     yield object(Map.of("sort",

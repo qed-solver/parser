@@ -186,16 +186,37 @@ public record JSONDeserializer() {
                     return null;
                 }).filter(Objects::nonNull);
 
-        SqlOperator op(String name) throws Exception {
+        SqlOperator op(String name, int arity) throws Exception {
             switch (name) {
-                case "MINUS":
+                case "BOOL_AND" -> {
+                    return SqlStdOperatorTable.AND;
+                }
+                case "MINUS" -> {
                     return SqlStdOperatorTable.MINUS;
-                case "UNARY MINUS":
+                }
+                case "UNARY MINUS" -> {
                     return SqlStdOperatorTable.UNARY_MINUS;
-                case "PLUS":
+                }
+                case "PLUS" -> {
                     return SqlStdOperatorTable.PLUS;
-                case "UNARY PLUS":
+                }
+                case "UNARY PLUS" -> {
                     return SqlStdOperatorTable.UNARY_PLUS;
+                }
+                case "+" -> {
+                    if (arity == 2) {
+                        return SqlStdOperatorTable.PLUS;
+                    } else if (arity == 1) {
+                        return SqlStdOperatorTable.UNARY_PLUS;
+                    }
+                }
+                case "-" -> {
+                    if (arity == 2) {
+                        return SqlStdOperatorTable.MINUS;
+                    } else if (arity == 1) {
+                        return SqlStdOperatorTable.UNARY_MINUS;
+                    }
+                }
             }
             var finalName = switch (name) {
                 case "EQ" -> "=";
@@ -216,7 +237,7 @@ public record JSONDeserializer() {
         }
 
         RelBuilder.AggCall agg(JsonNode node) throws Exception {
-            return builder().aggregateCall((SqlAggFunction) op(string(node, "operator")),
+            return builder().aggregateCall((SqlAggFunction) op(string(node, "operator"), 1),
                     array(node, "operand").mapChecked(this::deserialize));
         }
 
@@ -246,8 +267,8 @@ public record JSONDeserializer() {
                                         .getOrElse(() -> rex.makeLiteral(lit, type)));
                     };
                 } else {
-                    return builder().getRexBuilder()
-                            .makeCall(type, op(operator), operands.mapChecked(this::deserialize).asJava());
+                    return builder().getRexBuilder().makeCall(type, op(operator, operands.size()),
+                            operands.mapChecked(this::deserialize).asJava());
                 }
             }
         }
@@ -329,23 +350,13 @@ public record JSONDeserializer() {
 
     public static void main(String[] args) throws Exception {
         var refs = Seq.from(new File("RelOptRulesTest").listFiles());
-        for (var file : refs.filter(f -> f.getName().matches(".*testJoinDeriveIsNotNullFilterRule1.*"))) {
+        for (var file : refs) {
             try {
                 var store = mapper.readTree(file);
-                var ref = new JSONDeserializer().deserialize(store);
-                var dmp = JSONSerializer.serialize(ref);
-                var chk = new JSONDeserializer().deserialize(dmp);
-                ref.zip(chk).forEachChecked(t -> {
-                    if (!t.getKey().explain().equals(t.getValue().explain())) {
-                        throw new Exception(String.format("Asymmetrical serialization:\n%s\n%s", t.getKey().explain(),
-                                t.getValue().explain()));
-                    }
-                });
+                new JSONDeserializer().deserialize(store);
             } catch (Exception e) {
                 System.err.println("===> " + file.getName() + " <===");
                 System.err.println(e.getMessage());
-                System.err.println(JSONSerializer.serialize(new JSONDeserializer().deserialize(mapper.readTree(file)))
-                        .toPrettyString());
                 System.err.println();
             }
         }
