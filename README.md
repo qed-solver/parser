@@ -5,17 +5,38 @@ based on that of [Apache Calcite](https://calcite.apache.org/).
 
 ## Requirements
 
-Java version 11.
+Java version 19.
 
-## Get Cosette Parser
+## Install
 
-### Download and build
+### With Nix
 
+It is recommended to use the parser with Nix Shell:
+ 
 ```bash
-$ git clone git://github.com/cosette-solver/cosette-parser.git
-$ cd cosette-parser
-$ ./mvnw install
+nix shell github:cosette-solver/cosette-parser
 ```
+
+## Usage
+
+The parser accept list of paths to input files or folders containing input files:
+
+``` bash
+cosette-parser <path1> <path2> ...
+```
+
+### Input format
+
+The input files should have `.sql` extension, containing a list of allowed SQL statements:
+
+- `CREATE TABLE` statements that declare the schema of available tables
+- `SELECT` statements that represent the query
+
+The input file can interlace the declarations and queries, but the table must be defined before use.
+
+### Output format
+
+For each input file, the parser will dump a `.json` file as the input to `cosette-prover` and a `.rkt` file as the input to `cosette-disprover`.
 
 ## License
 
