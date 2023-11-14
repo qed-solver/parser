@@ -34,10 +34,23 @@
         "type": "github"
       }
     },
+    "parser-release": {
+      "flake": false,
+      "locked": {
+        "narHash": "sha256-85YKpfXR7WKG9gVtLUD9fIsqEv1175p+1VmbwRlw+Dg=",
+        "type": "file",
+        "url": "https://github.com/cosette-solver/cosette-parser/releases/download/latest/cosette-parser-1.0-SNAPSHOT-jar-with-dependencies.jar"
+      },
+      "original": {
+        "type": "file",
+        "url": "https://github.com/cosette-solver/cosette-parser/releases/download/latest/cosette-parser-1.0-SNAPSHOT-jar-with-dependencies.jar"
+      }
+    },
     "root": {
       "inputs": {
         "flake-utils": "flake-utils",
-        "nixpkgs": "nixpkgs"
+        "nixpkgs": "nixpkgs",
+        "parser-release": "parser-release"
       }
     },
     "systems": {
