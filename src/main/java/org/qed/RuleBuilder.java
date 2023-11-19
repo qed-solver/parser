@@ -46,12 +46,12 @@ public class RuleBuilder extends RelBuilder {
     }
 
     /**
-     * Create a cosette table given the column types and whether they are unique (i.e. can be key)
+     * Create a qed table given the column types and whether they are unique (i.e. can be key)
      *
      * @param schema the list of column types and they are unique
      * @return the table created from the given schema
      */
-    public QedTable createCosetteTable(Seq<Tuple2<RelType, Boolean>> schema) {
+    public QedTable createQedTable(Seq<Tuple2<RelType, Boolean>> schema) {
         var identifier = "Table_" + TABLE_ID_GENERATOR.getAndIncrement();
         var cols = schema.mapIndexed(
                 (idx, tuple) -> Tuple.of(identifier + "_Column_" + idx, tuple.component1(), tuple.component2()));

@@ -12,7 +12,7 @@ import java.util.regex.Pattern;
 
 
 /**
- * The Main logic of Cosette-Parser.
+ * The Main logic of Qed-Parser.
  */
 public class Main {
 

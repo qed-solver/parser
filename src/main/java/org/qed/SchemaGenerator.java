@@ -133,7 +133,7 @@ public class SchemaGenerator {
                         Class[].class, int.class, int.class, String.class, byte[].class, byte[].class, byte[].class);
         methodConstructor.setAccessible(true);
         if (matcher.group("type").equalsIgnoreCase("SCALAR")) {
-            Method scalarFunction = methodConstructor.newInstance(SchemaGenerator.class, "cosetteFunction", parameters,
+            Method scalarFunction = methodConstructor.newInstance(SchemaGenerator.class, "qedFunction", parameters,
                     toPrimitive.get(target), null, 0, 0, "", null, null, null);
             customFunction = ScalarFunctionImpl.createUnsafe(scalarFunction);
         } else {
@@ -143,7 +143,7 @@ public class SchemaGenerator {
                 sourceParameters.add(clazz, clazz.getName(), false);
                 sourceTypes.add(clazz);
             }
-            Method nullFunction = methodConstructor.newInstance(SchemaGenerator.class, "cosetteFunction", parameters,
+            Method nullFunction = methodConstructor.newInstance(SchemaGenerator.class, "qedFunction", parameters,
                     toPrimitive.get(target), null, 0, 0, "", null, null, null);
             Constructor<AggregateFunctionImpl> aggregateFunctionConstructor =
                     AggregateFunctionImpl.class.getDeclaredConstructor(Class.class, List.class, List.class, Class.class,
@@ -209,7 +209,7 @@ class QedSchema extends AbstractSchema {
                     types.append(SqlTypeName.get(decl.dataType.getTypeName().toString()));
                     nullabilities.append(decl.strategy != ColumnStrategy.NOT_NULLABLE);
                 }
-                case FOREIGN_KEY -> System.err.println("Foreign key constraint is not implemented in cosette yet.");
+                case FOREIGN_KEY -> System.err.println("Foreign key constraint is not implemented in qed yet.");
                 case PRIMARY_KEY, UNIQUE -> {
                     SqlKeyConstraint cons = (SqlKeyConstraint) column;
                     List<Integer> key = new ArrayList<>();
@@ -226,10 +226,10 @@ class QedSchema extends AbstractSchema {
                         "Unsupported declaration type " + column.getKind() + " in table " + createTable.name);
             }
         }
-        var cosetteTable = new QedTable(createTable.name.toString(), names.zip(
+        var qedTable = new QedTable(createTable.name.toString(), names.zip(
                         types.zip(nullabilities).map(type -> new RelType.BaseType(type.component1(), type.component2())))
                 .toImmutableMap(), ImmutableSet.from(keys), ImmutableSet.from(checkConstraints));
-        tables.put(createTable.name.toString(), cosetteTable);
+        tables.put(createTable.name.toString(), qedTable);
     }
 
     public void addView(SqlCreateView sqlCreateView, String rawDef) throws SQLException {
@@ -265,7 +265,7 @@ class QedSchema extends AbstractSchema {
     }
 
     public SchemaPlus plus() {
-        SchemaPlus plus = CalciteSchema.createRootSchema(true, false, "Cosette", this).plus();
+        SchemaPlus plus = CalciteSchema.createRootSchema(true, false, "Qed", this).plus();
         for (String fn : owner.customFunctions().keySet()) {
             plus.add(fn, owner.customFunctions().get(fn));
         }

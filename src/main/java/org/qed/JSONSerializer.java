@@ -198,9 +198,9 @@ public record JSONSerializer(Env env) {
         var tables = shuttle.env.tables();
         var schemas = array(tables.map(table -> {
             var visitor = new Rex(shuttle.env.rex(table.getRowType().getFieldCount()));
-            var cosette = table.unwrap(QedTable.class);
+            var qedTable = table.unwrap(QedTable.class);
             var fields = Seq.from(table.getRowType().getFieldList());
-            return cosette == null ?
+            return qedTable == null ?
                     object(Map.of("name", string(Seq.from(table.getQualifiedName()).joinToString(".")), "fields",
                             array(fields.map(field -> string(field.getName()))), "types",
                             array(fields.map(field -> type(field.getType()))), "nullable",
@@ -208,12 +208,12 @@ public record JSONSerializer(Env env) {
                             array((table.getKeys() != null ? Seq.from(table.getKeys()) :
                                     Seq.<ImmutableBitSet>empty()).map(
                                     key -> array(Seq.from(key).map(JSONSerializer::integer)))), "guaranteed",
-                            array(Seq.empty()))) : object(Map.of("name", string(cosette.getName()), "fields",
-                    array(cosette.getColumnNames().map(JSONSerializer::string)), "types",
-                    array(cosette.getColumnTypes().map(JSONSerializer::type)), "nullable",
-                    array(cosette.getColumnTypes().map(type -> bool(type.isNullable()))), "key",
-                    array(Seq.from(cosette.getKeys().map(key -> array(Seq.from(key).map(JSONSerializer::integer))))),
-                    "guaranteed", array(cosette.getConstraints().map(visitor::serialize).toImmutableSeq())));
+                            array(Seq.empty()))) : object(Map.of("name", string(qedTable.getName()), "fields",
+                    array(qedTable.getColumnNames().map(JSONSerializer::string)), "types",
+                    array(qedTable.getColumnTypes().map(JSONSerializer::type)), "nullable",
+                    array(qedTable.getColumnTypes().map(type -> bool(type.isNullable()))), "key",
+                    array(Seq.from(qedTable.getKeys().map(key -> array(Seq.from(key).map(JSONSerializer::integer))))),
+                    "guaranteed", array(qedTable.getConstraints().map(visitor::serialize).toImmutableSeq())));
         }));
 
         return object(Map.of("schemas", schemas, "queries", queries, "help", helps));
