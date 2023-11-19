@@ -1,4 +1,4 @@
-package org.cosette;
+package org.qed;
 
 import kala.collection.Seq;
 import kala.collection.Set;
@@ -23,7 +23,7 @@ import org.apache.calcite.rex.RexSubQuery;
 import org.apache.calcite.util.ImmutableBitSet;
 
 public class RelPruner implements RelFolder {
-    private final MutableMap<RelOptTable, Tuple2<CosetteTable, RelDataType>> cache = MutableMap.create();
+    private final MutableMap<RelOptTable, Tuple2<QedTable, RelDataType>> cache = MutableMap.create();
     ImmutableMap<String, ImmutableSet<Integer>> usages;
 
     public RelPruner(ImmutableMap<String, ImmutableSet<Integer>> usages) {
@@ -36,7 +36,7 @@ public class RelPruner implements RelFolder {
 
     private LogicalTableScan prune(LogicalTableScan scan) {
         var table = scan.getTable();
-        CosetteTable cosTable;
+        QedTable cosTable;
         RelDataType rowType;
         if (!cache.containsKey(table)) {
             var fieldList = table.getRowType().getFieldList();
@@ -47,7 +47,7 @@ public class RelPruner implements RelFolder {
                     Seq.from(table.getKeys()).filter(ks -> ImmutableSet.from(ks).removedAll(fields).isEmpty())
                             .map(ks -> ImmutableBitSet.of(ImmutableSet.from(ks).map(fields::indexOf))));
             var qName = table.getQualifiedName();
-            cosTable = new CosetteTable(qName.get(qName.size() - 1), columns, keys, Set.empty());
+            cosTable = new QedTable(qName.get(qName.size() - 1), columns, keys, Set.empty());
             rowType = new RelRecordType(fields.map(fieldList::get).asJava());
             cache.put(table, Tuple.of(cosTable, rowType));
         } else {

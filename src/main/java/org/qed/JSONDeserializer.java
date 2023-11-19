@@ -1,4 +1,4 @@
-package org.cosette;
+package org.qed;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -34,7 +34,7 @@ import java.util.Objects;
 public record JSONDeserializer() {
     private final static ObjectMapper mapper = new ObjectMapper();
 
-    private record Rel(RuleBuilder builder, ImmutableSeq<RexNode> globals, ImmutableSeq<CosetteTable> tables)
+    private record Rel(RuleBuilder builder, ImmutableSeq<RexNode> globals, ImmutableSeq<QedTable> tables)
             implements CheckedFunction<JsonNode, RelNode, Exception> {
         Rel(RuleBuilder builder) {
             this(builder, ImmutableSeq.empty(), ImmutableSeq.empty());
@@ -155,7 +155,7 @@ public record JSONDeserializer() {
     }
 
     private record Rex(RuleBuilder builder, ImmutableSeq<RexNode> globals, RexCorrelVariable local,
-                       ImmutableSeq<CosetteTable> tables) implements CheckedFunction<JsonNode, RexNode, Exception> {
+                       ImmutableSeq<QedTable> tables) implements CheckedFunction<JsonNode, RexNode, Exception> {
         public RexNode resolve(int lvl) {
             assert lvl < globals().size() + local().getType().getFieldCount();
             return lvl < globals().size() ? globals().get(lvl) : builder().getRexBuilder()
@@ -336,7 +336,7 @@ public record JSONDeserializer() {
                 var type = builder.getTypeFactory().createSqlType(typeName(tn.component1()));
                 return builder.getTypeFactory().createTypeWithNullability(type, tn.component2());
             });
-            var table = new CosetteTable(name, fields, sts, keys, Set.empty());
+            var table = new QedTable(name, fields, sts, keys, Set.empty());
             builder.addTable(table);
             return table;
         });

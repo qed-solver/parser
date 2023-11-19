@@ -1,4 +1,4 @@
-package org.cosette;
+package org.qed;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import kala.collection.mutable.MutableArrayList;

@@ -1,4 +1,4 @@
-package org.cosette;
+package org.qed;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -59,14 +59,14 @@ public class SchemaGenerator {
     private static final SqlParser.Config schemaParserConfig =
             SqlParser.Config.DEFAULT.withParserFactory(SqlDdlParserImpl.FACTORY).withLex(Lex.MYSQL)
                     .withQuoting(Quoting.DOUBLE_QUOTE);
-    private final CosetteSchema schema;
+    private final QedSchema schema;
     private final Map<String, Function> declaredFunctions = new HashMap<>();
 
     /**
      * Create a SchemaGenerator instance by setting up a connection to JDBC.
      */
     public SchemaGenerator() {
-        schema = new CosetteSchema(this);
+        schema = new QedSchema(this);
     }
 
     /**
@@ -172,12 +172,12 @@ public class SchemaGenerator {
 
 }
 
-class CosetteSchema extends AbstractSchema {
+class QedSchema extends AbstractSchema {
 
     final MutableMap<String, Table> tables = new MutableHashMap<>();
     final SchemaGenerator owner;
 
-    public CosetteSchema(SchemaGenerator source) {
+    public QedSchema(SchemaGenerator source) {
         owner = source;
     }
 
@@ -226,7 +226,7 @@ class CosetteSchema extends AbstractSchema {
                         "Unsupported declaration type " + column.getKind() + " in table " + createTable.name);
             }
         }
-        var cosetteTable = new CosetteTable(createTable.name.toString(), names.zip(
+        var cosetteTable = new QedTable(createTable.name.toString(), names.zip(
                         types.zip(nullabilities).map(type -> new RelType.BaseType(type.component1(), type.component2())))
                 .toImmutableMap(), ImmutableSet.from(keys), ImmutableSet.from(checkConstraints));
         tables.put(createTable.name.toString(), cosetteTable);

@@ -1,4 +1,4 @@
-package org.cosette;
+package org.qed;
 
 import org.apache.calcite.tools.RelBuilder;
 import org.apache.commons.io.FilenameUtils;

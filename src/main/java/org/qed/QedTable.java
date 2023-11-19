@@ -1,4 +1,4 @@
-package org.cosette;
+package org.qed;
 
 import kala.collection.Map;
 import kala.collection.Seq;
@@ -12,7 +12,7 @@ import org.apache.calcite.schema.Statistics;
 import org.apache.calcite.schema.impl.AbstractTable;
 import org.apache.calcite.util.ImmutableBitSet;
 
-public class CosetteTable extends AbstractTable {
+public class QedTable extends AbstractTable {
     private final String name;
 
     private final Seq<String> columnNames;
@@ -21,7 +21,7 @@ public class CosetteTable extends AbstractTable {
     private final Set<ImmutableBitSet> keys;
     private final Set<RexNode> constraints;
 
-    public CosetteTable(String n, Seq<String> cn, Seq<RelDataType> ct, Set<ImmutableBitSet> k, Set<RexNode> cs) {
+    public QedTable(String n, Seq<String> cn, Seq<RelDataType> ct, Set<ImmutableBitSet> k, Set<RexNode> cs) {
         name = n;
         columnNames = cn;
         columnTypes = ct;
@@ -29,8 +29,8 @@ public class CosetteTable extends AbstractTable {
         constraints = cs;
     }
 
-    public CosetteTable(String identifier, Map<String, RelDataType> columns, Set<Set<String>> eligibleKeys,
-                        Set<RexNode> checkConstraints) {
+    public QedTable(String identifier, Map<String, RelDataType> columns, Set<Set<String>> eligibleKeys,
+                    Set<RexNode> checkConstraints) {
         name = identifier;
         columnNames = columns.keysView().toImmutableSeq().sorted();
         columnTypes = columnNames.map(columns::get);
@@ -38,8 +38,8 @@ public class CosetteTable extends AbstractTable {
         constraints = checkConstraints;
     }
 
-    public CosetteTable(String identifier, Map<String, RelDataType> columns, ImmutableSet<ImmutableBitSet> eligibleKeys,
-                        Set<RexNode> checkConstraints) {
+    public QedTable(String identifier, Map<String, RelDataType> columns, ImmutableSet<ImmutableBitSet> eligibleKeys,
+                    Set<RexNode> checkConstraints) {
         name = identifier;
         columnNames = columns.keysView().toImmutableSeq().sorted();
         columnTypes = columnNames.map(columns::get);

@@ -4,8 +4,8 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>org.cosette</groupId>
-    <artifactId>cosette-parser</artifactId>
+    <groupId>org.qed</groupId>
+    <artifactId>qed-parser</artifactId>
     <version>1.0-SNAPSHOT</version>
     <build>
         <plugins>
@@ -17,9 +17,10 @@
                     <executable>java</executable>
                     <arguments>
                         <argument>--enable-preview</argument>
+                        <argument>--add-opens=java.base/java.lang.reflect=ALL-UNNAMED</argument>>
                         <argument>-classpath</argument>
                         <classpath/>
-                        <argument>org.cosette.Main</argument>
+                        <argument>org.qed.Main</argument>
                         <argument>${args}</argument>
                     </arguments>
                 </configuration>
@@ -30,7 +31,7 @@
                 <configuration>
                     <archive>
                         <manifest>
-                            <mainClass>org.cosette.Main</mainClass>
+                            <mainClass>org.qed.Main</mainClass>
                         </manifest>
                     </archive>
                     <descriptorRefs>

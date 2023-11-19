@@ -1,4 +1,4 @@
-package org.cosette;
+package org.qed;
 
 import kala.collection.Seq;
 import org.apache.calcite.rel.RelNode;

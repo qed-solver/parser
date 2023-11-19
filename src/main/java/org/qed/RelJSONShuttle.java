@@ -1,4 +1,4 @@
-package org.cosette;
+package org.qed;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -94,7 +94,7 @@ public record RelJSONShuttle(Env env) {
         var node = mapper.readTree(path.toFile());
         var env = Env.empty();
         var tables = array(node, "schemas").flatMap(schemas -> {
-            var collected = ImmutableSeq.<CosetteTable>empty();
+            var collected = ImmutableSeq.<QedTable>empty();
             for (var schema : schemas) {
                 try {
                     var tys = unwrap(array(schema, "types"));
@@ -108,7 +108,7 @@ public record RelJSONShuttle(Env env) {
                     }
                     var sts = tys.zip(nbs).map(tn -> (RelDataType) RelType.fromString(tn.component1().asText(),
                             tn.component2().asBoolean()));
-                    collected = collected.appended(new CosetteTable(nm.asText(), fds, sts, kgs, Set.empty()));
+                    collected = collected.appended(new QedTable(nm.asText(), fds, sts, kgs, Set.empty()));
                 } catch (Exception e) {
                     return Result.err(
                             String.format("Broken table schemas: %s in\n%s", e.getMessage(), schema.toPrettyString()));
@@ -135,7 +135,7 @@ public record RelJSONShuttle(Env env) {
     public JsonNode serialize(RelNode rel) {
         return switch (rel) {
             case TableScan scan ->
-                    object(Map.of("scan", new IntNode(env.resolve(scan.getTable().unwrap(CosetteTable.class)))));
+                    object(Map.of("scan", new IntNode(env.resolve(scan.getTable().unwrap(QedTable.class)))));
             case LogicalValues values -> {
                 var visitor = new RexJSONVisitor(env);
                 var schema = array(Seq.from(values.getRowType().getFieldList())

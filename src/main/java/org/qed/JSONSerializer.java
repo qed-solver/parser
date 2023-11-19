@@ -1,4 +1,4 @@
-package org.cosette;
+package org.qed;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -198,7 +198,7 @@ public record JSONSerializer(Env env) {
         var tables = shuttle.env.tables();
         var schemas = array(tables.map(table -> {
             var visitor = new Rex(shuttle.env.rex(table.getRowType().getFieldCount()));
-            var cosette = table.unwrap(CosetteTable.class);
+            var cosette = table.unwrap(QedTable.class);
             var fields = Seq.from(table.getRowType().getFieldList());
             return cosette == null ?
                     object(Map.of("name", string(Seq.from(table.getQualifiedName()).joinToString(".")), "fields",

@@ -1,4 +1,4 @@
-package org.cosette;
+package org.qed;
 
 import kala.collection.Seq;
 import kala.collection.immutable.ImmutableMap;
@@ -7,7 +7,7 @@ import org.apache.calcite.rel.core.CorrelationId;
 
 import java.util.Set;
 
-record Env(int base, int delta, ImmutableMap<CorrelationId, Integer> globals, MutableList<CosetteTable> tables) {
+record Env(int base, int delta, ImmutableMap<CorrelationId, Integer> globals, MutableList<QedTable> tables) {
     static Env empty() {
         return new Env(0, 0, ImmutableMap.empty(), MutableList.create());
     }
@@ -24,7 +24,7 @@ record Env(int base, int delta, ImmutableMap<CorrelationId, Integer> globals, Mu
         return new Env(base + d, delta, globals, tables);
     }
 
-    int resolve(CosetteTable table) {
+    int resolve(QedTable table) {
         var idx = tables.indexOf(table);
         if (idx == -1) {
             idx = tables.size();

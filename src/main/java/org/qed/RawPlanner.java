@@ -1,4 +1,4 @@
-package org.cosette;
+package org.qed;
 
 import com.google.common.collect.ImmutableList;
 import org.apache.calcite.adapter.java.JavaTypeFactory;

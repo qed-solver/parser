@@ -4,7 +4,7 @@
     flake-utils.url = "github:numtide/flake-utils";
     parser-release = {
       flake = false;
-      url = "https://github.com/cosette-solver/cosette-parser/releases/download/latest/cosette-parser-1.0-SNAPSHOT-jar-with-dependencies.jar";
+      url = "https://github.com/qed-solver/parser/releases/download/latest/qed-parser-1.0-SNAPSHOT-jar-with-dependencies.jar";
     };
   };
 
@@ -13,14 +13,14 @@
       let
         pkgs = nixpkgs.legacyPackages.${system};
         parser = pkgs.stdenv.mkDerivation {
-          name = "cosette-parser";
+          name = "qed-parser";
           src = parser-release;
           buildInputs = with pkgs; [ jre ];
           nativeBuildInputs = with pkgs; [ makeWrapper ];
           buildCommand = ''
-            jar=$out/share/java/cosette-parser.jar
+            jar=$out/share/java/qed-parser.jar
             install -Dm444 $src $jar
-            makeWrapper ${pkgs.jre}/bin/java $out/bin/cosette-parser --add-flags "--enable-preview -jar $jar"
+            makeWrapper ${pkgs.jre}/bin/java $out/bin/qed-parser --add-flags "--enable-preview --add-opens=java.base/java.lang.reflect=ALL-UNNAMED -jar $jar"
           '';
         };
       in

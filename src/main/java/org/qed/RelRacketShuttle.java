@@ -1,4 +1,4 @@
-package org.cosette;
+package org.qed;
 
 import kala.collection.Seq;
 import org.apache.calcite.rel.RelNode;
@@ -20,7 +20,7 @@ public record RelRacketShuttle(Env env) {
         var env = Env.empty();
         var rels = Seq.from(relNodes).mapIndexed((i, rel) -> SExpr.def("r" + i, new RelRacketShuttle(env).visit(rel)));
         Seq<SExpr> tabs = env.tables().toSeq().map(t -> {
-            var table = t.unwrap(CosetteTable.class);
+            var table = t.unwrap(QedTable.class);
             assert table != null;
             var fullName = table.getName();
             Seq<SExpr> fields = table.getColumnNames().map(SExpr::string);
@@ -42,7 +42,7 @@ public record RelRacketShuttle(Env env) {
     public SExpr visit(RelNode rel) {
         return switch (rel) {
             case TableScan scan ->
-                    SExpr.app("r-scan", SExpr.integer(env.resolve(scan.getTable().unwrap(CosetteTable.class))));
+                    SExpr.app("r-scan", SExpr.integer(env.resolve(scan.getTable().unwrap(QedTable.class))));
             case LogicalValues values -> {
                 var visitor = new RexRacketVisitor(env);
                 Seq<SExpr> tuples = Seq.from(values.getTuples())
