@@ -1,0 +1,98 @@
+{
+  "help" : [ "LogicalProject(EXPR$0=[fund($1)])\n  LogicalJoin(condition=[=(-($0, $2), 0)], joinType=[inner])\n    LogicalTableScan(table=[[Cosette, dept]])\n    LogicalAggregate(group=[{0}])\n      LogicalTableScan(table=[[Cosette, emp]])\n", "LogicalProject(EXPR$0=[fund($1)])\n  LogicalFilter(condition=[IN($0, {\nLogicalTableScan(table=[[Cosette, emp]])\n})])\n    LogicalTableScan(table=[[Cosette, dept]])\n" ],
+  "schemas" : [ {
+    "types" : [ "INTEGER", "VARCHAR" ],
+    "nullable" : [ false, true ],
+    "name" : "dept",
+    "guaranteed" : [ ],
+    "fields" : [ "deptno", "dname" ],
+    "key" : [ [ 0 ] ]
+  }, {
+    "types" : [ "INTEGER" ],
+    "nullable" : [ true ],
+    "name" : "emp",
+    "guaranteed" : [ ],
+    "fields" : [ "deptno" ],
+    "key" : [ ]
+  } ],
+  "queries" : [ {
+    "project" : {
+      "source" : {
+        "join" : {
+          "condition" : {
+            "type" : "BOOLEAN",
+            "operand" : [ {
+              "type" : "INTEGER",
+              "operand" : [ {
+                "column" : 0,
+                "type" : "INTEGER"
+              }, {
+                "column" : 2,
+                "type" : "INTEGER"
+              } ],
+              "operator" : "-"
+            }, {
+              "type" : "INTEGER",
+              "operand" : [ ],
+              "operator" : "0"
+            } ],
+            "operator" : "="
+          },
+          "left" : {
+            "scan" : 0
+          },
+          "kind" : "INNER",
+          "right" : {
+            "group" : {
+              "keys" : [ {
+                "column" : 0,
+                "type" : "INTEGER"
+              } ],
+              "function" : [ ],
+              "source" : {
+                "scan" : 1
+              }
+            }
+          }
+        }
+      },
+      "target" : [ {
+        "type" : "REAL",
+        "operand" : [ {
+          "column" : 1,
+          "type" : "VARCHAR"
+        } ],
+        "operator" : "fund"
+      } ]
+    }
+  }, {
+    "project" : {
+      "source" : {
+        "filter" : {
+          "condition" : {
+            "query" : {
+              "scan" : 1
+            },
+            "type" : "BOOLEAN",
+            "operand" : [ {
+              "column" : 0,
+              "type" : "INTEGER"
+            } ],
+            "operator" : "IN"
+          },
+          "source" : {
+            "scan" : 0
+          }
+        }
+      },
+      "target" : [ {
+        "type" : "REAL",
+        "operand" : [ {
+          "column" : 1,
+          "type" : "VARCHAR"
+        } ],
+        "operator" : "fund"
+      } ]
+    }
+  } ]
+}
