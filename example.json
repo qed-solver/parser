@@ -1,5 +1,5 @@
 {
-  "help" : [ "LogicalProject(EXPR$0=[fund($1)])\n  LogicalJoin(condition=[=(-($0, $2), 0)], joinType=[inner])\n    LogicalTableScan(table=[[Cosette, dept]])\n    LogicalAggregate(group=[{0}])\n      LogicalTableScan(table=[[Cosette, emp]])\n", "LogicalProject(EXPR$0=[fund($1)])\n  LogicalFilter(condition=[IN($0, {\nLogicalTableScan(table=[[Cosette, emp]])\n})])\n    LogicalTableScan(table=[[Cosette, dept]])\n" ],
+  "help" : [ "LogicalProject(EXPR$0=[fund($1)])\n  LogicalJoin(condition=[=(-($0, $2), 0)], joinType=[inner])\n    LogicalTableScan(table=[[Qed, dept]])\n    LogicalAggregate(group=[{0}])\n      LogicalTableScan(table=[[Qed, emp]])\n", "LogicalProject(EXPR$0=[fund($1)])\n  LogicalFilter(condition=[IN($0, {\nLogicalTableScan(table=[[Qed, emp]])\n})])\n    LogicalTableScan(table=[[Qed, dept]])\n" ],
   "schemas" : [ {
     "types" : [ "INTEGER", "VARCHAR" ],
     "nullable" : [ false, true ],

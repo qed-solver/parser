@@ -37,7 +37,7 @@
     "parser-release": {
       "flake": false,
       "locked": {
-        "narHash": "sha256-NfQdsMXE+ZsmS6nSEZ8v9tqlhFpHCaKJmz4toCVOvZU=",
+        "narHash": "sha256-zlM8w0O4yYD/GYRBpr5ezoEY934mN5UoW4Ij9YSkNxw=",
         "type": "file",
         "url": "https://github.com/qed-solver/parser/releases/download/latest/qed-parser-1.0-SNAPSHOT-jar-with-dependencies.jar"
       },
