@@ -129,81 +129,81 @@ public class RuleBuilder extends RelBuilder {
         }
     }
 
-    public interface CosetteRule {
-
-        RelNode getPattern();
-
-        RelNode getTransformation();
-
-        default ImmutableSeq<Term> deriveAdditionalConstraints(Solver solver, RexTranslator.Declarations declarations) {
-            return ImmutableSeq.empty();
-        }
-
-        default Result<RexTranslator, String> match(RelNode target) {
-            return RelMatcher.check(getPattern(), target).map(translator -> translator.addConstraints(
-                    deriveAdditionalConstraints(translator.solver(), translator.declaredFunctions())));
-        }
-
-    }
-
-    public static class JoinConditionPush implements CosetteRule {
-
-        private final RelNode pattern;
-        private final RelNode transform;
-        private final String bothPredicate = "joinBoth";
-        private final String leftPredicate = "joinLeft";
-        private final String rightPredicate = "joinRight";
-
-
-        public JoinConditionPush() {
-            var builder = RuleBuilder.create();
-            var tableNames = builder.sourceSimpleTables(Seq.of(1, 2));
-            tableNames.forEach(builder::scan);
-            var joinBoth = builder.genericPredicateOp(bothPredicate, true);
-            var joinLeft = builder.genericPredicateOp(leftPredicate, true);
-            var joinRight = builder.genericPredicateOp(rightPredicate, true);
-            var joinCond = builder.and(builder.call(joinBoth, builder.joinFields()),
-                    builder.call(joinLeft, builder.fields(2, 0)), builder.call(joinRight, builder.fields(2, 1)));
-            builder.join(JoinRelType.INNER, joinCond);
-            pattern = builder.build();
-            builder.scan(tableNames.get(0)).filter(builder.call(joinLeft, builder.fields()));
-            builder.scan(tableNames.get(1)).filter(builder.call(joinRight, builder.fields()));
-            joinCond = builder.call(joinBoth, builder.joinFields());
-            builder.join(JoinRelType.INNER, joinCond);
-            transform = builder.build();
-        }
-
-        @Override
-        public RelNode getPattern() {
-            return pattern;
-        }
-
-        @Override
-        public RelNode getTransformation() {
-            return transform;
-        }
-
-        @Override
-        public ImmutableSeq<Term> deriveAdditionalConstraints(Solver solver, RexTranslator.Declarations declarations) {
-            var bp = declarations.store().get(bothPredicate);
-            var lp = declarations.store().get(leftPredicate);
-            var rp = declarations.store().get(rightPredicate);
-            var lvs = lp.component2().mapIndexed((i, s) -> solver.declareSygusVar(leftPredicate + "-V" + i, s));
-            var rvs = rp.component2().mapIndexed((i, s) -> solver.declareSygusVar(rightPredicate + "-V" + i, s));
-            var bpc = solver.mkTerm(Kind.APPLY_UF,
-                    bp.component1().map(Tuple2::component1).appendedAll(lvs).appendedAll(rvs).toArray(new Term[]{}));
-            var lpc = solver.mkTerm(Kind.APPLY_UF,
-                    lp.component1().map(Tuple2::component1).appendedAll(lvs).toArray(new Term[]{}));
-            var rpc = solver.mkTerm(Kind.APPLY_UF,
-                    rp.component1().map(Tuple2::component1).appendedAll(rvs).toArray(new Term[]{}));
-            var acl = solver.mkTerm(Kind.IMPLIES, lpc,
-                    solver.mkTerm(Kind.EXISTS, solver.mkTerm(Kind.VARIABLE_LIST, rvs.toArray(new Term[]{})),
-                            solver.mkTerm(Kind.AND, bpc, rpc)));
-            var acr = solver.mkTerm(Kind.IMPLIES, rpc,
-                    solver.mkTerm(Kind.EXISTS, solver.mkTerm(Kind.VARIABLE_LIST, lvs.toArray(new Term[]{})),
-                            solver.mkTerm(Kind.AND, bpc, lpc)));
-            return ImmutableSeq.of(acl, acr);
-        }
-    }
+//    public interface CosetteRule {
+//
+//        RelNode getPattern();
+//
+//        RelNode getTransformation();
+//
+//        default ImmutableSeq<Term> deriveAdditionalConstraints(Solver solver, RexTranslator.Declarations declarations) {
+//            return ImmutableSeq.empty();
+//        }
+//
+//        default Result<RexTranslator, String> match(RelNode target) {
+//            return RelMatcher.check(getPattern(), target).map(translator -> translator.addConstraints(
+//                    deriveAdditionalConstraints(translator.solver(), translator.declaredFunctions())));
+//        }
+//
+//    }
+//
+//    public static class JoinConditionPush implements CosetteRule {
+//
+//        private final RelNode pattern;
+//        private final RelNode transform;
+//        private final String bothPredicate = "joinBoth";
+//        private final String leftPredicate = "joinLeft";
+//        private final String rightPredicate = "joinRight";
+//
+//
+//        public JoinConditionPush() {
+//            var builder = RuleBuilder.create();
+//            var tableNames = builder.sourceSimpleTables(Seq.of(1, 2));
+//            tableNames.forEach(builder::scan);
+//            var joinBoth = builder.genericPredicateOp(bothPredicate, true);
+//            var joinLeft = builder.genericPredicateOp(leftPredicate, true);
+//            var joinRight = builder.genericPredicateOp(rightPredicate, true);
+//            var joinCond = builder.and(builder.call(joinBoth, builder.joinFields()),
+//                    builder.call(joinLeft, builder.fields(2, 0)), builder.call(joinRight, builder.fields(2, 1)));
+//            builder.join(JoinRelType.INNER, joinCond);
+//            pattern = builder.build();
+//            builder.scan(tableNames.get(0)).filter(builder.call(joinLeft, builder.fields()));
+//            builder.scan(tableNames.get(1)).filter(builder.call(joinRight, builder.fields()));
+//            joinCond = builder.call(joinBoth, builder.joinFields());
+//            builder.join(JoinRelType.INNER, joinCond);
+//            transform = builder.build();
+//        }
+//
+//        @Override
+//        public RelNode getPattern() {
+//            return pattern;
+//        }
+//
+//        @Override
+//        public RelNode getTransformation() {
+//            return transform;
+//        }
+//
+//        @Override
+//        public ImmutableSeq<Term> deriveAdditionalConstraints(Solver solver, RexTranslator.Declarations declarations) {
+//            var bp = declarations.store().get(bothPredicate);
+//            var lp = declarations.store().get(leftPredicate);
+//            var rp = declarations.store().get(rightPredicate);
+//            var lvs = lp.component2().mapIndexed((i, s) -> solver.declareSygusVar(leftPredicate + "-V" + i, s));
+//            var rvs = rp.component2().mapIndexed((i, s) -> solver.declareSygusVar(rightPredicate + "-V" + i, s));
+//            var bpc = solver.mkTerm(Kind.APPLY_UF,
+//                    bp.component1().map(Tuple2::component1).appendedAll(lvs).appendedAll(rvs).toArray(new Term[]{}));
+//            var lpc = solver.mkTerm(Kind.APPLY_UF,
+//                    lp.component1().map(Tuple2::component1).appendedAll(lvs).toArray(new Term[]{}));
+//            var rpc = solver.mkTerm(Kind.APPLY_UF,
+//                    rp.component1().map(Tuple2::component1).appendedAll(rvs).toArray(new Term[]{}));
+//            var acl = solver.mkTerm(Kind.IMPLIES, lpc,
+//                    solver.mkTerm(Kind.EXISTS, solver.mkTerm(Kind.VARIABLE_LIST, rvs.toArray(new Term[]{})),
+//                            solver.mkTerm(Kind.AND, bpc, rpc)));
+//            var acr = solver.mkTerm(Kind.IMPLIES, rpc,
+//                    solver.mkTerm(Kind.EXISTS, solver.mkTerm(Kind.VARIABLE_LIST, lvs.toArray(new Term[]{})),
+//                            solver.mkTerm(Kind.AND, bpc, lpc)));
+//            return ImmutableSeq.of(acl, acr);
+//        }
+//    }
 
 }
