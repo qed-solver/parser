@@ -34,6 +34,94 @@ import java.util.Objects;
 public record JSONDeserializer() {
     private final static ObjectMapper mapper = new ObjectMapper();
 
+    private static ImmutableSeq<JsonNode> array(JsonNode node) throws Exception {
+        if (!node.isArray()) throw new Exception();
+        return ImmutableSeq.from(node.elements());
+    }
+
+    private static ImmutableSeq<JsonNode> array(JsonNode node, String path) throws Exception {
+        return array(node.required(path));
+    }
+
+    private static String string(JsonNode node) throws Exception {
+        if (!node.isTextual()) throw new Exception();
+        return node.asText();
+    }
+
+    private static String string(JsonNode node, String path) throws Exception {
+        return string(node.required(path));
+    }
+
+    private static int integer(JsonNode node) throws Exception {
+        if (!node.isInt()) throw new Exception();
+        return node.asInt();
+    }
+
+    private static int integer(JsonNode node, String path) throws Exception {
+        return integer(node.required(path));
+    }
+
+    private static boolean bool(JsonNode node) throws Exception {
+        if (!node.isBoolean()) throw new Exception();
+        return node.asBoolean();
+    }
+
+    static SqlTypeName typeName(String name) {
+        name = switch (name) {
+            case "BOOL" -> "BOOLEAN";
+            case "INT", "INT2", "INT4", "OID" -> "INTEGER";
+            case "TIMESTAMPTZ" -> "TIMESTAMP";
+            case "TIMETZ" -> "TIME";
+            case "STRING" -> "VARCHAR";
+            case "JSONB" -> "VARBINARY";
+            default -> name;
+        };
+        return Enum.valueOf(SqlTypeName.class, name);
+    }
+
+    public static ImmutableSeq<RelNode> load(File file) throws Exception {
+        return new JSONDeserializer().deserialize(mapper.readTree(file));
+    }
+
+    public static void main(String[] args) throws Exception {
+        var refs = Seq.from(new File("RelOptRulesTest").listFiles());
+        for (var file : refs) {
+            try {
+                var store = mapper.readTree(file);
+                new JSONDeserializer().deserialize(store);
+            } catch (Exception e) {
+                System.err.println("===> " + file.getName() + " <===");
+                System.err.println(e.getMessage());
+                System.err.println();
+            }
+        }
+    }
+
+    public ImmutableSeq<RelNode> deserialize(JsonNode node) throws Exception {
+        var builder = RuleBuilder.create();
+        var tables = array(node, "schemas").mapChecked(schema -> {
+            var types = array(schema, "types").mapChecked(JSONDeserializer::string);
+            var nullabilities = array(schema, "nullable").mapChecked(JSONDeserializer::bool);
+            var name = schema.path("name").asText("DEFAULT_TABLE_NAME");
+            var fields = schema.get("fields") == null ?
+                    Seq.fill(types.size(), i -> String.format("DEFAULT_FIELD_NAME_%d", i)) :
+                    array(schema, "fields").mapChecked(JSONDeserializer::string);
+            var keys = Set.from(array(schema, "key").map(
+                    CheckedFunction.of(key -> ImmutableBitSet.of(array(key).mapChecked(JSONDeserializer::integer)))));
+            if (types.size() != nullabilities.size())
+                throw new Exception("Expecting corresponding types and nullabilities");
+            var sts = types.zip(nullabilities).map(tn -> {
+                var type = builder.getTypeFactory().createSqlType(typeName(tn.component1()));
+                return builder.getTypeFactory().createTypeWithNullability(type, tn.component2());
+            });
+            var table = new CosetteTable(name, fields, sts, keys, Set.empty());
+            builder.addTable(table);
+            return table;
+        });
+        var rel = new Rel(builder, ImmutableSeq.empty(), tables);
+        return array(node, "queries").mapChecked(rel);
+    }
+
     private record Rel(RuleBuilder builder, ImmutableSeq<RexNode> globals, ImmutableSeq<CosetteTable> tables)
             implements CheckedFunction<JsonNode, RelNode, Exception> {
         Rel(RuleBuilder builder) {
@@ -156,6 +244,15 @@ public record JSONDeserializer() {
 
     private record Rex(RuleBuilder builder, ImmutableSeq<RexNode> globals, RexCorrelVariable local,
                        ImmutableSeq<CosetteTable> tables) implements CheckedFunction<JsonNode, RexNode, Exception> {
+        static Seq<SqlOperator> ops = Seq.from(SqlStdOperatorTable.class.getDeclaredFields())
+                .filter(f -> java.lang.reflect.Modifier.isPublic(f.getModifiers()) &&
+                        java.lang.reflect.Modifier.isStatic(f.getModifiers())).map(f -> {
+                    var mist = Try.of(() -> f.get(null)).getOrNull();
+                    if (mist == null) return null;
+                    if (mist instanceof SqlOperator op) return op;
+                    return null;
+                }).filter(Objects::nonNull);
+
         public RexNode resolve(int lvl) {
             assert lvl < globals().size() + local().getType().getFieldCount();
             return lvl < globals().size() ? globals().get(lvl) : builder().getRexBuilder()
@@ -176,15 +273,6 @@ public record JSONDeserializer() {
         public RelDataType type(String name) {
             return builder().getTypeFactory().createSqlType(typeName(name));
         }
-
-        static Seq<SqlOperator> ops = Seq.from(SqlStdOperatorTable.class.getDeclaredFields())
-                .filter(f -> java.lang.reflect.Modifier.isPublic(f.getModifiers()) &&
-                        java.lang.reflect.Modifier.isStatic(f.getModifiers())).map(f -> {
-                    var mist = Try.of(() -> f.get(null)).getOrNull();
-                    if (mist == null) return null;
-                    if (mist instanceof SqlOperator op) return op;
-                    return null;
-                }).filter(Objects::nonNull);
 
         SqlOperator op(String name, int arity) throws Exception {
             switch (name) {
@@ -270,94 +358,6 @@ public record JSONDeserializer() {
                     return builder().getRexBuilder().makeCall(type, op(operator, operands.size()),
                             operands.mapChecked(this::deserialize).asJava());
                 }
-            }
-        }
-    }
-
-    private static ImmutableSeq<JsonNode> array(JsonNode node) throws Exception {
-        if (!node.isArray()) throw new Exception();
-        return ImmutableSeq.from(node.elements());
-    }
-
-    private static ImmutableSeq<JsonNode> array(JsonNode node, String path) throws Exception {
-        return array(node.required(path));
-    }
-
-    private static String string(JsonNode node) throws Exception {
-        if (!node.isTextual()) throw new Exception();
-        return node.asText();
-    }
-
-    private static String string(JsonNode node, String path) throws Exception {
-        return string(node.required(path));
-    }
-
-    private static int integer(JsonNode node) throws Exception {
-        if (!node.isInt()) throw new Exception();
-        return node.asInt();
-    }
-
-    private static int integer(JsonNode node, String path) throws Exception {
-        return integer(node.required(path));
-    }
-
-    private static boolean bool(JsonNode node) throws Exception {
-        if (!node.isBoolean()) throw new Exception();
-        return node.asBoolean();
-    }
-
-    static SqlTypeName typeName(String name) {
-        name = switch (name) {
-            case "BOOL" -> "BOOLEAN";
-            case "INT", "INT2", "INT4", "OID" -> "INTEGER";
-            case "TIMESTAMPTZ" -> "TIMESTAMP";
-            case "TIMETZ" -> "TIME";
-            case "STRING" -> "VARCHAR";
-            case "JSONB" -> "VARBINARY";
-            default -> name;
-        };
-        return Enum.valueOf(SqlTypeName.class, name);
-    }
-
-    public ImmutableSeq<RelNode> deserialize(JsonNode node) throws Exception {
-        var builder = RuleBuilder.create();
-        var tables = array(node, "schemas").mapChecked(schema -> {
-            var types = array(schema, "types").mapChecked(JSONDeserializer::string);
-            var nullabilities = array(schema, "nullable").mapChecked(JSONDeserializer::bool);
-            var name = schema.path("name").asText("DEFAULT_TABLE_NAME");
-            var fields = schema.get("fields") == null ?
-                    Seq.fill(types.size(), i -> String.format("DEFAULT_FIELD_NAME_%d", i)) :
-                    array(schema, "fields").mapChecked(JSONDeserializer::string);
-            var keys = Set.from(array(schema, "key").map(
-                    CheckedFunction.of(key -> ImmutableBitSet.of(array(key).mapChecked(JSONDeserializer::integer)))));
-            if (types.size() != nullabilities.size())
-                throw new Exception("Expecting corresponding types and nullabilities");
-            var sts = types.zip(nullabilities).map(tn -> {
-                var type = builder.getTypeFactory().createSqlType(typeName(tn.component1()));
-                return builder.getTypeFactory().createTypeWithNullability(type, tn.component2());
-            });
-            var table = new CosetteTable(name, fields, sts, keys, Set.empty());
-            builder.addTable(table);
-            return table;
-        });
-        var rel = new Rel(builder, ImmutableSeq.empty(), tables);
-        return array(node, "queries").mapChecked(rel);
-    }
-
-    public static ImmutableSeq<RelNode> load(File file) throws Exception {
-        return new JSONDeserializer().deserialize(mapper.readTree(file));
-    }
-
-    public static void main(String[] args) throws Exception {
-        var refs = Seq.from(new File("RelOptRulesTest").listFiles());
-        for (var file : refs) {
-            try {
-                var store = mapper.readTree(file);
-                new JSONDeserializer().deserialize(store);
-            } catch (Exception e) {
-                System.err.println("===> " + file.getName() + " <===");
-                System.err.println(e.getMessage());
-                System.err.println();
             }
         }
     }

@@ -27,7 +27,7 @@
             libantlr3c
             antlr3_4
             boost
-            jdk
+            jdk21
             (python3.withPackages (ps: with ps; [ pyparsing toml ]))
           ];
 
@@ -48,10 +48,10 @@
         devShells.default = pkgs.mkShell {
           packages = with pkgs; [
             cvc5-java
-            jdk
+            jdk21
             jetbrains.idea-community
           ];
-          CVC5_JAVA = "${cvc5-java}/share/java/${cvc5-pname}.jar";
+          CVC5_JAVA = "${cvc5-java}/share/java/cvc5.jar";
           LD_LIBRARY_PATH = pkgs.lib.strings.makeLibraryPath [ cvc5-java ];
         };
       });

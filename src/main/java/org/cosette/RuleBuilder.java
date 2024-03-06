@@ -1,20 +1,13 @@
 package org.cosette;
 
-import io.github.cvc5.Kind;
-import io.github.cvc5.Solver;
-import io.github.cvc5.Term;
 import kala.collection.Seq;
 import kala.collection.Set;
-import kala.collection.immutable.ImmutableSeq;
-import kala.control.Result;
 import kala.tuple.Tuple;
 import kala.tuple.Tuple2;
 import kala.tuple.Tuple3;
 import org.apache.calcite.plan.Context;
 import org.apache.calcite.plan.RelOptCluster;
 import org.apache.calcite.plan.RelOptSchema;
-import org.apache.calcite.rel.RelNode;
-import org.apache.calcite.rel.core.JoinRelType;
 import org.apache.calcite.rex.RexNode;
 import org.apache.calcite.schema.SchemaPlus;
 import org.apache.calcite.sql.*;

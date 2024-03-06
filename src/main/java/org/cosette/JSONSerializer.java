@@ -21,32 +21,61 @@ import java.util.Set;
 public record JSONSerializer(Env env) {
     private final static ObjectMapper mapper = new ObjectMapper();
 
+    private static ArrayNode array(Seq<JsonNode> objs) {
+        return new ArrayNode(mapper.getNodeFactory(), objs.asJava());
+    }
+
+    private static ObjectNode object(Map<String, JsonNode> fields) {
+        return new ObjectNode(mapper.getNodeFactory(), fields.asJava());
+    }
+
+    private static BooleanNode bool(boolean b) {
+        return BooleanNode.valueOf(b);
+    }
+
+    private static TextNode string(String s) {
+        return new TextNode(s);
+    }
+
+    private static TextNode type(RelDataType type) {
+        return new TextNode(type.getSqlTypeName().getName());
+    }
+
+    private static IntNode integer(int i) {
+        return new IntNode(i);
+    }
+
+    public static ObjectNode serialize(Seq<RelNode> relNodes) {
+        var shuttle = new Rel();
+        var helps = array(relNodes.map(rel -> new TextNode(rel.explain())));
+        var queries = array(relNodes.map(shuttle::serialize));
+        var tables = shuttle.env.tables();
+        var schemas = array(tables.map(table -> {
+            var visitor = new Rex(shuttle.env.rex(table.getRowType().getFieldCount()));
+            var cosette = table.unwrap(CosetteTable.class);
+            var fields = Seq.from(table.getRowType().getFieldList());
+            return cosette == null ?
+                    object(Map.of("name", string(Seq.from(table.getQualifiedName()).joinToString(".")), "fields",
+                            array(fields.map(field -> string(field.getName()))), "types",
+                            array(fields.map(field -> type(field.getType()))), "nullable",
+                            array(fields.map(field -> bool(field.getType().isNullable()))), "key",
+                            array((table.getKeys() != null ? Seq.from(table.getKeys()) :
+                                    Seq.<ImmutableBitSet>empty()).map(
+                                    key -> array(Seq.from(key).map(JSONSerializer::integer)))), "guaranteed",
+                            array(Seq.empty()))) : object(Map.of("name", string(cosette.getName()), "fields",
+                    array(cosette.getColumnNames().map(JSONSerializer::string)), "types",
+                    array(cosette.getColumnTypes().map(JSONSerializer::type)), "nullable",
+                    array(cosette.getColumnTypes().map(type -> bool(type.isNullable()))), "key",
+                    array(Seq.from(cosette.getKeys().map(key -> array(Seq.from(key).map(JSONSerializer::integer))))),
+                    "guaranteed", array(cosette.getConstraints().map(visitor::serialize).toImmutableSeq())));
+        }));
+
+        return object(Map.of("schemas", schemas, "queries", queries, "help", helps));
+    }
+
     private record Rel(Env env) {
         Rel() {
             this(new Env(0, ImmutableMap.empty(), MutableList.create()));
-        }
-
-        private record Env(int lvl, ImmutableMap<CorrelationId, Integer> globals, MutableList<RelOptTable> tables) {
-            Env recorded(Set<CorrelationId> ids) {
-                return new Env(lvl, Seq.from(ids).foldLeft(globals, (g, id) -> g.putted(id, lvl)), tables);
-            }
-
-            Env lifted(int d) {
-                return new Env(lvl + d, globals, tables);
-            }
-
-            int resolve(RelOptTable table) {
-                var idx = tables.indexOf(table);
-                if (idx == -1) {
-                    idx = tables.size();
-                    tables.append(table);
-                }
-                return idx;
-            }
-
-            public Rex.Env rex(int delta) {
-                return new Rex.Env(lvl, delta, globals, tables);
-            }
         }
 
         public JsonNode serialize(RelNode rel) {
@@ -132,20 +161,32 @@ public record JSONSerializer(Env env) {
                 default -> throw new RuntimeException("Not implemented: " + rel.getRelTypeName());
             };
         }
+
+        private record Env(int lvl, ImmutableMap<CorrelationId, Integer> globals, MutableList<RelOptTable> tables) {
+            Env recorded(Set<CorrelationId> ids) {
+                return new Env(lvl, Seq.from(ids).foldLeft(globals, (g, id) -> g.putted(id, lvl)), tables);
+            }
+
+            Env lifted(int d) {
+                return new Env(lvl + d, globals, tables);
+            }
+
+            int resolve(RelOptTable table) {
+                var idx = tables.indexOf(table);
+                if (idx == -1) {
+                    idx = tables.size();
+                    tables.append(table);
+                }
+                return idx;
+            }
+
+            public Rex.Env rex(int delta) {
+                return new Rex.Env(lvl, delta, globals, tables);
+            }
+        }
     }
 
     private record Rex(Env env) {
-        private record Env(int base, int delta, ImmutableMap<CorrelationId, Integer> globals,
-                           MutableList<RelOptTable> tables) {
-            public Rel.Env rel() {
-                return new Rel.Env(base + delta, globals, tables);
-            }
-
-            int resolve(CorrelationId id) {
-                return globals.getOrThrow(id, () -> new RuntimeException("Correlation ID not declared"));
-            }
-        }
-
         public JsonNode serialize(RexNode rex) {
             return switch (rex) {
                 case RexInputRef inputRef -> object(Map.of("column", integer(inputRef.getIndex() + env.base()), "type",
@@ -165,57 +206,16 @@ public record JSONSerializer(Env env) {
                 default -> throw new RuntimeException("Not implemented: " + rex.getKind());
             };
         }
-    }
 
-    private static ArrayNode array(Seq<JsonNode> objs) {
-        return new ArrayNode(mapper.getNodeFactory(), objs.asJava());
-    }
+        private record Env(int base, int delta, ImmutableMap<CorrelationId, Integer> globals,
+                           MutableList<RelOptTable> tables) {
+            public Rel.Env rel() {
+                return new Rel.Env(base + delta, globals, tables);
+            }
 
-    private static ObjectNode object(Map<String, JsonNode> fields) {
-        return new ObjectNode(mapper.getNodeFactory(), fields.asJava());
-    }
-
-    private static BooleanNode bool(boolean b) {
-        return BooleanNode.valueOf(b);
-    }
-
-    private static TextNode string(String s) {
-        return new TextNode(s);
-    }
-
-    private static TextNode type(RelDataType type) {
-        return new TextNode(type.getSqlTypeName().getName());
-    }
-
-    private static IntNode integer(int i) {
-        return new IntNode(i);
-    }
-
-    public static ObjectNode serialize(Seq<RelNode> relNodes) {
-        var shuttle = new Rel();
-        var helps = array(relNodes.map(rel -> new TextNode(rel.explain())));
-        var queries = array(relNodes.map(shuttle::serialize));
-        var tables = shuttle.env.tables();
-        var schemas = array(tables.map(table -> {
-            var visitor = new Rex(shuttle.env.rex(table.getRowType().getFieldCount()));
-            var cosette = table.unwrap(CosetteTable.class);
-            var fields = Seq.from(table.getRowType().getFieldList());
-            return cosette == null ?
-                    object(Map.of("name", string(Seq.from(table.getQualifiedName()).joinToString(".")), "fields",
-                            array(fields.map(field -> string(field.getName()))), "types",
-                            array(fields.map(field -> type(field.getType()))), "nullable",
-                            array(fields.map(field -> bool(field.getType().isNullable()))), "key",
-                            array((table.getKeys() != null ? Seq.from(table.getKeys()) :
-                                    Seq.<ImmutableBitSet>empty()).map(
-                                    key -> array(Seq.from(key).map(JSONSerializer::integer)))), "guaranteed",
-                            array(Seq.empty()))) : object(Map.of("name", string(cosette.getName()), "fields",
-                    array(cosette.getColumnNames().map(JSONSerializer::string)), "types",
-                    array(cosette.getColumnTypes().map(JSONSerializer::type)), "nullable",
-                    array(cosette.getColumnTypes().map(type -> bool(type.isNullable()))), "key",
-                    array(Seq.from(cosette.getKeys().map(key -> array(Seq.from(key).map(JSONSerializer::integer))))),
-                    "guaranteed", array(cosette.getConstraints().map(visitor::serialize).toImmutableSeq())));
-        }));
-
-        return object(Map.of("schemas", schemas, "queries", queries, "help", helps));
+            int resolve(CorrelationId id) {
+                return globals.getOrThrow(id, () -> new RuntimeException("Correlation ID not declared"));
+            }
+        }
     }
 }
