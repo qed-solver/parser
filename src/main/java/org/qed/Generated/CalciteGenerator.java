@@ -25,7 +25,7 @@ public class CalciteGenerator implements CodeGenerator<CalciteGenerator.Env> {
 
     @Override
     public Env postTransform(Env env) {
-        return env.state(STR."call.transformTo(\{env.current()}.build());");
+        return env.state("call.transformTo(" + env.current() + ".build());");
     }
 
     @Override
@@ -36,8 +36,8 @@ public class CalciteGenerator implements CodeGenerator<CalciteGenerator.Env> {
         builder.append("import org.apache.calcite.rel.RelNode;\n");
         builder.append("import org.apache.calcite.rel.core.JoinRelType;\n");
         builder.append("import org.apache.calcite.rel.logical.*;\n\n");
-        builder.append(STR."public class \{name} extends RelRule<\{name}.Config> {\n");
-        builder.append(STR."\tprotected \{name}(Config config) {\n");
+        builder.append("public class " + name + " extends RelRule<" + name + ".Config> {\n");
+        builder.append("\tprotected " + name + "(Config config) {\n");
         builder.append("\t\tsuper(config);\n");
         builder.append("\t}\n\n");
         builder.append("\t@Override\n\tpublic void onMatch(RelOptRuleCall call) {\n");
@@ -45,14 +45,14 @@ public class CalciteGenerator implements CodeGenerator<CalciteGenerator.Env> {
         builder.append("\t}\n\n");
         builder.append("\tpublic interface Config extends EmptyConfig {\n");
         builder.append("\t\tConfig DEFAULT = new Config() {};\n\n");
-        builder.append(STR."\t\t@Override\n\t\tdefault \{name} toRule() {\n");
-        builder.append(STR."\t\t\treturn new \{name}(this);\n");
+        builder.append("\t\t@Override\n\t\tdefault " + name + " toRule() {\n");
+        builder.append("\t\t\treturn new " + name + "(this);\n");
         builder.append("\t\t}\n\n");
         builder.append("\t\t@Override\n\t\tdefault String description() {\n");
-        builder.append(STR."\t\t\treturn \"\{name}\";\n");
+        builder.append("\t\t\treturn \"" + name + "\";\n");
         builder.append("\t\t}\n\n");
         builder.append("\t\t@Override\n\t\tdefault RelRule.OperandTransform operandSupplier() {\n");
-        builder.append(STR."\t\t\treturn \{onMatch.skeleton()};\n");
+        builder.append("\t\t\treturn " + onMatch.skeleton() + ";\n");
         builder.append("\t\t}\n\n");
         builder.append("\t}\n");
         builder.append("}\n");
@@ -67,8 +67,8 @@ public class CalciteGenerator implements CodeGenerator<CalciteGenerator.Env> {
     @Override
     public Env onMatchFilter(Env env, RelRN.Filter filter) {
         var source_match = onMatch(env.next(), filter.source());
-        var operator_match = source_match.grow(STR."operand(LogicalFilter.class).oneInput(\{source_match.skeleton()})");
-        var condition_match = operator_match.focus(STR."((LogicalFilter) \{env.current()}).getCondition()");
+        var operator_match = source_match.grow("operand(LogicalFilter.class).oneInput(" + source_match.skeleton() + ")");
+        var condition_match = operator_match.focus("((LogicalFilter) " + env.current() + ").getCondition()");
         return onMatch(condition_match, filter.cond());
     }
 
@@ -76,8 +76,8 @@ public class CalciteGenerator implements CodeGenerator<CalciteGenerator.Env> {
     public Env onMatchProject(Env env, RelRN.Project project) {
         var source_match = onMatch(env.next(), project.source());
         var operator_match =
-                source_match.grow(STR."operand(LogicalProject.class).oneInput(\{source_match.skeleton()})");
-        var map_match = operator_match.focus(STR."((LogicalProject) \{env.current()}).getProjects()");
+                source_match.grow("operand(LogicalProject.class).oneInput(" + source_match.skeleton() + ")");
+        var map_match = operator_match.focus("((LogicalProject) " + env.current() + ").getProjects()");
         return onMatch(map_match, project.map());
     }
 
@@ -93,21 +93,21 @@ public class CalciteGenerator implements CodeGenerator<CalciteGenerator.Env> {
 
     @Override
     public Env onMatchJoin(Env env, RelRN.Join join) {
-        var current_join = STR."((LogicalJoin) \{env.current()})";
+        var current_join = "((LogicalJoin) " + env.current() + ")";
         // STR."\{join_env.current()}.getJoinType()"
         var left_source_env = env.next();
         var left_match_env = onMatch(left_source_env, join.left());
         var right_source_env = left_match_env.next();
         var right_match_env = onMatch(right_source_env, join.right());
         var operator_match =
-                right_match_env.grow(STR."operand(LogicalJoin.class).inputs(\{left_match_env.skeleton()}, \{right_match_env.skeleton()})");
-        var cond_source_env = operator_match.focus(STR."\{current_join}.getCondition()");
+                right_match_env.grow("operand(LogicalJoin.class).inputs(" + left_match_env.skeleton() + ", " + right_match_env.skeleton() + ")");
+        var cond_source_env = operator_match.focus(current_join + ".getCondition()");
         return onMatch(cond_source_env, join.cond());
     }
 
     @Override
     public Env transformScan(Env env, RelRN.Scan scan) {
-        return env.focus(STR."\{env.current()}.push(\{env.symbols().get(scan.name())})");
+        return env.focus(env.current() + ".push(" + env.symbols().get(scan.name()) + ")");
     }
 
 //    @Override
@@ -131,7 +131,7 @@ public class CalciteGenerator implements CodeGenerator<CalciteGenerator.Env> {
         var source_transform = transform(env, filter.source());
         var source_expression = source_transform.current();
         var cond_transform = transform(source_transform, filter.cond());
-        return cond_transform.focus(STR."\{source_expression}.filter(\{cond_transform.current()})");
+        return cond_transform.focus(source_expression + ".filter(" + cond_transform.current() + ")");
     }
 
     @Override
@@ -153,7 +153,7 @@ public class CalciteGenerator implements CodeGenerator<CalciteGenerator.Env> {
             case SEMI -> "JoinRelType.SEMI";
             case ANTI -> "JoinRelType.ANTI";
         };
-        return cond_transform.focus(STR."\{source_expression}.join(\{join_type}, \{cond_transform.current()})");
+        return cond_transform.focus(source_expression + ".join(" + join_type + ", " + cond_transform.current() + ")");
     }
 
     @Override
@@ -165,7 +165,7 @@ public class CalciteGenerator implements CodeGenerator<CalciteGenerator.Env> {
             operands = operands.appended(source_transform.current());
             source_transform = source_transform.focus(env.current());
         }
-        return source_transform.focus(STR."\{env.current()}.and(\{operands.joinToString(", ")})");
+        return source_transform.focus(env.current() + ".and(" + operands.joinToString(", ") + ")");
     }
 
     public record Env(AtomicInteger varId, int rel, String current, String skeleton, Seq<String> statements,
@@ -176,7 +176,7 @@ public class CalciteGenerator implements CodeGenerator<CalciteGenerator.Env> {
         }
 
         public Env next() {
-            return new Env(varId, rel + 1, STR."call.rel(\{rel + 1})", skeleton, statements, symbols);
+            return new Env(varId, rel + 1, "call.rel(" + (rel + 1) + ")", skeleton, statements, symbols);
         }
 
         public Env focus(String target) {
@@ -192,13 +192,13 @@ public class CalciteGenerator implements CodeGenerator<CalciteGenerator.Env> {
         }
 
         public Tuple2<String, Env> declare(String expression) {
-            var name = STR."var_\{varId.getAndIncrement()}";
-            return Tuple.of(name, state(STR."var \{name} = \{expression};"));
+            var name = "var_" + varId.getAndIncrement();
+            return Tuple.of(name, state("var " + name + " = " + expression + ";"));
         }
 
         public Env grow(String requirement) {
-            var vn = STR."s_\{varId.getAndIncrement()}";
-            return new Env(varId, rel, current, STR."\{vn} -> \{vn}.\{requirement}", statements, symbols);
+            var vn = "s_" + varId.getAndIncrement();
+            return new Env(varId, rel, current, vn + " -> " + vn + "." + requirement, statements, symbols);
         }
     }
 }

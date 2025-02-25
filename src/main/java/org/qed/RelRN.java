@@ -112,7 +112,7 @@ public interface RelRN {
 
         @Override
         public RelNode semantics() {
-            var table = new QedTable(name, Seq.of(STR."col-\{name}"), Seq.of(ty), unique ?
+            var table = new QedTable(name, Seq.of("col-" + name), Seq.of(ty), unique ?
                     Set.of(ImmutableBitSet.of(0)) : Set.empty(), Set.empty());
             return RuleBuilder.create().addTable(table).scan(name).build();
         }

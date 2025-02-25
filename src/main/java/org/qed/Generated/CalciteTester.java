@@ -7,10 +7,9 @@ import org.apache.calcite.plan.RelOptRule;
 import org.apache.calcite.plan.hep.HepPlanner;
 import org.apache.calcite.plan.hep.HepProgramBuilder;
 import org.apache.calcite.rel.RelNode;
-import org.qed.JSONDeserializer;
-import org.qed.JSONSerializer;
-import org.qed.RRule;
-import org.qed.RRuleInstance;
+import org.apache.calcite.rel.core.JoinRelType;
+import org.apache.calcite.sql.fun.SqlStdOperatorTable;
+import org.qed.*;
 
 import java.io.File;
 import java.io.IOException;
@@ -38,7 +37,7 @@ public class CalciteTester {
     }
 
     public static void verify() {
-        ruleList().forEachUnchecked(rule -> rule.dump(STR."\{rulePath}/\{rule.name()}.json"));
+        ruleList().forEachUnchecked(rule -> rule.dump(rulePath + "/" + rule.name() + ".json"));
     }
 
     public static void generate() {
@@ -50,55 +49,55 @@ public class CalciteTester {
         var rules = new RRuleInstance.JoinAssociate();
         Files.createDirectories(Path.of(rulePath));
         for (var rule : rules.family()) {
-            new ObjectMapper().writerWithDefaultPrettyPrinter().writeValue(Path.of(rulePath, STR."\{rule.name()}-\{rule.info()}.json").toFile(), rule.toJson());
+            new ObjectMapper().writerWithDefaultPrettyPrinter().writeValue(Path.of(rulePath, rule.name() + "-" + rule.info() + ".json").toFile(), rule.toJson());
         }
-//        generate();
-//        var tester = new CalciteTester();
-//        var builder = RuleBuilder.create();
-//        var table = builder.createQedTable(Seq.of(Tuple.of(RelType.fromString("INTEGER", true), false)));
-//        builder.addTable(table);
-//        var before = builder.scan(table.getName())
-//                .filter(builder.call(builder.genericPredicateOp("inner", true), builder.fields()))
-//                .filter(builder.call(builder.genericPredicateOp("outer", true), builder.fields()))
-//                .build();
-//        var after = builder.scan(table.getName()).filter(builder.call(SqlStdOperatorTable.AND,
-//                        builder.call(builder.genericPredicateOp("inner", true), builder.fields()),
-//                        builder.call(builder.genericPredicateOp("outer", true), builder.fields())))
-//                .build();
-//        var runner = loadRule(FilterMerge.Config.DEFAULT.toRule());
-//        tester.verify(runner, before, after);
-//        before = builder.scan(table.getName())
-//                .scan(table.getName())
-//                .join(JoinRelType.INNER, builder.call(builder.genericPredicateOp("join", true), builder.joinFields()))
-//                .filter(builder.call(builder.genericPredicateOp("pred", true), builder.fields()))
-//                .build();
-//        after = builder.scan(table.getName())
-//                .scan(table.getName())
-//                .join(JoinRelType.INNER, builder.call(SqlStdOperatorTable.AND,
-//                        builder.call(builder.genericPredicateOp("join", true), builder.joinFields()),
-//                        builder.call(builder.genericPredicateOp("pred", true), builder.joinFields())))
-//                .build();
-//        runner = loadRule(FilterIntoJoin.Config.DEFAULT.toRule());
-//        tester.verify(runner, before, after);
+        generate();
+        var tester = new CalciteTester();
+        var builder = RuleBuilder.create();
+        var table = builder.createQedTable(Seq.of(Tuple.of(RelType.fromString("INTEGER", true), false)));
+        builder.addTable(table);
+        var before = builder.scan(table.getName())
+                .filter(builder.call(builder.genericPredicateOp("inner", true), builder.fields()))
+                .filter(builder.call(builder.genericPredicateOp("outer", true), builder.fields()))
+                .build();
+        var after = builder.scan(table.getName()).filter(builder.call(SqlStdOperatorTable.AND,
+                        builder.call(builder.genericPredicateOp("inner", true), builder.fields()),
+                        builder.call(builder.genericPredicateOp("outer", true), builder.fields())))
+                .build();
+        var runner = loadRule(FilterMerge.Config.DEFAULT.toRule());
+        tester.verify(runner, before, after);
+        before = builder.scan(table.getName())
+                .scan(table.getName())
+                .join(JoinRelType.INNER, builder.call(builder.genericPredicateOp("join", true), builder.joinFields()))
+                .filter(builder.call(builder.genericPredicateOp("pred", true), builder.fields()))
+                .build();
+        after = builder.scan(table.getName())
+                .scan(table.getName())
+                .join(JoinRelType.INNER, builder.call(SqlStdOperatorTable.AND,
+                        builder.call(builder.genericPredicateOp("join", true), builder.joinFields()),
+                        builder.call(builder.genericPredicateOp("pred", true), builder.joinFields())))
+                .build();
+        runner = loadRule(FilterIntoJoin.Config.DEFAULT.toRule());
+        tester.verify(runner, before, after);
     }
 
     public void serialize(RRule rule, String path) {
         var generator = new CalciteGenerator();
         var code_gen = generator.generate(rule);
         try {
-            Files.write(Path.of(path, STR."\{rule.name()}.java"), code_gen.getBytes());
+            Files.write(Path.of(path, rule.name() + ".java"), code_gen.getBytes());
         } catch (IOException ioe) {
             System.err.println(ioe.getMessage());
         }
     }
 
     public void test(RelOptRule rule, Seq<String> tests) {
-        System.out.println(STR."Testing rule \{rule.getClass().getSimpleName()}");
+        System.out.println("Testing rule " + rule.getClass().getSimpleName());
         var runner = loadRule(rule);
         var exams = tests.mapUnchecked(t -> Tuple.of(t, JSONDeserializer.load(new File(t))));
         for (var entry : exams) {
             if (entry.getValue().size() != 2) {
-                System.err.println(STR."\{entry.getKey()} does not have exactly two nodes, and thus is not a valid test");
+                System.err.println(entry.getKey() + " does not have exactly two nodes, and thus is not a valid test");
                 continue;
             }
             verify(runner, entry.getValue().get(0), entry.getValue().get(1));
@@ -108,9 +107,9 @@ public class CalciteTester {
     public void verify(HepPlanner runner, RelNode source, RelNode target) {
         runner.setRoot(source);
         var answer = runner.findBestExp();
-        System.out.println(STR."> Given source RelNode:\n\{source.explain()}");
-        System.out.println(STR."> Actual rewritten RelNode:\n\{answer.explain()}");
-        System.out.println(STR."> Expected rewritten RelNode:\n\{target.explain()}");
+        System.out.println("> Given source RelNode:\n" + source.explain());
+        System.out.println("> Actual rewritten RelNode:\n" + answer.explain());
+        System.out.println("> Expected rewritten RelNode:\n" + target.explain());
     }
 
 }
