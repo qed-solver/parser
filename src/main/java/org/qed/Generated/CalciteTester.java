@@ -3,6 +3,8 @@ package org.qed.Generated;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import kala.collection.Seq;
 import kala.tuple.Tuple;
+
+import org.apache.calcite.jdbc.CalcitePrepare.SparkHandler.RuleSetBuilder;
 import org.apache.calcite.plan.RelOptRule;
 import org.apache.calcite.plan.hep.HepPlanner;
 import org.apache.calcite.plan.hep.HepProgramBuilder;
@@ -52,6 +54,34 @@ public class CalciteTester {
         for (var rule : rules.family()) {
             new ObjectMapper().writerWithDefaultPrettyPrinter().writeValue(Path.of(rulePath, STR."\{rule.name()}-\{rule.info()}.json").toFile(), rule.toJson());
         }
+
+        
+        var r = new RRuleInstance.ProjectJoinTranspose();
+        new ObjectMapper().writerWithDefaultPrettyPrinter().writeValue(Path.of(rulePath, STR."\{r.name()}-\{r.info()}.json").toFile(), r.toJson());
+        
+        generate();
+        var tester = new CalciteTester();
+        var builder = RuleBuilder.create();
+        var table = builder.createQedTable(Seq.of(Tuple.of(RelType.fromString("INTEGER", true), false)));
+        builder.addTable(table);
+        var before = builder.scan(table.getName())
+                .scan(table.getName())
+                .join(JoinRelType.INNER, builder.call(builder.genericPredicateOp("join", true), builder.joinFields()))
+                .project(builder.call(builder.genericProjectionOp("proj", RelType.fromString("INTEGER", true)), builder.fields(0)))
+                .build();
+        var leftProjected = builder.scan(table.getName())
+                .project(builder.call(builder.genericProjectionOp("proj", RelType.fromString("INTEGER", true)), builder.fields(0)))
+                .build();
+        var after = builder.push(leftProjected)
+                .push(builder.scan(table.getName()))
+                .join(JoinRelType.INNER, builder.call(builder.genericPredicateOp("join", true), builder.joinFields()))
+                .build();
+        var runner = loadRule(ProjectJoinTranspose.Config.DEFAULT.toRule());
+        var tester = new CalciteTester();
+        tester.verify(runner, before, after);
+                
+        
+        
 //        generate();
 //        var tester = new CalciteTester();
 //        var builder = RuleBuilder.create();
