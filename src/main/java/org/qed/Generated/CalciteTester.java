@@ -54,7 +54,6 @@ public class CalciteTester {
         for (var rule : rules.family()) {
             new ObjectMapper().writerWithDefaultPrettyPrinter().writeValue(Path.of(rulePath, STR."\{rule.name()}-\{rule.info()}.json").toFile(), rule.toJson());
         }
-
         
         var r = new RRuleInstance.ProjectJoinTranspose();
         new ObjectMapper().writerWithDefaultPrettyPrinter().writeValue(Path.of(rulePath, STR."\{r.name()}-\{r.info()}.json").toFile(), r.toJson());
@@ -64,6 +63,7 @@ public class CalciteTester {
         var builder = RuleBuilder.create();
         var table = builder.createQedTable(Seq.of(Tuple.of(RelType.fromString("INTEGER", true), false)));
         builder.addTable(table);
+
         var before = builder.scan(table.getName())
                 .scan(table.getName())
                 .join(JoinRelType.INNER, builder.call(builder.genericPredicateOp("join", true), builder.joinFields()))
@@ -77,9 +77,63 @@ public class CalciteTester {
                 .join(JoinRelType.INNER, builder.call(builder.genericPredicateOp("join", true), builder.joinFields()))
                 .build();
         var runner = loadRule(ProjectJoinTranspose.Config.DEFAULT.toRule());
-        var tester = new CalciteTester();
         tester.verify(runner, before, after);
-                
+
+        before = builder.scan(table.getName())
+                .scan(table.getName())
+                .join(JoinRelType.SEMI, builder.call(builder.genericPredicateOp("join", true), builder.joinFields()))
+                .filter(builder.call(builder.genericPredicateOp("pred", true), builder.fields()))
+                .build();
+        var leftFiltered = builder.scan(table.getName()).filter(builder.call(builder.genericPredicateOp("pred", true), builder.fields()))
+        after = builder.push(leftFiltered)
+                .push(builder.scan(table.getName()))
+                .join(JoinRelType.SEMI, builder.call(builder.genericPredicateOp("join", true), builder.joinFields()))
+                .build();
+        runner = loadRule(SemiJoinFilterTranspose.Config.DEFAULT.toRule());
+        tester.verify(runner, before, after);
+        
+        var semiFirst = builder.scan(table.getName())
+                .scan(table.getName())
+                .join(JoinRelType.SEMI, builder.call(builder.genericPredicateOp("join", true), builder.joinFields()))
+                .build();
+        before = builder.push(semiFirst)
+                .push(builder.scan(table.getName()))
+                .join(JoinRelType.INNER, builder.call(builder.genericPredicateOp("join", true), builder.joinFields()))
+                .build();
+        var innerFirst = builder.scan(table.getName())
+                .scan(table.getName())
+                .join(JoinRelType.INNER, builder.call(builder.genericPredicateOp("join", true), builder.joinFields()))
+                .build();
+        after = builder.push(innerFirst)
+                .push(builder.scan(table.getName()))
+                .join(JoinRelType.SEMI, builder.call(builder.genericPredicateOp("join", true), builder.joinFields()))
+                .build();
+        runner = loadRule(SemiJoinJoinTranspose.Config.DEFAULT.toRule());
+        tester.verify(runner, before, after);
+
+        before = builder.scan(table.getName())
+                .scan(table.getName())
+                .join(JoinRelType.SEMI, builder.call(builder.genericPredicateOp("join", true), builder.joinFields()))
+                .project(builder.call(builder.genericProjectionOp("proj", RelType.fromString("INTEGER", true)), builder.fields(0)))
+                .build();
+        leftProjected = builder.scan(table.getName())
+                .project(builder.call(builder.genericProjectionOp("proj", RelType.fromString("INTEGER", true)), builder.fields(0)))
+                .build();
+        after = builder.push(leftProjected)
+                .push(builder.scan(table.getName()))
+                .join(JoinRelType.SEMI, builder.call(builder.genericPredicateOp("join", true), builder.joinFields()))
+                .build();
+        runner = loadRule(SemiJoinProjectTranspose.Config.DEFAULT.toRule());
+        tester.verify(runner, before, after);
+
+        before = builder.scan(table.getName())
+                .scan(table.getName())
+                .join(JoinRelType.SEMI, builder.call(builder.genericPredicateOp("join", true), builder.joinFields()))
+                .build();
+        after = builder.scan(table.getName()).build();
+        runner = loadRule(SemiJoinRemove.Config.DEFAULT.toRule());
+        tester.verify(runner, before, after);
+        
         
         
 //        generate();
