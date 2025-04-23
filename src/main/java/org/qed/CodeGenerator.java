@@ -3,7 +3,7 @@ package org.qed;
 public interface CodeGenerator<E> {
 
     default String unimplemented(String context, Object object) {
-        return STR."<--\{context}\{object.getClass().getName()}-->";
+        return "<--" + context + object.getClass().getName() + "-->";
     }
 
     default E unimplementedOnMatch(E env, Object object) {
