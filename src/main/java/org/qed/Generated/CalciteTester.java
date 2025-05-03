@@ -35,7 +35,6 @@ public class CalciteTester {
         var individuals =
                 Seq.from(RRuleInstance.class.getClasses()).filter(RRule.class::isAssignableFrom).mapUnchecked(Class::getConstructor).mapUnchecked(Constructor::newInstance).map(r -> (RRule) r);
         System.out.println(Seq.from(RRuleInstance.class.getClasses()).filter(RRule.RRuleFamily.class::isAssignableFrom).mapUnchecked(Class::getConstructor));
-        /* To be restored */
         // var families =
         //         Seq.from(RRuleInstance.class.getClasses()).filter(RRule.RRuleFamily.class::isAssignableFrom).mapUnchecked(Class::getConstructor).mapUnchecked(Constructor::newInstance).map(r -> (RRule.RRuleFamily) r);
         // return individuals.appendedAll(families.flatMap(RRule.RRuleFamily::family));
@@ -52,16 +51,16 @@ public class CalciteTester {
     }
 
     public static void main(String[] args) throws IOException {
-        // var rule = new RRuleInstance.FilterReduceTrue();
-        // Files.createDirectories(Path.of(rulePath));
-        // new ObjectMapper().writerWithDefaultPrettyPrinter().writeValue(Path.of(rulePath, rule.name() + "-" + rule.info() + ".json").toFile(), rule.toJson());
+        var rule = new RRuleInstance.FilterSetOpTranspose();
+        Files.createDirectories(Path.of(rulePath));
+        new ObjectMapper().writerWithDefaultPrettyPrinter().writeValue(Path.of(rulePath, rule.name() + "-" + rule.info() + ".json").toFile(), rule.toJson());
         // var rules = new RRuleInstance.JoinAssociate();
         // Files.createDirectories(Path.of(rulePath));
         // for (var rule : rules.family()) {
         //     new ObjectMapper().writerWithDefaultPrettyPrinter().writeValue(Path.of(rulePath, rule.name() + "-" + rule.info() + ".json").toFile(), rule.toJson());
         // }
         // generate();
-
+        
         /* FilterIntoJoin */
         var tester = new CalciteTester();
         var builder = RuleBuilder.create();

@@ -85,6 +85,7 @@ public interface RRuleInstance {
         }
     }
 
+    // TBD: include intersect to make it a rule familiy
     record FilterSetOpTranspose() implements RRule {
         static final RelRN left = RelRN.scan("Left", "Common_Type");
         static final RelRN right = RelRN.scan("Right", "Common_Type");
