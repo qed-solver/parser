@@ -7,6 +7,7 @@ import kala.tuple.Tuple2;
 import org.qed.CodeGenerator;
 import org.qed.RelRN;
 import org.qed.RexRN;
+import org.qed.Generated.CalciteGenerator.Env;
 
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -106,6 +107,118 @@ public class CalciteGenerator implements CodeGenerator<CalciteGenerator.Env> {
     }
 
     @Override
+    public Env onMatchAnd(Env env, RexRN.And and) {
+        // Process each source in the And condition
+        var current_env = env;
+        // Use a unique symbol name for the AND condition
+        String andSymbol = "and_" + env.varId.getAndIncrement();
+        // Store the current expression as this AND node's symbol
+        current_env = current_env.symbol(andSymbol, current_env.current());
+        
+        // Process each child source in the AND condition
+        for (var source : and.sources()) {
+            current_env = onMatch(current_env, source);
+        }
+        
+        return current_env;
+    }
+
+    @Override
+    public Env onMatchUnion(Env env, RelRN.Union union) {
+        // Get the all flag from the union
+        boolean all = union.all();
+        
+        // Process each source in the union
+        var current_env = env;
+        var skeletons = Seq.empty();
+        
+        // Process all sources in the sequence
+        for (var source : union.sources()) {
+            var next_env = current_env.next();
+            var source_env = onMatch(next_env, source);
+            skeletons = skeletons.appended(source_env.skeleton());
+            current_env = source_env;
+        }
+        
+        // Build the input skeletons string for the operand
+        StringBuilder inputsBuilder = new StringBuilder();
+        for (int i = 0; i < skeletons.size(); i++) {
+            if (i > 0) {
+                inputsBuilder.append(", ");
+            }
+            inputsBuilder.append(skeletons.get(i).toString());
+        }
+        
+        // Create the union operand with the appropriate class based on the all flag
+        String operatorClass = all ? "LogicalUnionAll" : "LogicalUnion";
+        return current_env.grow("operand(" + operatorClass + ".class).inputs(" + inputsBuilder.toString() + ")");
+    }
+
+    @Override
+    public Env onMatchIntersect(Env env, RelRN.Intersect intersect) {
+        // Get the all flag from the intersect
+        boolean all = intersect.all();
+        
+        // Process each source in the intersect
+        var current_env = env;
+        var skeletons = Seq.empty();
+        
+        // Process all sources in the sequence
+        for (var source : intersect.sources()) {
+            var next_env = current_env.next();
+            var source_env = onMatch(next_env, source);
+            skeletons = skeletons.appended(source_env.skeleton());
+            current_env = source_env;
+        }
+        
+        // Build the input skeletons string for the operand
+        StringBuilder inputsBuilder = new StringBuilder();
+        for (int i = 0; i < skeletons.size(); i++) {
+            if (i > 0) {
+                inputsBuilder.append(", ");
+            }
+            inputsBuilder.append(skeletons.get(i).toString());
+        }
+        
+        // Create the intersect operand with the appropriate class based on the all flag
+        String operatorClass = all ? "LogicalIntersectAll" : "LogicalIntersect";
+        return current_env.grow("operand(" + operatorClass + ".class).inputs(" + inputsBuilder.toString() + ")");
+    }
+
+    @Override
+    public Env onMatchField(Env env, RexRN.Field field) {
+        // Generate a unique symbolic name for this field
+        String fieldSymbol = "field_" + env.varId.getAndIncrement();
+        
+        // Store the field expression in the environment's symbol table
+        return env.symbol(fieldSymbol, env.current());
+    }
+
+    @Override
+    public Env onMatchTrue(Env env, RexRN literal) {
+        // Create a unique symbol name for this true literal
+        String trueSymbol = "true_" + env.varId.getAndIncrement();
+        
+        // Store the current expression as this true literal's symbol
+        return env.symbol(trueSymbol, env.current());
+    }
+
+    @Override
+    public Env onMatchFalse(Env env, RexRN literal) {
+        // Create a unique symbol name for this false literal
+        String falseSymbol = "false_" + env.varId.getAndIncrement();
+        
+        // Store the current expression as this false literal's symbol
+        return env.symbol(falseSymbol, env.current());
+    }
+
+    @Override
+    public Env onMatchEmpty(Env env, RelRN.Empty empty) {
+        return env.grow("operand(LogicalValues.class).noInputs()");
+    }
+
+
+    @Override
     public Env transformScan(Env env, RelRN.Scan scan) {
         return env.focus(env.current() + ".push(" + env.symbols().get(scan.name()) + ")");
     }
@@ -166,6 +279,105 @@ public class CalciteGenerator implements CodeGenerator<CalciteGenerator.Env> {
             source_transform = source_transform.focus(env.current());
         }
         return source_transform.focus(env.current() + ".and(" + operands.joinToString(", ") + ")");
+    }
+
+    @Override
+    public Env transformUnion(Env env, RelRN.Union union) {
+        // Get the all flag from the union
+        boolean all = union.all();
+        
+        // The number of sources
+        int sourceCount = union.sources().size();
+        
+        // Transform each source
+        var current_env = env;
+        for (var source : union.sources()) {
+            current_env = transform(current_env, source);
+        }
+        
+        // Use the union method with the all flag and source count
+        // This matches the Calcite RelBuilder.union(boolean all, int n) signature
+        return current_env.focus(current_env.current() + ".union(" + all + ", " + sourceCount + ")");
+    }
+
+    @Override
+    public Env transformIntersect(Env env, RelRN.Intersect intersect) {
+        // Get the all flag from the intersect
+        boolean all = intersect.all();
+        
+        // The number of sources
+        int sourceCount = intersect.sources().size();
+        
+        // Transform each source
+        var current_env = env;
+        for (var source : intersect.sources()) {
+            current_env = transform(current_env, source);
+        }
+        
+        // Use the intersect method with the all flag and source count
+        // This matches the expected Calcite RelBuilder.intersect(boolean all, int n) signature
+        String methodName = all ? "intersectAll" : "intersect";
+        return current_env.focus(current_env.current() + "." + methodName + "(" + all + ", " + sourceCount + ")");
+    }
+
+    @Override
+    public Env transformField(Env env, RexRN.Field field) {
+        // In Calcite, field references are typically created with a "field" method
+        // We'll need to pass some identifier for the field - use toString() if no specific field accessor is available
+        
+        // Assuming field has a method that returns some kind of identifier or name
+        // If not, we may need to adjust this implementation
+        return env.focus(env.current() + ".field(" + field + ")");
+    }
+
+    @Override
+    public Env transformProj(Env env, RexRN.Proj proj) {
+        // In Calcite, projections are typically created using the operator name
+        // This is similar to your transformPred implementation
+        
+        // Look up the symbol from the matching phase
+        if (!env.symbols().containsKey(proj.operator().getName())) {
+            throw new RuntimeException("Operator symbol not found: " + proj.operator().getName() + 
+                                    ". Make sure onMatchProj is properly implemented.");
+        }
+        
+        // Return an environment focused on the expression for this projection
+        return env.focus(env.symbols().get(proj.operator().getName()));
+    }
+
+    @Override
+    public Env transformProject(Env env, RelRN.Project project) {
+        // First transform the source relation
+        var source_transform = transform(env, project.source());
+        var source_expression = source_transform.current();
+        
+        // Then transform the projection map
+        var map_transform = transform(source_transform, project.map());
+        
+        // Combine the source and projection using the project operation
+        // This creates a projection on top of the source relation
+        return map_transform.focus(source_expression + ".project(" + map_transform.current() + ")");
+    }
+
+    @Override
+    public Env transformTrue(Env env, RexRN literal) {
+        // In Calcite, true literals are typically represented using the 
+        // rexBuilder.makeLiteral(true) method or just "TRUE"
+        return env.focus(env.current() + ".literal(true)");
+    }
+
+    @Override
+    public Env transformFalse(Env env, RexRN literal) {
+        // In Calcite, false literals are represented using the 
+        // rexBuilder.makeLiteral(false) method or just "FALSE"
+        return env.focus(env.current() + ".literal(false)");
+    }
+
+    @Override
+    public Env transformEmpty(Env env, RelRN.Empty empty) {
+        // In Calcite, empty relations are created using the values() method with no tuples
+        // This creates a LogicalValues node with no rows
+        return env.focus(env.current() + ".empty()");
     }
 
     public record Env(AtomicInteger varId, int rel, String current, String skeleton, Seq<String> statements,
