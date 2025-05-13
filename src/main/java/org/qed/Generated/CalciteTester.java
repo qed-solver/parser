@@ -13,12 +13,16 @@ import org.apache.calcite.rel.logical.LogicalValues;
 import org.apache.calcite.rex.RexNode;
 import org.apache.calcite.sql.fun.SqlStdOperatorTable;
 import org.qed.*;
+import org.reflections.Reflections;
 
 import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.Constructor;
+import java.lang.reflect.Modifier;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 public class CalciteTester {
     // Assuming that current working directory is the root of the project
@@ -32,11 +36,29 @@ public class CalciteTester {
     }
 
     public static Seq<RRule> ruleList() {
-        var individuals =
-                Seq.from(RRuleInstance.class.getClasses()).filter(RRule.class::isAssignableFrom).mapUnchecked(Class::getConstructor).mapUnchecked(Constructor::newInstance).map(r -> (RRule) r);
-        System.out.println(Seq.from(RRuleInstance.class.getClasses()).filter(RRule.RRuleFamily.class::isAssignableFrom).mapUnchecked(Class::getConstructor));
-        // var families =
-        //         Seq.from(RRuleInstance.class.getClasses()).filter(RRule.RRuleFamily.class::isAssignableFrom).mapUnchecked(Class::getConstructor).mapUnchecked(Constructor::newInstance).map(r -> (RRule.RRuleFamily) r);
+        Reflections reflections = new Reflections("org.qed.RRuleInstances");
+    
+        Set<Class<? extends RRule>> ruleClasses = reflections.getSubTypesOf(RRule.class);
+        var concreteRuleClasses = ruleClasses.stream()
+                .filter(clazz -> !clazz.isInterface() && 
+                            !Modifier.isAbstract(clazz.getModifiers()) &&
+                            !clazz.getName().contains("$")) // Skip all inner classes
+                .collect(Collectors.toSet());
+        
+        var individuals = Seq.from(concreteRuleClasses)
+                .mapUnchecked(Class::getConstructor)
+                .mapUnchecked(Constructor::newInstance)
+                .map(r -> (RRule) r);
+        
+        // var families = Seq.from(reflections.getSubTypesOf(RRule.RRuleFamily.class))
+        //         .filter(clazz -> !clazz.isInterface() && !Modifier.isAbstract(clazz.getModifiers()))
+        //         .mapUnchecked(clazz -> {
+        //             Constructor<? extends RRule.RRuleFamily> constructor = clazz.getDeclaredConstructor();
+        //             constructor.setAccessible(true);
+        //             return constructor.newInstance();
+        //         })
+        //         .map(r -> (RRule.RRuleFamily) r);
+        
         // return individuals.appendedAll(families.flatMap(RRule.RRuleFamily::family));
         return individuals;
     }
@@ -51,15 +73,15 @@ public class CalciteTester {
     }
 
     public static void main(String[] args) throws IOException {
-        var rule = new RRuleInstance.FilterSetOpTranspose();
-        Files.createDirectories(Path.of(rulePath));
-        new ObjectMapper().writerWithDefaultPrettyPrinter().writeValue(Path.of(rulePath, rule.name() + "-" + rule.info() + ".json").toFile(), rule.toJson());
+        // var rule = new RRuleInstance.FilterSetOpTranspose();
+        // Files.createDirectories(Path.of(rulePath));
+        // new ObjectMapper().writerWithDefaultPrettyPrinter().writeValue(Path.of(rulePath, rule.name() + "-" + rule.info() + ".json").toFile(), rule.toJson());
         // var rules = new RRuleInstance.JoinAssociate();
         // Files.createDirectories(Path.of(rulePath));
         // for (var rule : rules.family()) {
         //     new ObjectMapper().writerWithDefaultPrettyPrinter().writeValue(Path.of(rulePath, rule.name() + "-" + rule.info() + ".json").toFile(), rule.toJson());
         // }
-        // generate();
+        generate();
         
         /* FilterIntoJoin */
         var tester = new CalciteTester();

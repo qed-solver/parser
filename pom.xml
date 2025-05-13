@@ -108,5 +108,10 @@
             <scope>system</scope>
             <systemPath>${env.CVC5_JAVA}</systemPath>
         </dependency>
+        <dependency>
+            <groupId>org.reflections</groupId>
+            <artifactId>reflections</artifactId>
+            <version>0.10.2</version>
+        </dependency>
     </dependencies>
 </project>
