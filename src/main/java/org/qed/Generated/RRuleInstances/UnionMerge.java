@@ -1,4 +1,4 @@
-package org.qed.RRuleInstances;
+package org.qed.Generated.RRuleInstances;
 
 import kala.collection.Map;
 import kala.collection.Seq;
@@ -9,21 +9,18 @@ import org.qed.RexRN;
 import org.qed.RRule;
 import org.qed.RuleBuilder;
 
-public record IntersectMerge() implements RRule {
-    // Use a common type for all relations to make them compatible
+public record UnionMerge() implements RRule {
     static final RelRN a = RelRN.scan("A", "Common_Type");
     static final RelRN b = RelRN.scan("B", "Common_Type");
     static final RelRN c = RelRN.scan("C", "Common_Type");
 
     @Override
     public RelRN before() {
-        // Nested INTERSECT: (A INTERSECT B) INTERSECT C
-        return a.intersect(false, b).intersect(false, c);
+        return a.union(false, b).union(false, c);
     }
 
     @Override
     public RelRN after() {
-        // Flattened INTERSECT: A INTERSECT B INTERSECT C
-        return a.intersect(false, b, c);
+        return a.union(false, b, c);
     }
 }

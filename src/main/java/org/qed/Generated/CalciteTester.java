@@ -36,13 +36,13 @@ public class CalciteTester {
     }
 
     public static Seq<RRule> ruleList() {
-        Reflections reflections = new Reflections("org.qed.RRuleInstances");
+        Reflections reflections = new Reflections("org.qed.Generated.RRuleInstances");
     
         Set<Class<? extends RRule>> ruleClasses = reflections.getSubTypesOf(RRule.class);
         var concreteRuleClasses = ruleClasses.stream()
                 .filter(clazz -> !clazz.isInterface() && 
                             !Modifier.isAbstract(clazz.getModifiers()) &&
-                            !clazz.getName().contains("$")) // Skip all inner classes
+                            !clazz.getName().contains("$")) 
                 .collect(Collectors.toSet());
         
         var individuals = Seq.from(concreteRuleClasses)
@@ -72,6 +72,22 @@ public class CalciteTester {
         ruleList().forEach(r -> tester.serialize(r, genPath));
     }
 
+    public static void runAllTests() {
+        try {
+            org.qed.Generated.Tests.FilterIntoJoinTest.runTest();
+            org.qed.Generated.Tests.FilterMergeTest.runTest();
+            org.qed.Generated.Tests.FilterProjectTransposeTest.runTest();
+            org.qed.Generated.Tests.UnionMergeTest.runTest();
+            org.qed.Generated.Tests.IntersectMergeTest.runTest();
+            org.qed.Generated.Tests.FilterSetOpTransposeTest.runTest();
+            org.qed.Generated.Tests.JoinExtractFilterTest.runTest();
+            org.qed.Generated.Tests.SemiJoinFilterTransposeTest.runTest();
+        } catch (Exception e) {
+            System.out.println("Test failed: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
     public static void main(String[] args) throws IOException {
         // var rule = new RRuleInstance.FilterSetOpTranspose();
         // Files.createDirectories(Path.of(rulePath));
@@ -81,276 +97,8 @@ public class CalciteTester {
         // for (var rule : rules.family()) {
         //     new ObjectMapper().writerWithDefaultPrettyPrinter().writeValue(Path.of(rulePath, rule.name() + "-" + rule.info() + ".json").toFile(), rule.toJson());
         // }
-        generate();
-        
-        /* FilterIntoJoin */
-        var tester = new CalciteTester();
-        var builder = RuleBuilder.create();
-        var table = builder.createQedTable(Seq.of(Tuple.of(RelType.fromString("INTEGER", true), false)));
-        builder.addTable(table);
-        var before = builder.scan(table.getName())
-                .scan(table.getName())
-                .join(JoinRelType.INNER, builder.call(builder.genericPredicateOp("join", true), builder.joinFields()))
-                .filter(builder.call(builder.genericPredicateOp("pred", true), builder.fields()))
-                .build();
-        var after = builder.scan(table.getName())
-                .scan(table.getName())
-                .join(JoinRelType.INNER, builder.call(SqlStdOperatorTable.AND,
-                        builder.call(builder.genericPredicateOp("join", true), builder.joinFields()),
-                        builder.call(builder.genericPredicateOp("pred", true), builder.joinFields())))
-                .build();
-        var runner = loadRule(FilterIntoJoin.Config.DEFAULT.toRule());
-        tester.verify(runner, before, after);
-
-        /* FilterMerge */
-        before = builder.scan(table.getName())
-                .filter(builder.call(builder.genericPredicateOp("inner", true), builder.fields()))
-                .filter(builder.call(builder.genericPredicateOp("outer", true), builder.fields()))
-                .build();
-        after = builder.scan(table.getName()).filter(builder.call(SqlStdOperatorTable.AND,
-                        builder.call(builder.genericPredicateOp("inner", true), builder.fields()),
-                        builder.call(builder.genericPredicateOp("outer", true), builder.fields())))
-                .build();
-        runner = loadRule(FilterMerge.Config.DEFAULT.toRule());
-        tester.verify(runner, before, after);
-
-        /* FilterProjectTranspose */
-        builder = RuleBuilder.create();
-        table = builder.createQedTable(Seq.of(
-            Tuple.of(RelType.fromString("INTEGER", true), false),
-            Tuple.of(RelType.fromString("INTEGER", true), false)
-        ));
-        builder.addTable(table);
-        var scan = builder.scan(table.getName()).build();
-        before = builder
-            .push(scan)
-            .filter(builder.equals(builder.field(0), builder.literal(10)))
-            .project(builder.field(0))
-            .build();
-        after = builder
-            .push(scan)
-            .project(builder.field(0))
-            .filter(builder.equals(builder.field(0), builder.literal(10)))
-            .build();
-        runner = loadRule(FilterProjectTranspose.Config.DEFAULT.toRule());
-        tester.verify(runner, before, after);
-        
-        /* UnionMerge */
-        builder = RuleBuilder.create();
-        table = builder.createQedTable(Seq.of(
-            Tuple.of(RelType.fromString("INTEGER", true), false)
-        ));
-        builder.addTable(table);
-        var scan1 = builder.scan(table.getName()).build();
-        var scan2 = builder.scan(table.getName()).build();
-        var scan3 = builder.scan(table.getName()).build();
-        var firstUnion = builder.push(scan1).push(scan2).union(false).build();
-        before = builder.push(firstUnion).push(scan3).union(false).build();
-        after = builder.push(scan1).push(scan2).push(scan3).union(false, 3).build();
-        runner = loadRule(UnionMerge.Config.DEFAULT.toRule());
-        tester.verify(runner, before, after);
-
-        /* IntersectMerge */
-        builder = RuleBuilder.create();
-        table = builder.createQedTable(Seq.of(
-            Tuple.of(RelType.fromString("INTEGER", true), false)
-        ));
-        builder.addTable(table);
-        scan1 = builder.scan(table.getName()).build();
-        scan2 = builder.scan(table.getName()).build();
-        scan3 = builder.scan(table.getName()).build();   
-        var firstIntersect = builder.push(scan1).push(scan2).intersect(false).build();
-        before = builder.push(firstIntersect).push(scan3).intersect(false).build();
-        after = builder.push(scan1).push(scan2).push(scan3).intersect(false, 3).build();
-        runner = loadRule(IntersectMerge.Config.DEFAULT.toRule());
-        tester.verify(runner, before, after);
-
-        /* FilterSetOpTranspose */
-        builder = RuleBuilder.create();
-        table = builder.createQedTable(Seq.of(
-            Tuple.of(RelType.fromString("INTEGER", true), false)
-        ));
-        builder.addTable(table);
-        scan1 = builder.scan(table.getName()).build();
-        scan2 = builder.scan(table.getName()).build();
-        var union = builder.push(scan1).push(scan2).union(false).build();
-        before = builder.push(union).filter(builder.call(builder.genericPredicateOp("filter", true), builder.fields())).build();
-        var filteredScan1 = builder.push(scan1).filter(builder.call(builder.genericPredicateOp("filter", true), builder.fields())).build();
-        var filteredScan2 = builder.push(scan2).filter(builder.call(builder.genericPredicateOp("filter", true), builder.fields())).build();
-        after = builder.push(filteredScan1).push(filteredScan2).union(false).build();
-        runner = loadRule(FilterSetOpTranspose.Config.DEFAULT.toRule());
-        tester.verify(runner, before, after);
-
-        /* JoinExtractFilter */
-        builder = RuleBuilder.create();
-        var leftTable = builder.createQedTable(Seq.of(Tuple.of(RelType.fromString("INTEGER", true), false)));
-        var rightTable = builder.createQedTable(Seq.of(Tuple.of(RelType.fromString("VARCHAR", true), false)));
-        builder.addTable(leftTable);
-        builder.addTable(rightTable);
-        var leftScan = builder.scan(leftTable.getName()).build();
-        var rightScan = builder.scan(rightTable.getName()).build();
-        before = builder.push(leftScan).push(rightScan).join(JoinRelType.INNER, builder.call(builder.genericPredicateOp("join", true), builder.field(2, 0, 0), builder.field(2, 1, 0))).build();
-        var trueJoin = builder.push(leftScan).push(rightScan).join(JoinRelType.INNER, builder.literal(true)).build();
-        after = builder.push(trueJoin).filter(builder.call(builder.genericPredicateOp("join", true), builder.field(0), builder.field(1))).build();
-        runner = loadRule(JoinExtractFilter.Config.DEFAULT.toRule());
-        tester.verify(runner, before, after);
-
-        /* SemiJoinFilterTranspose */
-        builder = RuleBuilder.create();
-        leftTable = builder.createQedTable(Seq.of(Tuple.of(RelType.fromString("INTEGER", true), false)));
-        rightTable = builder.createQedTable(Seq.of(Tuple.of(RelType.fromString("INTEGER", true), false)));
-        builder.addTable(leftTable);
-        builder.addTable(rightTable);
-        leftScan = builder.scan(leftTable.getName()).build();
-        rightScan = builder.scan(rightTable.getName()).build();
-        builder.push(leftScan);
-        builder.push(rightScan);
-        var joinPredicate = builder.equals(builder.field(2, 0, 0), builder.field(2, 1, 0));
-        var semiJoin = builder.join(JoinRelType.SEMI, joinPredicate).build();
-        builder.push(semiJoin);
-        var filterPredicate = builder.call(builder.genericPredicateOp("filter", true), builder.field(0));
-        before = builder.filter(filterPredicate).build();
-        builder.push(leftScan);
-        var leftFilterPredicate = builder.call(builder.genericPredicateOp("filter", true), builder.field(0));
-        var filteredLeft = builder.filter(leftFilterPredicate).build();
-        builder.push(filteredLeft);
-        builder.push(rightScan);
-        var afterJoinPredicate = builder.equals(builder.field(2, 0, 0), builder.field(2, 1, 0));
-        after = builder.join(JoinRelType.SEMI, afterJoinPredicate).build();
-        runner = loadRule(SemiJoinFilterTranspose.Config.DEFAULT.toRule());
-        tester.verify(runner, before, after);
-
-        /* JoinCommute */
-        // TBD: failed
-        // builder = RuleBuilder.create();
-        // leftTable = builder.createQedTable(Seq.of(
-        //     Tuple.of(RelType.fromString("INTEGER", true), false)
-        // ));
-        // rightTable = builder.createQedTable(Seq.of(
-        //     Tuple.of(RelType.fromString("INTEGER", true), false)
-        // ));
-        // builder.addTable(leftTable);
-        // builder.addTable(rightTable);
-        // leftScan = builder.scan(leftTable.getName()).build();
-        // rightScan = builder.scan(rightTable.getName()).build();
-        // before = builder
-        //     .push(leftScan)
-        //     .push(rightScan)
-        //     .join(
-        //         JoinRelType.INNER,
-        //         builder.equals(builder.field(2, 0, 0), builder.field(2, 1, 0))
-        //     )
-        //     .build();
-        // after = builder
-        //     .push(rightScan)
-        //     .push(leftScan)
-        //     .join(
-        //         JoinRelType.INNER,
-        //         builder.equals(builder.field(2, 0, 0), builder.field(2, 1, 0))
-        //     )
-        //     .build();
-        // runner = loadRule(JoinCommute.Config.DEFAULT.toRule());
-        // tester.verify(runner, before, after);
-
-        /* ProjectMerge */
-        // TBD: Automatically optimized?
-        // builder = RuleBuilder.create();
-        // table = builder.createQedTable(Seq.of(
-        //     Tuple.of(RelType.fromString("INTEGER", true), false),
-        //     Tuple.of(RelType.fromString("INTEGER", true), false),
-        //     Tuple.of(RelType.fromString("INTEGER", true), false)  
-        // ));
-        // builder.addTable(table);
-        // scan = builder.scan(table.getName()).build();
-        // var innerProject = builder
-        //     .push(scan)
-        //     .project(builder.field(0), builder.field(1))
-        //     .build();
-        // before = builder
-        //     .push(innerProject)
-        //     .project(builder.field(0))
-        //     .build();
-        // after = builder
-        //     .push(scan)
-        //     .project(builder.field(0))
-        //     .build();
-        // runner = loadRule(ProjectMerge.Config.DEFAULT.toRule());
-        // tester.verify(runner, before, after);
-
-        /* JoinAddRedundantSemiJoin */ 
-        // TBD: failed
-        // builder = RuleBuilder.create();
-        // leftTable = builder.createQedTable(Seq.of(
-        //     Tuple.of(RelType.fromString("INTEGER", true), false)
-        // ));
-        // rightTable = builder.createQedTable(Seq.of(
-        //     Tuple.of(RelType.fromString("INTEGER", true), false)
-        // ));
-        // builder.addTable(leftTable);
-        // builder.addTable(rightTable);
-        // leftScan = builder.scan(leftTable.getName()).build();
-        // rightScan = builder.scan(rightTable.getName()).build();
-        // before = builder
-        //     .push(leftScan)
-        //     .push(rightScan)
-        //     .join(
-        //         JoinRelType.INNER,
-        //         builder.equals(builder.field(2, 0, 0), builder.field(2, 1, 0))
-        //     )
-        //     .build();
-        // after = builder
-        //     .push(leftScan)
-        //     .push(rightScan)
-        //     .join(JoinRelType.SEMI, builder.equals(builder.field(2, 0, 0), builder.field(2, 1, 0)))
-        //     .push(rightScan)
-        //     .join(JoinRelType.INNER, builder.equals(builder.field(2, 0, 0), builder.field(2, 1, 0)))
-        //     .build();
-        // runner = loadRule(JoinAddRedundantSemiJoin.Config.DEFAULT.toRule());
-        // tester.verify(runner, before, after);
-
-        /* FilterReduceFalse */
-        // TBD: Automatically optimized?
-        // builder = RuleBuilder.create();
-        // table = builder.createQedTable(Seq.of(
-        //     Tuple.of(RelType.fromString("INTEGER", true), false),
-        //     Tuple.of(RelType.fromString("INTEGER", true), false)
-        // ));
-        // builder.addTable(table);
-        // scan = builder.scan(table.getName()).build();
-        // before = builder
-        //     .push(scan)
-        //     .filter(builder.equals(builder.field(0), builder.literal(10)))
-        //     .filter(builder.literal(false))
-        //     .build();
-        // after = builder
-        //     .push(scan)
-        //     .empty()
-        //     .build();
-        // runner = loadRule(FilterReduceFalse.Config.DEFAULT.toRule());
-        // tester.verify(runner, before, after);
-
-        /* FilterReduceTrue */
-        // TBD: Automatically optimized? And something wrong with this rule? 
-        // builder = RuleBuilder.create();
-        // table = builder.createQedTable(Seq.of(
-        //     Tuple.of(RelType.fromString("INTEGER", true), false),
-        //     Tuple.of(RelType.fromString("INTEGER", true), false)
-        // ));
-        // builder.addTable(table);
-        // scan = builder.scan(table.getName()).build();
-        // before = builder
-        //     .push(scan)
-        //     .filter(builder.equals(builder.field(0), builder.literal(10)))
-        //     .filter(builder.literal(true)) 
-        //     .filter(builder.equals(builder.field(1), builder.literal(20)))
-        //     .build();
-        // after = builder
-        //     .push(scan)
-        //     .filter(builder.equals(builder.field(0), builder.literal(10)))
-        //     .filter(builder.equals(builder.field(1), builder.literal(20)))
-        //     .build();
-        // runner = loadRule(FilterReduceTrue.Config.DEFAULT.toRule());
-        // tester.verify(runner, before, after);
+        // generate();
+        runAllTests();
     }
 
     public void serialize(RRule rule, String path) {

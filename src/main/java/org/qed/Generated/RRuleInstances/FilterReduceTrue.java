@@ -1,4 +1,4 @@
-package org.qed.RRuleInstances;
+package org.qed.Generated.RRuleInstances;
 
 import kala.collection.Map;
 import kala.collection.Seq;

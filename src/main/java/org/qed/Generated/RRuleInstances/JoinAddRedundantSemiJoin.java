@@ -1,4 +1,4 @@
-package org.qed.RRuleInstances;
+package org.qed.Generated.RRuleInstances;
 
 import kala.collection.Map;
 import kala.collection.Seq;
@@ -9,18 +9,18 @@ import org.qed.RexRN;
 import org.qed.RRule;
 import org.qed.RuleBuilder;
 
-public record JoinExtractFilter() implements RRule {
+public record JoinAddRedundantSemiJoin() implements RRule {
     static final RelRN left = RelRN.scan("Left", "Left_Type");
     static final RelRN right = RelRN.scan("Right", "Right_Type");
-    static final RexRN joinCond = left.joinPred("join", right);
+    static final String pred = "pred";
 
     @Override
     public RelRN before() {
-        return left.join(JoinRelType.INNER, joinCond, right);
+        return left.join(JoinRelType.INNER, pred, right);
     }
 
     @Override
     public RelRN after() {
-        return left.join(JoinRelType.INNER, RexRN.trueLiteral(), right).filter(joinCond);
+        return left.join(JoinRelType.SEMI, pred, right).join(JoinRelType.INNER, pred, right);
     }
 }
