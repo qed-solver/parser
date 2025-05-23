@@ -21,7 +21,6 @@
                         <argument>-classpath</argument>
                         <classpath/>
                         <argument>org.qed.Main</argument>
-                        <argument>${args}</argument>
                     </arguments>
                 </configuration>
             </plugin>
@@ -54,7 +53,6 @@
                 <configuration>
                     <source>21</source>
                     <target>21</target>
-                    <compilerArgs>--enable-preview</compilerArgs>
                 </configuration>
             </plugin>
         </plugins>
@@ -100,13 +98,6 @@
             <groupId>org.glavo.kala</groupId>
             <artifactId>kala-common</artifactId>
             <version>0.67.0</version>
-        </dependency>
-        <dependency>
-            <groupId>io.github</groupId>
-            <artifactId>cvc5</artifactId>
-            <version>1.1.1</version>
-            <scope>system</scope>
-            <systemPath>${env.CVC5_JAVA}</systemPath>
         </dependency>
         <dependency>
             <groupId>org.reflections</groupId>
