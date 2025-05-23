@@ -3,7 +3,7 @@ package org.qed;
 public interface CodeGenerator<E> {
 
     default String unimplemented(String context, Object object) {
-        return STR."<--\{context}\{object.getClass().getName()}-->";
+        return "<--" + context + object.getClass().getName() + "-->";
     }
 
     default E unimplementedOnMatch(E env, Object object) {
@@ -26,6 +26,7 @@ public interface CodeGenerator<E> {
             case RelRN.Join join -> onMatchJoin(env, join);
             case RelRN.Union union -> onMatchUnion(env, union);
             case RelRN.Intersect intersect -> onMatchIntersect(env, intersect);
+            case RelRN.Empty empty -> onMatchEmpty(env, empty);
             default -> onMatchCustom(env, pattern);
         };
     }
@@ -39,6 +40,8 @@ public interface CodeGenerator<E> {
             case RexRN.And and -> onMatchAnd(env, and);
             case RexRN.Or or -> onMatchOr(env, or);
             case RexRN.Not not -> onMatchNot(env, not);
+            case RexRN.True literal -> onMatchTrue(env, literal);
+            case RexRN.False literal -> onMatchFalse(env, literal);
             default -> onMatchCustom(env, pattern);
         };
     }
@@ -59,6 +62,7 @@ public interface CodeGenerator<E> {
             case RelRN.Join join -> transformJoin(env, join);
             case RelRN.Union union -> transformUnion(env, union);
             case RelRN.Intersect intersect -> transformIntersect(env, intersect);
+            case RelRN.Empty empty -> transformEmpty(env, empty);
             default -> transformCustom(env, target);
         };
     }
@@ -72,6 +76,8 @@ public interface CodeGenerator<E> {
             case RexRN.And and -> transformAnd(env, and);
             case RexRN.Or or -> transformOr(env, or);
             case RexRN.Not not -> transformNot(env, not);
+            case RexRN.True literal -> transformTrue(env, literal);
+            case RexRN.False literal -> transformFalse(env, literal);
             default -> transformCustom(env, target);
         };
     }
@@ -85,6 +91,7 @@ public interface CodeGenerator<E> {
     }
 
     default String generate(RRule rule) {
+        System.out.printf("Generating Rule: %s\n", rule.name());
         var onMatch = postMatch(onMatch(preMatch(), rule.before()));
         var transform = postTransform(transform(preTransform(onMatch), rule.after()));
         return translate(rule.getClass().getSimpleName(), onMatch, transform);
@@ -150,6 +157,18 @@ public interface CodeGenerator<E> {
         return unimplementedOnMatch(env, custom);
     }
 
+    default E onMatchTrue(E env, RexRN literal) {
+        return unimplementedOnMatch(env, literal);
+    }
+
+    default E onMatchFalse(E env, RexRN literal) {
+        return unimplementedOnMatch(env, literal);
+    }
+
+    default E onMatchEmpty(E env, RelRN.Empty empty) {
+        return unimplementedOnMatch(env, empty);
+    }
+
     default E transformScan(E env, RelRN.Scan scan) {
         return unimplementedTransform(env, scan);
     }
@@ -210,4 +229,15 @@ public interface CodeGenerator<E> {
         return unimplementedTransform(env, custom);
     }
 
+    default E transformTrue(E env, RexRN literal) {
+        return unimplementedTransform(env, literal);
+    }
+
+    default E transformFalse(E env, RexRN literal) {
+        return unimplementedTransform(env, literal);
+    }
+
+    default E transformEmpty(E env, RelRN.Empty empty) {
+        return unimplementedTransform(env, empty);
+    }
 }

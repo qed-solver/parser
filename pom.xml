@@ -102,9 +102,14 @@
             <version>0.67.0</version>
         </dependency>
         <dependency>
-            <groupId>io.github</groupId>
+            <groupId>io.github.cvc5</groupId>
             <artifactId>cvc5</artifactId>
-            <version>1.1.1</version>
+            <version>1.2.1</version>
+        </dependency>
+        <dependency>
+            <groupId>org.reflections</groupId>
+            <artifactId>reflections</artifactId>
+            <version>0.10.2</version>
         </dependency>
     </dependencies>
 </project>

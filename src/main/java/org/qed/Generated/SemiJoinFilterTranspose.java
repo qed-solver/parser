@@ -6,28 +6,28 @@ import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.core.JoinRelType;
 import org.apache.calcite.rel.logical.*;
 
-public class FilterIntoJoin extends RelRule<FilterIntoJoin.Config> {
-	protected FilterIntoJoin(Config config) {
+public class SemiJoinFilterTranspose extends RelRule<SemiJoinFilterTranspose.Config> {
+	protected SemiJoinFilterTranspose(Config config) {
 		super(config);
 	}
 
 	@Override
 	public void onMatch(RelOptRuleCall call) {
 		var var_4 = call.builder();
-		call.transformTo(var_4.push(call.rel(2)).push(call.rel(3)).join(JoinRelType.INNER, var_4.push(call.rel(2)).push(call.rel(3)).and(((LogicalJoin) call.rel(1)).getCondition(), ((LogicalFilter) call.rel(0)).getCondition())).build());
+		call.transformTo(var_4.push(call.rel(2)).filter(((LogicalFilter) call.rel(0)).getCondition()).push(call.rel(3)).join(JoinRelType.SEMI, ((LogicalJoin) call.rel(1)).getCondition()).build());
 	}
 
 	public interface Config extends EmptyConfig {
 		Config DEFAULT = new Config() {};
 
 		@Override
-		default FilterIntoJoin toRule() {
-			return new FilterIntoJoin(this);
+		default SemiJoinFilterTranspose toRule() {
+			return new SemiJoinFilterTranspose(this);
 		}
 
 		@Override
 		default String description() {
-			return "FilterIntoJoin";
+			return "SemiJoinFilterTranspose";
 		}
 
 		@Override

@@ -14,7 +14,12 @@ public interface RRule {
     RelRN after();
 
     default String explain() {
-        return STR."\{getClass().getName()}\n\{before().semantics().explain()}=>\n\{after().semantics().explain()}";
+        return getClass().getName()
+                + "\n"
+                + before().semantics().explain()
+                + "=>"
+                + "\n"
+                + after().semantics().explain();
     }
 
     default String name() {
@@ -101,7 +106,7 @@ public interface RRule {
             }
 
             public String info() {
-                return joinTypeAssignment.joinToString("&", (m, c) -> STR."\{m.name()}=\{c.semantics()}");
+                return joinTypeAssignment.joinToString("&", (m, c) -> "{" + m.name() + "}=" + c.semantics());
             }
 
         }
