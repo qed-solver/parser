@@ -314,7 +314,7 @@ public interface RRuleInstance {
         static final RelRN left = RelRN.scan("Left", "Left_Type");
         static final RelRN right = RelRN.scan("Right", "Right_Type");
         static final RexRN proj = left.proj("proj", "Project_Type");
-        static final String joinCond = left.joinPred("join", right);
+        static final String joinCond = left.joinPred("join", right).toString();
 
         @Override
         public RelRN before() {
