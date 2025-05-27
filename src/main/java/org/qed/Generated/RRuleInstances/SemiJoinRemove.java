@@ -5,7 +5,7 @@ import org.qed.RRule;
 import org.qed.RelRN;
 import org.qed.RexRN;
 
-record SemiJoinRemove() implements RRule {
+public record SemiJoinRemove() implements RRule {
     static final RelRN left = RelRN.scan("Left", "Left_Type");
     static final RelRN right = RelRN.scan("Right", "Right_Type");
 

@@ -10,14 +10,8 @@ import org.qed.RelType;
 import org.qed.Generated.RRuleInstances.FilterIntoJoin;
 import org.qed.RuleBuilder;
 
-/**
- * Test for the FilterIntoJoin rule.
- */
 public class FilterIntoJoinTest {
 
-    /**
-     * Run test for FilterIntoJoin rule.
-     */
     public static void runTest() {
         var tester = new CalciteTester();
         var builder = RuleBuilder.create();
@@ -40,10 +34,7 @@ public class FilterIntoJoinTest {
         var runner = CalciteTester.loadRule(org.qed.Generated.FilterIntoJoin.Config.DEFAULT.toRule());
         tester.verify(runner, before, after);
     }
-    
-    /**
-     * Main method to run this test independently.
-     */
+
     public static void main(String[] args) {
         System.out.println("Running FilterIntoJoin test...");
         runTest();

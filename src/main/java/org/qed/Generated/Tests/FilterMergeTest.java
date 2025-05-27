@@ -5,17 +5,10 @@ import kala.tuple.Tuple;
 import org.apache.calcite.sql.fun.SqlStdOperatorTable;
 import org.qed.Generated.CalciteTester;
 import org.qed.RelType;
-import org.qed.Generated.RRuleInstances.FilterMerge;
 import org.qed.RuleBuilder;
 
-/**
- * Test for the FilterMerge rule.
- */
 public class FilterMergeTest {
 
-    /**
-     * Run test for FilterMerge rule.
-     */
     public static void runTest() {
         var tester = new CalciteTester();
         var builder = RuleBuilder.create();
@@ -35,10 +28,7 @@ public class FilterMergeTest {
         var runner = CalciteTester.loadRule(org.qed.Generated.FilterMerge.Config.DEFAULT.toRule());
         tester.verify(runner, before, after);
     }
-    
-    /**
-     * Main method to run this test independently.
-     */
+
     public static void main(String[] args) {
         System.out.println("Running FilterMerge test...");
         runTest();
