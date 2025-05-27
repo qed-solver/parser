@@ -91,15 +91,15 @@ public class CalciteTester {
     }
 
     public static void main(String[] args) throws IOException {
-        // var rule = new RRuleInstance.FilterSetOpTranspose();
-        // Files.createDirectories(Path.of(rulePath));
-        // new ObjectMapper().writerWithDefaultPrettyPrinter().writeValue(Path.of(rulePath, rule.name() + "-" + rule.info() + ".json").toFile(), rule.toJson());
-        // var rules = new RRuleInstance.JoinAssociate();
-        // Files.createDirectories(Path.of(rulePath));
-        // for (var rule : rules.family()) {
-        //     new ObjectMapper().writerWithDefaultPrettyPrinter().writeValue(Path.of(rulePath, rule.name() + "-" + rule.info() + ".json").toFile(), rule.toJson());
-        // }
-        // generate();
+//         var rule = new RRuleInstance.FilterSetOpTranspose();
+//         Files.createDirectories(Path.of(rulePath));
+//         new ObjectMapper().writerWithDefaultPrettyPrinter().writeValue(Path.of(rulePath, rule.name() + "-" + rule.info() + ".json").toFile(), rule.toJson());
+//         var rules = new RRuleInstance.JoinAssociate();
+//         Files.createDirectories(Path.of(rulePath));
+//         for (var rule : rules.family()) {
+//             new ObjectMapper().writerWithDefaultPrettyPrinter().writeValue(Path.of(rulePath, rule.name() + "-" + rule.info() + ".json").toFile(), rule.toJson());
+//         }
+         generate();
         runAllTests();
     }
 

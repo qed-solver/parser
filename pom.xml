@@ -21,7 +21,6 @@
                         <argument>-classpath</argument>
                         <classpath/>
                         <argument>org.qed.Main</argument>
-                        <argument>${args}</argument>
                     </arguments>
                 </configuration>
             </plugin>
