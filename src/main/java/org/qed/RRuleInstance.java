@@ -310,9 +310,22 @@ public interface RRuleInstance {
 //
 //    }
 
-//    record ProjectJoinTranspose() implements RRule {
-//
-//    }
+   record ProjectJoinTranspose() implements RRule {
+        static final RelRN left = RelRN.scan("Left", "Left_Type");
+        static final RelRN right = RelRN.scan("Right", "Right_Type");
+        static final RexRN proj = left.proj("proj", "Project_Type");
+        static final String joinCond = left.joinPred("join", right).toString();
+
+        @Override
+        public RelRN before() {
+            return left.join(JoinRelType.INNER, joinCond, right).project(proj);
+        }
+
+        @Override
+        public RelRN after() {
+            return left.project(proj).join(JoinRelType.INNER, joinCond, right);
+        }
+   }
 
     record ProjectMerge() implements RRule {
         static final RelRN source = RelRN.scan("Source", "Source_Type");
@@ -378,57 +391,78 @@ public interface RRuleInstance {
     
         @Override
         public RelRN after() {
-            return a.union(false, b, c);
+            return null;
         }
     }
 
-    // TBD: generated java file doesn't work
-    // record PushFilterSemiJoin() implements RRule {
-    //     static final RelRN left = RelRN.scan("Left", "Left_Type");
-    //     static final RelRN right = RelRN.scan("Right", "Right_Type");
-    //     static final RexRN joinCond = left.joinPred("join", right);
-    //     static final RexRN leftFilter = left.pred("left_filter");
-        
-    //     @Override
-    //     public RelRN before() {
-    //         return left.join(JoinRelType.SEMI, RexRN.and(joinCond, leftFilter), right);
-    //     }
-        
-    //     @Override
-    //     public RelRN after() {
-    //         return left.filter(leftFilter).join(JoinRelType.SEMI, joinCond, right);
-    //     }
-    // }
-
-    record SemiJoinFilterTranspose() implements RRule {
-        static final RelRN left = RelRN.scan("Left", "Left_Type");
-        static final RelRN right = RelRN.scan("Right", "Right_Type");
+   record SemiJoinFilterTranspose() implements RRule {
+        static final RelRN left = RelRN.scan("left", "Left_Type");
+        static final RelRN right = RelRN.scan("right", "Right_Type");
+        static final RexRN pred = left.pred("pred");
         static final RexRN joinCond = left.joinPred("join", right);
-        static final RexRN filterPred = left.pred("filter");
-    
+        
         @Override
         public RelRN before() {
-            // Semi-join followed by a filter
-            return left.join(JoinRelType.SEMI, joinCond, right).filter(filterPred);
+            return left.join(JoinRelType.SEMI, joinCond, right).filter(pred);
         }
-    
+        
         @Override
         public RelRN after() {
-            // Push the filter before the semi-join
-            RelRN leftFiltered = left.filter(filterPred);
-            return leftFiltered.join(JoinRelType.SEMI, leftFiltered.joinPred("join", right), right);
+            return left.filter(pred).join(JoinRelType.SEMI, joinCond, right);
         }
-    }
+   }
 
-//    record SemiJoinJoinTranspose() implements RRule {
-//
-//    }
+   record SemiJoinJoinTranspose() implements RRule {
+        static final RelRN r = RelRN.scan("R", "R_Type");
+        static final RelRN s = RelRN.scan("S", "S_Type");
+        static final RelRN t = RelRN.scan("T", "T_Type");
+        static final RexRN semiCond = r.joinPred("semi", s);
+        static final RexRN joinCond = r.joinPred("join", t);
 
-//    record SemiJoinProjectTranspose() implements RRule {
-//
-//    }
+        @Override
+        public RelRN before() {
+            return r.join(JoinRelType.INNER, joinCond, t).join(JoinRelType.SEMI, semiCond, s);
+        }
 
-//    record SemiJoinRemove() implements RRule {
+        @Override
+        public RelRN after() {
+            return r.join(JoinRelType.SEMI, semiCond, s).join(JoinRelType.INNER, joinCond, t);
+        }
+   }
+
+   record SemiJoinProjectTranspose() implements RRule {
+        static final RelRN left = RelRN.scan("Left", "Left_Type");
+        static final RelRN right = RelRN.scan("Right", "Right_Type");
+        static final RexRN proj = left.proj("proj", "Project_Type");
+        static final RexRN semiCond = left.joinPred("semi", right);
+
+        @Override
+        public RelRN before() {
+            return left.join(JoinRelType.SEMI, semiCond, right).project(proj);
+        }
+
+        @Override
+        public RelRN after() {
+            return left.project(proj).join(JoinRelType.SEMI, semiCond, right);
+        }
+   }
+
+   record SemiJoinRemove() implements RRule {
+        static final RelRN left = RelRN.scan("Left", "Left_Type");
+        static final RelRN right = RelRN.scan("Right", "Right_Type");
+
+        @Override
+        public RelRN before() {
+            return left.join(JoinRelType.SEMI, RexRN.trueLiteral(), right);
+        }
+
+        @Override
+        public RelRN after() {
+            return left;
+        }
+   }
+
+//    record UnionMerge() implements RRule {
 //
 //    }
 
