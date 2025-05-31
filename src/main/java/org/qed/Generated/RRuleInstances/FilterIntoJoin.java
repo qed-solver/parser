@@ -22,6 +22,7 @@ public record FilterIntoJoin() implements RRule {
 
     @Override
     public RelRN after() {
-        return left.join(JoinRelType.INNER, RexRN.and(joinCond, left.joinPred("outer", right)), right);
+        return left.join(JoinRelType.INNER, RexRN.and(
+            joinCond, left.joinPred("outer", right)), right);
     }
 }
