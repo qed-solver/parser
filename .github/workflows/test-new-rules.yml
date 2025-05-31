@@ -29,6 +29,34 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-maven-
 
+      # Build CVC5 from source with Java bindings
+      - name: Build and Install CVC5
+        run: |
+          # Install build dependencies
+          sudo apt-get update
+          sudo apt-get install -y cmake libgmp-dev python3 python3-pip
+          
+          # Clone and build CVC5
+          git clone https://github.com/cvc5/cvc5.git
+          cd cvc5
+          ./configure.sh --java-bindings --auto-download --prefix=$PWD/build/install
+          cd build
+          make -j$(nproc)
+          make install
+          
+          # Find the built JAR file
+          CVC5_JAR=$(find install/share/java -name "cvc5*.jar" | grep -v sources | head -1)
+          echo "Found CVC5 JAR: $CVC5_JAR"
+          
+          # Install to Maven local repository
+          mvn install:install-file \
+            -Dfile="$CVC5_JAR" \
+            -DgroupId=io.github.cvc5 \
+            -DartifactId=cvc5 \
+            -Dversion=1.2.1 \
+            -Dpackaging=jar \
+            -DgeneratePom=true
+
       - name: Build project
         run: mvn -B compile --file pom.xml
 
@@ -36,9 +64,13 @@ jobs:
         run: |
           mkdir -p tmp-rules
 
+          # First, ensure all dependencies are downloaded
+          mvn dependency:resolve
+
           cat > JsonGenerator.java << 'EOF'
           import org.qed.*;
           import com.fasterxml.jackson.databind.ObjectMapper;
+          import com.fasterxml.jackson.databind.node.ObjectNode;
           import java.nio.file.*;
           public class JsonGenerator {
               public static void main(String[] args) throws Exception {
@@ -53,9 +85,14 @@ jobs:
                       ObjectMapper mapper = new ObjectMapper();
                       Files.createDirectories(Path.of("tmp-rules"));
                       String fileName = rule.name() + "-" + rule.info() + ".json";
+                      
+                      // Get the JSON object
+                      ObjectNode jsonNode = rule.toJson();
+                      
+                      // Write to file
                       mapper.writerWithDefaultPrettyPrinter().writeValue(
                           Path.of("tmp-rules", fileName).toFile(),
-                          rule.toJson()
+                          jsonNode
                       );
                       System.out.println("Generated: " + fileName);
                   } catch (Exception e) {
@@ -67,16 +104,36 @@ jobs:
           }
           EOF
 
-          CLASSPATH="target/classes:$(mvn dependency:build-classpath -q -DforceStdout)"
+          # Build the classpath more reliably
+          echo "Building classpath..."
+          MAVEN_CP=$(mvn dependency:build-classpath -Dmdep.outputFile=/dev/stdout -q)
+          CLASSPATH="target/classes:${MAVEN_CP}"
+          
+          echo "Compiling JsonGenerator..."
           javac -cp "$CLASSPATH" JsonGenerator.java
+          
+          if [ $? -ne 0 ]; then
+            echo "Failed to compile JsonGenerator.java"
+            echo "Classpath was: $CLASSPATH"
+            exit 1
+          fi
 
+          echo "Finding rule files..."
           find src/main/java/org/qed/Generated/RRuleInstances -name '*.java' | while read file; do
             className=$(echo "$file" | sed 's|src/main/java/||; s|/|.|g; s|\.java$||')
-            echo "Generating for: $className"
-            java -cp ".:$CLASSPATH" JsonGenerator "$className"
+            echo "Generating JSON for: $className"
+            java -cp ".:$CLASSPATH" JsonGenerator "$className" || echo "Failed to process $className"
           done
 
           rm -f JsonGenerator.java JsonGenerator.class
+          
+          # Check if any JSON files were generated
+          if [ ! "$(ls -A tmp-rules)" ]; then
+            echo "Error: No JSON files were generated!"
+            exit 1
+          fi
+          
+          echo "Generated $(ls -1 tmp-rules/*.json | wc -l) JSON files"
 
       - name: Install Rust and clone qed-prover
         run: |
@@ -87,7 +144,6 @@ jobs:
           git clone https://github.com/qed-solver/prover.git qed-prover
           cd qed-prover
           cargo build --release
-
 
       - name: Install jq
         run: |
