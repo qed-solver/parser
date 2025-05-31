@@ -99,7 +99,7 @@ public class CalciteTester {
 //         for (var rule : rules.family()) {
 //             new ObjectMapper().writerWithDefaultPrettyPrinter().writeValue(Path.of(rulePath, rule.name() + "-" + rule.info() + ".json").toFile(), rule.toJson());
 //         }
-         generate();
+        generate();
         runAllTests();
     }
 
