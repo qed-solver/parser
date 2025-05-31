@@ -194,11 +194,11 @@ jobs:
             });
       
       - name: Upload test artifacts
-        if: always()
-        uses: actions/upload-artifact@v3
-        with:
-          name: test-results
-          path: |
-            rules/*.json
-            rules/*.result
-            test-output-*.log
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-results
+        path: |
+          rules/*.json
+          rules/*.result
+          test-output-*.log
