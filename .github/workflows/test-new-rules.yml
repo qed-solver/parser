@@ -29,21 +29,6 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-maven-
 
-      # Add this step to manually install CVC5
-      - name: Install CVC5 dependency
-        run: |
-          # Download CVC5 JAR from GitHub releases or other source
-          wget https://github.com/cvc5/cvc5/releases/download/cvc5-1.2.0/cvc5-1.2.0.jar -O cvc5.jar
-          
-          # Install it to local Maven repository
-          mvn install:install-file \
-            -Dfile=cvc5.jar \
-            -DgroupId=io.github.cvc5 \
-            -DartifactId=cvc5 \
-            -Dversion=1.2.1 \
-            -Dpackaging=jar \
-            -DgeneratePom=true
-
       - name: Build project
         run: mvn -B compile --file pom.xml
 
@@ -102,6 +87,7 @@ jobs:
           git clone https://github.com/qed-solver/prover.git qed-prover
           cd qed-prover
           cargo build --release
+
 
       - name: Install jq
         run: |
