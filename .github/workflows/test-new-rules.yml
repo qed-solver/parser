@@ -152,10 +152,10 @@ jobs:
           cd qed-prover
           cargo +nightly build --release
 
-      - name: Install jq
+      - name: Install jq and z3
         run: |
           sudo apt-get update
-          sudo apt-get install -y jq
+          sudo apt-get install -y jq z3
 
       - name: Test all rules
         run: |
@@ -164,19 +164,50 @@ jobs:
 
           failed_rules=""
           passed_rules=""
+          total_count=0
+          passed_count=0
 
           for json_file in tmp-rules/*.json; do
+            if [ ! -f "$json_file" ]; then
+              continue
+            fi
+            
             rule_name=$(basename "$json_file" .json)
             echo "Testing $rule_name"
-            output=$(./qed-prover/target/release/qed-prover "$json_file")
-            if echo "$output" | jq -e '.provable == true' > /dev/null; then
-              echo "✅ $rule_name: PASSED" | tee -a $GITHUB_STEP_SUMMARY
-              passed_rules="$passed_rules$rule_name,"
+            total_count=$((total_count + 1))
+            
+            # Run the prover - it creates a .result file
+            ./qed-prover/target/release/qed-prover "$json_file" || true
+            
+            # Check if the result file was created
+            result_file="${json_file%.json}.result"
+            if [ -f "$result_file" ]; then
+              # Parse the result file
+              if jq -e '.provable == true' "$result_file" > /dev/null 2>&1; then
+                echo "✅ $rule_name: PASSED" | tee -a $GITHUB_STEP_SUMMARY
+                passed_rules="$passed_rules$rule_name,"
+                passed_count=$((passed_count + 1))
+              else
+                # Check if it panicked or just failed to prove
+                panicked=$(jq -r '.panicked // false' "$result_file")
+                if [ "$panicked" = "true" ]; then
+                  echo "❌ $rule_name: PANICKED" | tee -a $GITHUB_STEP_SUMMARY
+                else
+                  echo "❌ $rule_name: FAILED TO PROVE" | tee -a $GITHUB_STEP_SUMMARY
+                fi
+                failed_rules="$failed_rules$rule_name,"
+              fi
             else
-              echo "❌ $rule_name: FAILED" | tee -a $GITHUB_STEP_SUMMARY
+              echo "❌ $rule_name: NO RESULT FILE GENERATED" | tee -a $GITHUB_STEP_SUMMARY
               failed_rules="$failed_rules$rule_name,"
             fi
           done
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Summary" >> $GITHUB_STEP_SUMMARY
+          echo "- Total rules tested: $total_count" >> $GITHUB_STEP_SUMMARY
+          echo "- Passed: $passed_count" >> $GITHUB_STEP_SUMMARY
+          echo "- Failed: $((total_count - passed_count))" >> $GITHUB_STEP_SUMMARY
 
           if [ -n "$failed_rules" ]; then
             echo "::error::Some rules failed: ${failed_rules%,}"
@@ -187,5 +218,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: rule-json
-          path: tmp-rules/
+          name: rule-test-results
+          path: |
+            tmp-rules/*.json
+            tmp-rules/*.result
