@@ -68,13 +68,17 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y jq z3 cmake libgmp-dev
-          git clone --depth 1 --branch cvc5-1.2.1 https://github.com/cvc5/cvc5.git
-          cd cvc5
-          ./configure.sh --auto-download
-          cd build
-          make -j$(nproc) cvc5
-          sudo cp bin/cvc5 /usr/local/bin/
+          sudo apt-get install -y jq z3
+          # Try to install cvc5 from package manager first, otherwise build from source
+          sudo apt-get install -y cvc5 || (
+            sudo apt-get install -y cmake libgmp-dev &&
+            git clone --depth 1 https://github.com/cvc5/cvc5.git &&
+            cd cvc5 &&
+            ./configure.sh --auto-download &&
+            cd build &&
+            make -j$(nproc) &&
+            sudo make install
+          )
 
       - name: Build qed-prover
         run: |
