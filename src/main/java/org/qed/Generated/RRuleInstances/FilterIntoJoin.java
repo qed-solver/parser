@@ -17,7 +17,6 @@ public record FilterIntoJoin() implements RRule {
     @Override
     public RelRN before() {
         var join = left.join(JoinRelType.INNER, joinCond, right);
-        // return join.filter("outer");
         return join.filter("outer");
     }
 
