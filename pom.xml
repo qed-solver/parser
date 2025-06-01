@@ -21,7 +21,6 @@
                         <argument>-classpath</argument>
                         <classpath/>
                         <argument>org.qed.Main</argument>
-                        <argument>${args}</argument>
                     </arguments>
                 </configuration>
             </plugin>
@@ -52,9 +51,11 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
                 <configuration>
-                    <source>21</source>
-                    <target>21</target>
-                    <compilerArgs>--enable-preview</compilerArgs>
+                    <source>23</source>
+                    <target>23</target>
+                    <compilerArgs>
+                        <arg>--enable-preview</arg>
+                    </compilerArgs>
                 </configuration>
             </plugin>
         </plugins>
