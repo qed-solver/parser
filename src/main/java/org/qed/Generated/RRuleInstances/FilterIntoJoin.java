@@ -12,7 +12,7 @@ import org.qed.RuleBuilder;
 public record FilterIntoJoin() implements RRule {
     static final RelRN left = RelRN.scan("Left", "Left_Type");
     static final RelRN right = RelRN.scan("Right", "Right_Type");
-    static final RexRN joinCond = left.joinPred("join", right); 
+    static final RexRN joinCond = left.joinPred("join", right);
 
     @Override
     public RelRN before() {
