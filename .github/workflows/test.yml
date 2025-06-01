@@ -41,57 +41,18 @@ jobs:
 
       - name: Install dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y jq z3
-          sudo apt-get install -y cvc5 || (
-            sudo apt-get install -y cmake libgmp-dev &&
-            git clone --depth 1 https://github.com/cvc5/cvc5.git &&
-            cd cvc5 &&
-            ./configure.sh --auto-download &&
-            cd build &&
-            make -j$(nproc) &&
-            sudo make install
-          )
+          chmod +x scripts/install-dependencies.sh
+          ./scripts/install-dependencies.sh
 
       - name: Build qed-prover
         run: |
-          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain nightly
-          source $HOME/.cargo/env
-          git clone https://github.com/qed-solver/prover.git qed-prover
-          cd qed-prover
-          cargo +nightly build --release
+          chmod +x scripts/build-qed-prover.sh
+          ./scripts/build-qed-prover.sh
 
       - name: Test all rules
         run: |
-          echo "## QED Prover Test Results" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-
-          failed_rules=""
-          total_count=0
-          passed_count=0
-
-          for json_file in tmp-rules/*.json; do
-            rule_name=$(basename "$json_file" .json)
-            total_count=$((total_count + 1))
-            ./qed-prover/target/release/qed-prover "$json_file" || true
-            
-            result_file="${json_file%.json}.result"
-            if [ -f "$result_file" ] && jq -e '.provable == true' "$result_file" > /dev/null 2>&1; then
-              echo "✅ $rule_name: PASSED" >> $GITHUB_STEP_SUMMARY
-              passed_count=$((passed_count + 1))
-            else
-              echo "❌ $rule_name: FAILED" >> $GITHUB_STEP_SUMMARY
-              failed_rules="$failed_rules$rule_name,"
-            fi
-          done
-
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Summary:** $passed_count/$total_count passed" >> $GITHUB_STEP_SUMMARY
-
-          if [ -n "$failed_rules" ]; then
-            echo "::error::Failed rules: ${failed_rules%,}"
-            exit 1
-          fi
+          chmod +x scripts/test-rules.sh
+          ./scripts/test-rules.sh
 
       - name: Upload test artifacts
         if: always()
