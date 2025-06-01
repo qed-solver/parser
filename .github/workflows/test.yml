@@ -36,44 +36,13 @@ jobs:
         run: |
           mkdir -p tmp-rules
           mvn dependency:resolve
-
-          cat > JsonGenerator.java << 'EOF'
-          import org.qed.*;
-          import com.fasterxml.jackson.databind.ObjectMapper;
-          import com.fasterxml.jackson.databind.node.ObjectNode;
-          import java.nio.file.*;
-          public class JsonGenerator {
-              public static void main(String[] args) throws Exception {
-                  String className = args[0];
-                  Class<?> clazz = Class.forName(className);
-                  RRule rule = (RRule) clazz.getDeclaredConstructor().newInstance();
-                  ObjectMapper mapper = new ObjectMapper();
-                  String fileName = rule.name() + "-" + rule.info() + ".json";
-                  ObjectNode jsonNode = rule.toJson();
-                  mapper.writerWithDefaultPrettyPrinter().writeValue(
-                      Path.of("tmp-rules", fileName).toFile(),
-                      jsonNode
-                  );
-              }
-          }
-          EOF
-
-          MAVEN_CP=$(mvn dependency:build-classpath -Dmdep.outputFile=/dev/stdout -q)
-          CLASSPATH="target/classes:${MAVEN_CP}"
-          javac -cp "$CLASSPATH" JsonGenerator.java
-
-          find src/main/java/org/qed/Generated/RRuleInstances -name '*.java' | while read file; do
-            className=$(echo "$file" | sed 's|src/main/java/||; s|/|.|g; s|\.java$||')
-            java -cp ".:$CLASSPATH" JsonGenerator "$className"
-          done
-
-          rm -f JsonGenerator.java JsonGenerator.class
+          chmod +x scripts/generate-rule-json.sh
+          ./scripts/generate-rule-json.sh
 
       - name: Install dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y jq z3
-          # Try to install cvc5 from package manager first, otherwise build from source
           sudo apt-get install -y cvc5 || (
             sudo apt-get install -y cmake libgmp-dev &&
             git clone --depth 1 https://github.com/cvc5/cvc5.git &&
