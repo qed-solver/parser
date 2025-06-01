@@ -69,10 +69,10 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y jq z3
-          wget https://github.com/cvc5/cvc5/releases/download/cvc5-1.2.1/cvc5-1.2.1-Linux-x86_64-static.zip
-          unzip cvc5-1.2.1-Linux-x86_64-static.zip
-          chmod +x cvc5-1.2.1/bin/cvc5
-          sudo mv cvc5-1.2.1/bin/cvc5 /usr/local/bin/
+          wget https://github.com/cvc5/cvc5/releases/download/cvc5-1.2.1/cvc5-Linux-x86_64-static.zip
+          unzip cvc5-Linux-x86_64-static.zip
+          chmod +x cvc5/bin/cvc5
+          sudo mv cvc5/bin/cvc5 /usr/local/bin/
 
       - name: Build qed-prover
         run: |
