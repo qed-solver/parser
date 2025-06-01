@@ -17,13 +17,11 @@ public record SemiJoinFilterTranspose() implements RRule {
 
     @Override
     public RelRN before() {
-        // Semi-join followed by a filter
         return left.join(JoinRelType.SEMI, joinCond, right).filter(filterPred);
     }
 
     @Override
     public RelRN after() {
-        // Push the filter before the semi-join
         RelRN leftFiltered = left.filter(filterPred);
         return leftFiltered.join(JoinRelType.SEMI, leftFiltered.joinPred("join", right), right);
     }
