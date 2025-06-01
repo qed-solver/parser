@@ -139,11 +139,18 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y curl git
-          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+          
+          # Install Rust with nightly toolchain
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain nightly
           source $HOME/.cargo/env
+          
+          # Verify we're using nightly
+          rustc --version
+          
+          # Clone and build qed-prover
           git clone https://github.com/qed-solver/prover.git qed-prover
           cd qed-prover
-          cargo build --release
+          cargo +nightly build --release
 
       - name: Install jq
         run: |
