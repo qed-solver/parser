@@ -1,0 +1,62 @@
+name: Test All Rules
+
+on:
+  push:
+    paths:
+      - 'src/main/java/org/qed/Generated/RRuleInstances/**/*.java'
+  pull_request:
+    paths:
+      - 'src/main/java/org/qed/Generated/RRuleInstances/**/*.java'
+
+jobs:
+  test-all-rules:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          java-version: '23'
+          distribution: 'temurin'
+
+      - name: Cache Maven dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            ${{ runner.os }}-maven-
+
+      - name: Build project
+        run: mvn -B compile --file pom.xml
+
+      - name: Generate JSON for all rules
+        run: |
+          mkdir -p tmp-rules
+          mvn dependency:resolve
+          chmod +x scripts/generate-rule-json.sh
+          ./scripts/generate-rule-json.sh
+
+      - name: Install dependencies
+        run: |
+          chmod +x scripts/install-dependencies.sh
+          ./scripts/install-dependencies.sh
+
+      - name: Build qed-prover
+        run: |
+          chmod +x scripts/build-qed-prover.sh
+          ./scripts/build-qed-prover.sh
+
+      - name: Test all rules
+        run: |
+          chmod +x scripts/test-rules.sh
+          ./scripts/test-rules.sh
+
+      - name: Upload test artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: results
+          path: tmp-rules/
