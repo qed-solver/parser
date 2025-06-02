@@ -45,10 +45,14 @@ total_tests=0
 passed_tests=0
 
 # Find all test files and run them
-find src/main/java/org/qed/Generated/Tests -name '*Test.java' | sort | while read test_file; do
-    class_name=$(echo "$test_file" | sed 's|src/main/java/||; s|/|.|g; s|\.java$||')
+total_tests=0
+passed_tests=0
+
+for test_file in src/main/java/org/qed/Generated/Tests/*Test.java; do
+    class_name=${test_file#src/main/java/}
+    class_name=${class_name%.java}
+    class_name=${class_name//\//.}
     test_name=$(basename "$test_file" .java)
-    # Remove "Test" suffix for display
     display_name=${test_name%Test}
     total_tests=$((total_tests + 1))
     
