@@ -56,16 +56,16 @@ find src/main/java/org/qed/Generated/Tests -name '*Test.java' | sort | while rea
     # Run the test and capture output
     if java -cp "$CLASSPATH" "$class_name" > /tmp/test_output.txt 2>&1; then
         if grep -q "false-succeeded" /tmp/test_output.txt; then
-            result="⚠️ ${display_name}: FALSE-SUCCEEDED" >> $GITHUB_STEP_SUMMARY
+            result="⚠️ ${display_name}: FALSE-SUCCEEDED" 
             echo "$result" >> /tmp/test_results.txt
             echo "0" >> /tmp/test_counts.txt
             cat /tmp/test_output.txt
         elif grep -q "succeeded" /tmp/test_output.txt && ! grep -q "failed" /tmp/test_output.txt; then
-            result="✅ ${display_name}: PASSED" >> $GITHUB_STEP_SUMMARY
+            result="✅ ${display_name}: PASSED" 
             echo "$result" >> /tmp/test_results.txt
             echo "1" >> /tmp/test_counts.txt
         else
-            result="❌ ${display_name}: FAILED" >> $GITHUB_STEP_SUMMARY
+            result="❌ ${display_name}: FAILED" 
             echo "$result" >> /tmp/test_results.txt
             echo "0" >> /tmp/test_counts.txt
             cat /tmp/test_output.txt
@@ -88,13 +88,9 @@ fi
 rm -f RuleGenerator.java RuleGenerator.class /tmp/test_output.txt
 
 # Summary
-echo "## Summary"
-echo "Code generation complete for all rules in RRuleInstances"
-echo ""
-echo "**Calcite Test Results**"
 if [ -f /tmp/test_results.txt ]; then
     cat /tmp/test_results.txt | while read line; do
-        echo "$line"
+        echo "$line" >> $GITHUB_STEP_SUMMARY
     done
 fi
 echo "" >> $GITHUB_STEP_SUMMARY
