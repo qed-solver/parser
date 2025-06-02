@@ -84,6 +84,9 @@ public class CalciteTester {
             org.qed.Generated.Tests.FilterSetOpTransposeTest.runTest();
             org.qed.Generated.Tests.JoinExtractFilterTest.runTest();
             org.qed.Generated.Tests.SemiJoinFilterTransposeTest.runTest();
+            org.qed.Generated.Tests.ProjectFilterTransposeTest.runTest();
+            org.qed.Generated.Tests.JoinPushTransitivePredicatesTest.runTest();
+            org.qed.Generated.Tests.SemiJoinProjectTransposeTest.runTest();
         } catch (Exception e) {
             System.out.println("Test failed: " + e.getMessage());
             e.printStackTrace();
@@ -134,10 +137,14 @@ public class CalciteTester {
         String targetExplain = target.explain();
         
         if(answerExplain.equals(targetExplain)) {
-            System.out.println("succeeded");
-            // System.out.println("> Given source RelNode:\n" + source.explain());
-            // System.out.println("> Actual rewritten RelNode:\n" + answerExplain);
-            // System.out.println("> Expected rewritten RelNode:\n" + targetExplain);
+            if(answerExplain.equals(source.explain()))
+            {
+                System.out.println("false-succeeded");
+                System.out.println("> Given source RelNode:\n" + source.explain());
+                System.out.println("> Actual rewritten RelNode:\n" + answerExplain);
+                System.out.println("> Expected rewritten RelNode:\n" + targetExplain);
+            }
+            else System.out.println("succeeded");
             return;
         }
         System.out.println("failed");

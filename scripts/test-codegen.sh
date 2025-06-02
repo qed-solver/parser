@@ -60,7 +60,11 @@ find src/main/java/org/qed/Generated/Tests -name '*Test.java' | while read test_
     
     # Run the test and capture output
     if java -cp "$CLASSPATH" "$class_name" > /tmp/test_output.txt 2>&1; then
-        if grep -q "succeeded" /tmp/test_output.txt && ! grep -q "failed" /tmp/test_output.txt; then
+        if grep -q "false-succeeded" /tmp/test_output.txt; then
+            echo "⚠️  FALSE-SUCCEEDED (rule didn't transform)"
+            failed_tests="$failed_tests$test_name,"
+            cat /tmp/test_output.txt
+        elif grep -q "succeeded" /tmp/test_output.txt && ! grep -q "failed" /tmp/test_output.txt; then
             echo "✅ PASSED"
             passed_tests=$((passed_tests + 1))
         else
