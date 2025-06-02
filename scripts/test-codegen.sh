@@ -1,12 +1,11 @@
 #!/bin/bash
 
-# Script to generate code for each rule and run all Calcite tests
+# Script to generate code for each rule and test whether the rules can be applied correctly
 
-set -e
+echo "## Code Generation Test Results" >> $GITHUB_STEP_SUMMARY
+echo "" >> $GITHUB_STEP_SUMMARY
 
 # Step 1: Generate code for each rule in RRuleInstances
-echo "## Generating code for each rule..."
-
 # Create temporary Java file for code generation
 cat > RuleGenerator.java << 'EOF'
 import org.qed.Generated.CalciteTester;
@@ -42,10 +41,6 @@ find src/main/java/org/qed/Generated/RRuleInstances -name '*.java' -not -path '*
 done
 
 # Step 2: Run all test classes
-echo ""
-echo "## Running Calcite tests..."
-echo ""
-
 # Store results for summary
 test_results=""
 total_tests=0
@@ -61,16 +56,16 @@ find src/main/java/org/qed/Generated/Tests -name '*Test.java' | sort | while rea
     # Run the test and capture output
     if java -cp "$CLASSPATH" "$class_name" > /tmp/test_output.txt 2>&1; then
         if grep -q "false-succeeded" /tmp/test_output.txt; then
-            result="⚠️  ${display_name}: FALSE-SUCCEEDED"
+            result="⚠️ ${display_name}: FALSE-SUCCEEDED" >> $GITHUB_STEP_SUMMARY
             echo "$result" >> /tmp/test_results.txt
             echo "0" >> /tmp/test_counts.txt
             cat /tmp/test_output.txt
         elif grep -q "succeeded" /tmp/test_output.txt && ! grep -q "failed" /tmp/test_output.txt; then
-            result="✅ ${display_name}: PASSED"
+            result="✅ ${display_name}: PASSED" >> $GITHUB_STEP_SUMMARY
             echo "$result" >> /tmp/test_results.txt
             echo "1" >> /tmp/test_counts.txt
         else
-            result="❌ ${display_name}: FAILED"
+            result="❌ ${display_name}: FAILED" >> $GITHUB_STEP_SUMMARY
             echo "$result" >> /tmp/test_results.txt
             echo "0" >> /tmp/test_counts.txt
             cat /tmp/test_output.txt
@@ -102,8 +97,8 @@ if [ -f /tmp/test_results.txt ]; then
         echo "$line"
     done
 fi
-echo ""
-echo "**Summary:** $passed_tests/$total_tests passed"
+echo "" >> $GITHUB_STEP_SUMMARY
+echo "**Summary:** $passed_tests/$total_tests passed" >> $GITHUB_STEP_SUMMARY
 
 # Clean up test files
 rm -f /tmp/test_results.txt /tmp/test_counts.txt
