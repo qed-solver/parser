@@ -39,7 +39,24 @@ find src/main/java/org/qed/Generated/RRuleInstances -name '*.java' -not -path '*
     java -cp ".:$CLASSPATH" RuleGenerator "$className"
 done
 
-# Step 2: Run all test classes
+# Step 2: Check for missing tests
+missing_tests=""
+missing_count=0
+for rule_file in src/main/java/org/qed/Generated/RRuleInstances/*.java; do
+    rule_name=$(basename "$rule_file" .java)
+    if [ ! -f "src/main/java/org/qed/Generated/Tests/${rule_name}Test.java" ]; then
+        missing_tests="${missing_tests}- ${rule_name}\n"
+        missing_count=$((missing_count + 1))
+    fi
+done
+
+if [ $missing_count -gt 0 ]; then
+    echo "**⚠️ Warning: Missing tests for $missing_count rules:**" >> $GITHUB_STEP_SUMMARY
+    echo -e "$missing_tests" >> $GITHUB_STEP_SUMMARY
+    echo "" >> $GITHUB_STEP_SUMMARY
+fi
+
+# Step 3: Run all test classes
 # Store results for summary
 total_tests=0
 passed_tests=0
