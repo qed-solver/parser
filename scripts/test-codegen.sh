@@ -58,7 +58,7 @@ find src/main/java/org/qed/Generated/Tests -name '*Test.java' | sort | while rea
             echo "⚠️ ${display_name}: FALSE-SUCCEEDED" >> $GITHUB_STEP_SUMMARY
         elif grep -q "succeeded" /tmp/test_output.txt && ! grep -q "failed" /tmp/test_output.txt; then
             echo "✅ ${display_name}: PASSED" >> $GITHUB_STEP_SUMMARY
-            passed_count=$((passed_count + 1))
+            passed_tests=$((passed_tests + 1))
         else 
             echo "❌ ${display_name}: FAILED" >> $GITHUB_STEP_SUMMARY
         fi
