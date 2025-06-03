@@ -15,11 +15,12 @@ public record SemiJoinJoinTranspose() implements RRule {
 
     @Override
     public RelRN before() {
-        return left.join(JoinRelType.INNER, joinCond, right).join(JoinRelType.SEMI, semiCond, middle);
+        return left.join(JoinRelType.SEMI, semiCond, middle).join(JoinRelType.INNER, joinCond, right);
     }
 
     @Override
     public RelRN after() {
-        return left.join(JoinRelType.SEMI, semiCond, middle).join(JoinRelType.INNER, joinCond, right);
+        RelRN innerJoin = left.join(JoinRelType.INNER, joinCond, right);
+        return innerJoin.join(JoinRelType.SEMI, semiCond, middle);
     }
 }
