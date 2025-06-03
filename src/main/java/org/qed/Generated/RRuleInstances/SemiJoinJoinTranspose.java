@@ -7,20 +7,24 @@ import org.qed.RexRN;
 
 
 public record SemiJoinJoinTranspose() implements RRule {
-    static final RelRN left = RelRN.scan("left", "left_Type");
-    static final RelRN middle = RelRN.scan("middle", "middle_Type");
-    static final RelRN right = RelRN.scan("right", "right_Type");
-    static final RexRN semiCond = left.joinPred("semi", middle);
-    static final RexRN joinCond = left.joinPred("join", right);
+    static final RelRN x = RelRN.scan("X", "x_type");
+    static final RelRN y = RelRN.scan("Y", "y_type");
+    static final RelRN z = RelRN.scan("Z", "z_type");
+
+    static final RexRN innerCond = x.joinPred("inner", y);
+    static final RelRN xyJoin = x.join(JoinRelType.INNER, innerCond, y);
+
+    static final RexRN semiCond = xyJoin.joinPred("semi", z);
 
     @Override
     public RelRN before() {
-        return left.join(JoinRelType.SEMI, semiCond, middle).join(JoinRelType.INNER, joinCond, right);
+        return xyJoin.join(JoinRelType.SEMI, semiCond, z);
     }
 
     @Override
     public RelRN after() {
-        RelRN innerJoin = left.join(JoinRelType.INNER, joinCond, right);
-        return innerJoin.join(JoinRelType.SEMI, semiCond, middle);
+        RelRN xzSemiJoin = x.join(JoinRelType.SEMI, x.joinPred("semi", z), z);
+        return xzSemiJoin.join(JoinRelType.INNER, xzSemiJoin.joinPred("inner", y), y);
     }
 }
+
