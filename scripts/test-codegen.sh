@@ -75,8 +75,8 @@ for test_file in src/main/java/org/qed/Generated/Tests/*Test.java; do
     
     # Run the test and capture output
     if java -cp "$CLASSPATH" "$class_name" > /tmp/test_output.txt 2>&1; then
-        if grep -q "false-succeeded" /tmp/test_output.txt; then
-            echo "⚠️ ${display_name}: FALSE-SUCCEEDED" >> $GITHUB_STEP_SUMMARY
+        if grep -q "trivial" /tmp/test_output.txt; then
+            echo "⚠️ ${display_name}: TRIVIAL" >> $GITHUB_STEP_SUMMARY
         elif grep -q "succeeded" /tmp/test_output.txt && ! grep -q "failed" /tmp/test_output.txt; then
             echo "✅ ${display_name}: PASSED" >> $GITHUB_STEP_SUMMARY
             passed_tests=$((passed_tests + 1))

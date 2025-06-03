@@ -139,7 +139,7 @@ public class CalciteTester {
         if(answerExplain.equals(targetExplain)) {
             if(answerExplain.equals(source.explain()))
             {
-                System.out.println("false-succeeded");
+                System.out.println("trivial");
                 System.out.println("> Given source RelNode:\n" + source.explain());
                 System.out.println("> Actual rewritten RelNode:\n" + answerExplain);
                 System.out.println("> Expected rewritten RelNode:\n" + targetExplain);
