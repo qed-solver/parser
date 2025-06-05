@@ -12,7 +12,7 @@ public record PruneRightEmptyJoin() implements RRule {
 
     @Override
     public RelRN before() {
-        return left.join(JoinRelType.LEFT, joinCond, right.empty());
+        return left.join(JoinRelType.LEFT, "pred", right.empty());
     }
 
     @Override
