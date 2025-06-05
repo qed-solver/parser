@@ -19,6 +19,8 @@ public record SemiJoinProjectTranspose() implements RRule {
     @Override
     public RelRN after() {
         RelRN projectedLeft = left.project(proj);
-        return projectedLeft.join(JoinRelType.SEMI, projectedLeft.joinPred("semi", right), right);
+        RelRN projectedRight = right.project(proj);
+        RexRN newSemiJoin = projectedLeft.joinPred("semi", projectedRight);
+        return projectedLeft.join(JoinRelType.SEMI, newSemiJoin, projectedRight);
     }
 }
