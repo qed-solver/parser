@@ -186,6 +186,36 @@ public class CalciteGenerator implements CodeGenerator<CalciteGenerator.Env> {
     }
 
     @Override
+    public Env onMatchMinus(Env env, RelRN.Minus minus) {
+        // Get the all flag from the minus
+        boolean all = minus.all();
+        
+        // Process each source in the minus
+        var current_env = env;
+        var skeletons = Seq.empty();
+        
+        // Process all sources in the sequence
+        for (var source : minus.sources()) {
+            var next_env = current_env.next();
+            var source_env = onMatch(next_env, source);
+            skeletons = skeletons.appended(source_env.skeleton());
+            current_env = source_env;
+        }
+        
+        // Build the input skeletons string for the operand
+        StringBuilder inputsBuilder = new StringBuilder();
+        for (int i = 0; i < skeletons.size(); i++) {
+            if (i > 0) {
+                inputsBuilder.append(", ");
+            }
+            inputsBuilder.append(skeletons.get(i).toString());
+        }
+        
+        // Create the minus operand
+        return current_env.grow("operand(LogicalMinus.class).inputs(" + inputsBuilder.toString() + ")");
+    }
+
+    @Override
     public Env onMatchField(Env env, RexRN.Field field) {
         // Generate a unique symbolic name for this field
         String fieldSymbol = "field_" + env.varId.getAndIncrement();
@@ -318,6 +348,25 @@ public class CalciteGenerator implements CodeGenerator<CalciteGenerator.Env> {
         // This matches the expected Calcite RelBuilder.intersect(boolean all, int n) signature
         String methodName = all ? "intersectAll" : "intersect";
         return current_env.focus(current_env.current() + "." + methodName + "(" + all + ", " + sourceCount + ")");
+    }
+
+    @Override
+    public Env transformMinus(Env env, RelRN.Minus minus) {
+        // Get the all flag from the minus
+        boolean all = minus.all();
+        
+        // The number of sources
+        int sourceCount = minus.sources().size();
+        
+        // Transform each source
+        var current_env = env;
+        for (var source : minus.sources()) {
+            current_env = transform(current_env, source);
+        }
+        
+        // Use the minus method with the all flag and source count
+        // This matches the expected Calcite RelBuilder.minus(boolean all, int n) signature
+        return current_env.focus(current_env.current() + ".minus(" + all + ", " + sourceCount + ")");
     }
 
     @Override

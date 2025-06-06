@@ -84,6 +84,7 @@ public class CalciteTester {
             org.qed.Generated.Tests.FilterSetOpTransposeTest.runTest();
             org.qed.Generated.Tests.JoinExtractFilterTest.runTest();
             org.qed.Generated.Tests.SemiJoinFilterTransposeTest.runTest();
+            org.qed.Generated.Tests.MinusMergeTest.runTest();
         } catch (Exception e) {
             System.out.println("Test failed: " + e.getMessage());
             e.printStackTrace();

@@ -26,6 +26,7 @@ public interface CodeGenerator<E> {
             case RelRN.Join join -> onMatchJoin(env, join);
             case RelRN.Union union -> onMatchUnion(env, union);
             case RelRN.Intersect intersect -> onMatchIntersect(env, intersect);
+            case RelRN.Minus minus -> onMatchMinus(env, minus);
             case RelRN.Empty empty -> onMatchEmpty(env, empty);
             default -> onMatchCustom(env, pattern);
         };
@@ -62,6 +63,7 @@ public interface CodeGenerator<E> {
             case RelRN.Join join -> transformJoin(env, join);
             case RelRN.Union union -> transformUnion(env, union);
             case RelRN.Intersect intersect -> transformIntersect(env, intersect);
+            case RelRN.Minus minus -> transformMinus(env, minus);
             case RelRN.Empty empty -> transformEmpty(env, empty);
             default -> transformCustom(env, target);
         };
@@ -119,6 +121,10 @@ public interface CodeGenerator<E> {
 
     default E onMatchIntersect(E env, RelRN.Intersect intersect) {
         return unimplementedOnMatch(env, intersect);
+    }
+
+    default E onMatchMinus(E env, RelRN.Minus minus) {
+        return unimplementedOnMatch(env, minus);
     }
 
     default E onMatchCustom(E env, RelRN custom) {
@@ -191,6 +197,10 @@ public interface CodeGenerator<E> {
 
     default E transformIntersect(E env, RelRN.Intersect intersect) {
         return unimplementedTransform(env, intersect);
+    }
+
+    default E transformMinus(E env, RelRN.Minus minus) {
+        return unimplementedTransform(env, minus);
     }
 
     default E transformCustom(E env, RelRN custom) {
