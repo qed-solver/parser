@@ -4,17 +4,10 @@ import kala.collection.Seq;
 import kala.tuple.Tuple;
 import org.qed.Generated.CalciteTester;
 import org.qed.RelType;
-import org.qed.Generated.RRuleInstances.FilterSetOpTranspose;
 import org.qed.RuleBuilder;
 
-/**
- * Test for the FilterSetOpTranspose rule.
- */
 public class FilterSetOpTransposeTest {
 
-    /**
-     * Run test for FilterSetOpTranspose rule.
-     */
     public static void runTest() {
         var tester = new CalciteTester();
         var builder = RuleBuilder.create();
@@ -36,10 +29,7 @@ public class FilterSetOpTransposeTest {
         var runner = CalciteTester.loadRule(org.qed.Generated.FilterSetOpTranspose.Config.DEFAULT.toRule());
         tester.verify(runner, before, after);
     }
-    
-    /**
-     * Main method to run this test independently.
-     */
+
     public static void main(String[] args) {
         System.out.println("Running FilterSetOpTranspose test...");
         runTest();

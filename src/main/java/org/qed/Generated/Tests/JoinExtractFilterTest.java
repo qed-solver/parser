@@ -5,17 +5,10 @@ import kala.tuple.Tuple;
 import org.apache.calcite.rel.core.JoinRelType;
 import org.qed.Generated.CalciteTester;
 import org.qed.RelType;
-import org.qed.Generated.RRuleInstances.JoinExtractFilter;
 import org.qed.RuleBuilder;
 
-/**
- * Test for the JoinExtractFilter rule.
- */
 public class JoinExtractFilterTest {
 
-    /**
-     * Run test for JoinExtractFilter rule.
-     */
     public static void runTest() {
         var tester = new CalciteTester();
         var builder = RuleBuilder.create();
@@ -45,10 +38,7 @@ public class JoinExtractFilterTest {
         var runner = CalciteTester.loadRule(org.qed.Generated.JoinExtractFilter.Config.DEFAULT.toRule());
         tester.verify(runner, before, after);
     }
-    
-    /**
-     * Main method to run this test independently.
-     */
+
     public static void main(String[] args) {
         System.out.println("Running JoinExtractFilter test...");
         runTest();

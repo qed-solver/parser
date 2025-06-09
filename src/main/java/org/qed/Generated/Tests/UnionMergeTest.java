@@ -7,14 +7,8 @@ import org.qed.RelType;
 import org.qed.Generated.RRuleInstances.UnionMerge;
 import org.qed.RuleBuilder;
 
-/**
- * Test for the UnionMerge rule.
- */
 public class UnionMergeTest {
 
-    /**
-     * Run test for UnionMerge rule.
-     */
     public static void runTest() {
         var tester = new CalciteTester();
         var builder = RuleBuilder.create();
@@ -35,10 +29,7 @@ public class UnionMergeTest {
         var runner = CalciteTester.loadRule(org.qed.Generated.UnionMerge.Config.DEFAULT.toRule());
         tester.verify(runner, before, after);
     }
-    
-    /**
-     * Main method to run this test independently.
-     */
+
     public static void main(String[] args) {
         System.out.println("Running UnionMerge test...");
         runTest();
