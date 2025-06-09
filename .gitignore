@@ -5,3 +5,4 @@
 target/
 *.iml
 .mvn/wrapper/maven-wrapper.jar
+.vscode/
