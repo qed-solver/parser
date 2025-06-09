@@ -84,6 +84,7 @@ public class CalciteTester {
             org.qed.Generated.Tests.FilterSetOpTransposeTest.runTest();
             org.qed.Generated.Tests.JoinExtractFilterTest.runTest();
             org.qed.Generated.Tests.SemiJoinFilterTransposeTest.runTest();
+            org.qed.Generated.Tests.MinusMergeTest.runTest();
             org.qed.Generated.Tests.ProjectFilterTransposeTest.runTest();
             org.qed.Generated.Tests.JoinPushTransitivePredicatesTest.runTest();
             org.qed.Generated.Tests.SemiJoinProjectTransposeTest.runTest();

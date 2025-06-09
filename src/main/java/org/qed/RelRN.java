@@ -104,6 +104,10 @@ public interface RelRN {
         return new Intersect(all, Seq.of(this).appendedAll(sources));
     }
 
+    default Minus minus (boolean all, RelRN... sources) {
+        return new Minus(all, Seq.of(this).appendedAll(sources));
+    }
+
     default Empty empty() {
         return new Empty(this);
     }
@@ -177,6 +181,14 @@ public interface RelRN {
         @Override
         public RelNode semantics() {
             return RuleBuilder.create().pushAll(sources.map(RelRN::semantics)).intersect(all, sources.size()).build();
+        }
+    }
+
+    record Minus(boolean all, Seq<RelRN> sources) implements RelRN {
+
+        @Override
+        public RelNode semantics() {
+            return RuleBuilder.create().pushAll(sources.map(RelRN::semantics)).minus(all, sources.size()).build();
         }
     }
 
