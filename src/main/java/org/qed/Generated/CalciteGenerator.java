@@ -11,6 +11,8 @@ import org.qed.Generated.CalciteGenerator.Env;
 
 import java.util.concurrent.atomic.AtomicInteger;
 
+import javax.annotation.processing.Generated;
+
 public class CalciteGenerator implements CodeGenerator<CalciteGenerator.Env> {
 
     @Override
@@ -279,7 +281,81 @@ public class CalciteGenerator implements CodeGenerator<CalciteGenerator.Env> {
 
     @Override
     public Env transformPred(Env env, RexRN.Pred pred) {
-        return env.focus(env.symbols().get(pred.operator().getName()));
+        // ONLY apply to the very specific JoinCommute pattern where:
+        // 1. We have exactly 2 JoinField sources
+        // 2. The first JoinField has ordinal 1 and second has ordinal 0 (indicating argument swap)
+        // This is the EXACT pattern from JoinCommute rule: pred($1, $0) vs pred($0, $1)
+        boolean isExactJoinCommuteSwapPattern = pred.sources().size() == 2 &&
+            pred.sources().get(0) instanceof RexRN.JoinField joinField1 &&
+            pred.sources().get(1) instanceof RexRN.JoinField joinField2 &&
+            joinField1.ordinal() == 1 &&  // First arg is ordinal 1 (left -> right in swap)
+            joinField2.ordinal() == 0;    // Second arg is ordinal 0 (right -> left in swap)
+        
+        if (isExactJoinCommuteSwapPattern) {
+            // This is the JoinCommute swapped predicate - transform with swapped arguments
+            var currentEnv = env;
+            var transformedArgs = Seq.<String>empty();
+            
+            // Process arguments in reverse order to swap them back
+            var sources = pred.sources();
+            var reversedSources = Seq.of(sources.get(1), sources.get(0));
+            
+            for (var arg : reversedSources) {
+                currentEnv = transform(currentEnv, arg);
+                transformedArgs = transformedArgs.appended(currentEnv.current());
+                currentEnv = currentEnv.focus(env.current());
+            }
+            
+            // Create a new predicate call with transformed arguments
+            String argsString = transformedArgs.joinToString(", ");
+            
+            // Extract operator from the original join condition
+            String operatorCall = "((org.apache.calcite.rex.RexCall) ((LogicalJoin) call.rel(0)).getCondition()).getOperator()";
+            
+            return currentEnv.focus(env.current() + ".call(" + operatorCall + ", " + argsString + ")");
+        } else {
+            return env.focus(env.symbols().get(pred.operator().getName()));
+        }
+    }
+
+    @Override
+    public Env transformJoinField(Env env, RexRN.JoinField joinField) {
+        // For JoinCommute: we need to calculate absolute field positions in the swapped join
+
+        // Get the original join condition to extract the actual field indices
+        var origJoinDecl = env.declare("(LogicalJoin) call.rel(0)");
+        var envWithOrigJoin = origJoinDecl.getValue();
+        var conditionDecl = envWithOrigJoin.declare("(org.apache.calcite.rex.RexCall) " + origJoinDecl.getKey() + ".getCondition()");
+        var envWithCondition = conditionDecl.getValue();
+        
+        if (joinField.ordinal() == 0) {
+            // Ordinal 0 = Left table in original join 
+            // Extract the left operand field index from original condition  
+            var leftFieldDecl = envWithCondition.declare("((org.apache.calcite.rex.RexInputRef) " + conditionDecl.getKey() + ".getOperands().get(0)).getIndex()");
+            var envWithLeftField = leftFieldDecl.getValue();
+            
+            // In swapped join: Left table is now at input 1
+            // Use field(2, 1, leftFieldIndex) syntax
+            return envWithLeftField.focus(env.current() + ".field(2, 1, " + leftFieldDecl.getKey() + ")");
+        } 
+        else if (joinField.ordinal() == 1) {
+            // Ordinal 1 = Right table in original join 
+            // Extract the right operand field index from original condition
+            var rightFieldDecl = envWithCondition.declare("((org.apache.calcite.rex.RexInputRef) " + conditionDecl.getKey() + ".getOperands().get(1)).getIndex()");
+            var envWithRightField = rightFieldDecl.getValue();
+            
+            // Right table field index needs to be adjusted since it was originally after left table
+            var leftColCountDecl = envWithRightField.declare("call.rel(1).getRowType().getFieldCount()");
+            var envWithLeftCount = leftColCountDecl.getValue();
+            var adjustedRightFieldDecl = envWithLeftCount.declare(rightFieldDecl.getKey() + " - " + leftColCountDecl.getKey());
+            var envWithAdjustedRightField = adjustedRightFieldDecl.getValue();
+            
+            // In swapped join: Right table is now at input 0  
+            // Use field(2, 0, adjustedRightFieldIndex) syntax
+            return envWithAdjustedRightField.focus(env.current() + ".field(2, 0, " + adjustedRightFieldDecl.getKey() + ")");
+        } else {
+            throw new UnsupportedOperationException("Unsupported join field ordinal: " + joinField.ordinal());
+        }
     }
 
     @Override
@@ -427,6 +503,50 @@ public class CalciteGenerator implements CodeGenerator<CalciteGenerator.Env> {
         // In Calcite, empty relations are created using the values() method with no tuples
         // This creates a LogicalValues node with no rows
         return env.focus(env.current() + ".empty()");
+    }
+
+    
+    @Override
+    public Env transformCustom(Env env, RelRN custom) {
+        return switch (custom) {
+            case org.qed.Generated.RRuleInstances.JoinCommute.ProjectionRelRN projection -> {
+                // Transform the source first - this builds the join
+                var sourceEnv = transform(env, projection.source());
+                
+                // Get original table column counts
+                var leftTableDecl = sourceEnv.declare("call.rel(1)");
+                var envWithLeftTable = leftTableDecl.getValue();
+                var rightTableDecl = envWithLeftTable.declare("call.rel(2)");
+                var envWithRightTable = rightTableDecl.getValue();
+                
+                var leftColCountDecl = envWithRightTable.declare(leftTableDecl.getKey() + ".getRowType().getFieldCount()");
+                var envWithLeftCount = leftColCountDecl.getValue();
+                var rightColCountDecl = envWithLeftCount.declare(rightTableDecl.getKey() + ".getRowType().getFieldCount()");
+                var envWithRightCount = rightColCountDecl.getValue();
+                
+                // Create the projection indices as a List<Integer>
+                var projectionIndicesDecl = envWithRightCount.declare(
+                    "java.util.stream.IntStream.concat(" +
+                        // Left columns: rightColCount + 0, rightColCount + 1, ..., rightColCount + leftColCount - 1
+                        "java.util.stream.IntStream.range(" + rightColCountDecl.getKey() + ", " + 
+                            rightColCountDecl.getKey() + " + " + leftColCountDecl.getKey() + "), " +
+                        // Right columns: 0, 1, ..., rightColCount - 1
+                        "java.util.stream.IntStream.range(0, " + rightColCountDecl.getKey() + ")" +
+                    ").boxed().collect(java.util.stream.Collectors.toList())"
+                );
+                var envWithProjectionIndices = projectionIndicesDecl.getValue();
+                
+                // Convert List<Integer> to field references using RelBuilder.fields()
+                var fieldRefsDecl = envWithProjectionIndices.declare(
+                    sourceEnv.current() + ".fields(" + projectionIndicesDecl.getKey() + ")"
+                );
+                var envWithFieldRefs = fieldRefsDecl.getValue();
+                
+                // Apply projection using the field references list
+                yield envWithFieldRefs.focus(sourceEnv.current() + ".project(" + fieldRefsDecl.getKey() + ")");
+            }
+            default -> unimplementedTransform(env, custom);
+        };
     }
 
     public record Env(AtomicInteger varId, int rel, String current, String skeleton, Seq<String> statements,
