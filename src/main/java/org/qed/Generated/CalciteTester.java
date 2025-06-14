@@ -37,13 +37,21 @@ public class CalciteTester {
         return new HepPlanner(builder.build());
     }
 
+    public static HepPlanner loadRule(RelOptRule rule, int matchLimit) {
+        System.out.printf("Verifying Rule: %s (match limit: %d)\n", rule.getClass(), matchLimit);
+        var builder = new HepProgramBuilder()
+            .addMatchLimit(matchLimit)
+            .addRuleInstance(rule);
+        return new HepPlanner(builder.build());
+    }
+
     public static Seq<RRule> ruleList() {
         Reflections reflections = new Reflections("org.qed.Generated.RRuleInstances");
     
         Set<Class<? extends RRule>> ruleClasses = reflections.getSubTypesOf(RRule.class);
         var concreteRuleClasses = ruleClasses.stream()
                 .filter(clazz -> !clazz.isInterface() && 
-                            !Modifier.isAbstract(clazz.getModifiers()) &&
+                            !Modifier.isAbstract(clazz.getModifiers()) && 
                             !clazz.getName().contains("$")) 
                 .collect(Collectors.toSet());
         
@@ -87,7 +95,7 @@ public class CalciteTester {
             org.qed.Generated.Tests.MinusMergeTest.runTest();
             org.qed.Generated.Tests.ProjectFilterTransposeTest.runTest();
             org.qed.Generated.Tests.JoinPushTransitivePredicatesTest.runTest();
-            org.qed.Generated.Tests.SemiJoinProjectTransposeTest.runTest();
+            org.qed.Generated.Tests.JoinCommuteTest.runTest();
         } catch (Exception e) {
             System.out.println("Test failed: " + e.getMessage());
             e.printStackTrace();
@@ -95,14 +103,15 @@ public class CalciteTester {
     }
 
     public static void main(String[] args) throws IOException {
-//         var rule = new RRuleInstance.FilterSetOpTranspose();
-//         Files.createDirectories(Path.of(rulePath));
-//         new ObjectMapper().writerWithDefaultPrettyPrinter().writeValue(Path.of(rulePath, rule.name() + "-" + rule.info() + ".json").toFile(), rule.toJson());
-//         var rules = new RRuleInstance.JoinAssociate();
-//         Files.createDirectories(Path.of(rulePath));
-//         for (var rule : rules.family()) {
-//             new ObjectMapper().writerWithDefaultPrettyPrinter().writeValue(Path.of(rulePath, rule.name() + "-" + rule.info() + ".json").toFile(), rule.toJson());
-//         }
+        var rule = new org.qed.Generated.RRuleInstances.JoinCommute();
+        System.out.println(rule.explain());
+        Files.createDirectories(Path.of(rulePath));
+        new ObjectMapper().writerWithDefaultPrettyPrinter().writeValue(Path.of(rulePath, rule.name() + "-" + rule.info() + ".json").toFile(), rule.toJson());
+        // var rules = new RRuleInstance.JoinAssociate();
+        // Files.createDirectories(Path.of(rulePath));
+        // for (var rule : rules.family()) {
+        //     new ObjectMapper().writerWithDefaultPrettyPrinter().writeValue(Path.of(rulePath, rule.name() + "-" + rule.info() + ".json").toFile(), rule.toJson());
+        // }
         generate();
         runAllTests();
     }
