@@ -11,7 +11,7 @@ public record FilterAggregateTranspose() implements RRule {
     static final RelRN source = RelRN.scan("Source", "Source_Type");
     static final Seq<RexRN> groupSet = Seq.of(source.field(0));
     static final Seq<RelRN.AggCall> aggCalls = Seq.of(
-            new RelRN.AggCall("SUM", false, RelType.fromString("INTEGER", true), Seq.of(source.field(1)))
+            new RelRN.AggCall("SUM", false, RelType.fromString("INTEGER", true), Seq.of(source.field(0)))
     );
     static final RelRN aggregate = source.aggregate(groupSet, aggCalls);
     static final RexRN pred = aggregate.field(0).pred("pred");
