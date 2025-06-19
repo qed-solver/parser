@@ -49,10 +49,10 @@ public class PruneEmptyUnionTest {
                 .union(false)
                 .build();
 
-//        var runner = CalciteTester.loadRule(
-//                org.qed.Generated.PruneEmptyUnion.Config.DEFAULT.toRule()
-//        );
-//        tester.verify(runner, before, after);
+        var runner = CalciteTester.loadRule(
+                org.qed.Generated.PruneEmptyUnion.Config.DEFAULT.toRule()
+        );
+        tester.verify(runner, before, after);
     }
 
     public static void main(String[] args) {
