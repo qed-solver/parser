@@ -10,11 +10,11 @@ public record PruneEmptyUnion() implements RRule {
 
     @Override
     public RelRN before() {
-        return a.union(false, b.empty());
+        return a.empty().union(false, b.empty());
     }
 
     @Override
     public RelRN after() {
-        return a;
+        return a.empty();
     }
 }
