@@ -1,0 +1,72 @@
+{
+  "help" : [ "LogicalJoin(condition=[pred($0, $1)], joinType=[inner])\n  LogicalTableScan(table=[[Left]])\n  LogicalTableScan(table=[[Right]])\n", "LogicalProject(col-Left=[$1], col-Right=[$0])\n  LogicalJoin(condition=[pred($1, $0)], joinType=[inner])\n    LogicalTableScan(table=[[Right]])\n    LogicalTableScan(table=[[Left]])\n" ],
+  "schemas" : [ {
+    "types" : [ "INTEGER" ],
+    "nullable" : [ true ],
+    "name" : "Left",
+    "guaranteed" : [ ],
+    "fields" : [ "col-Left" ],
+    "key" : [ ]
+  }, {
+    "types" : [ "INTEGER" ],
+    "nullable" : [ true ],
+    "name" : "Right",
+    "guaranteed" : [ ],
+    "fields" : [ "col-Right" ],
+    "key" : [ ]
+  } ],
+  "queries" : [ {
+    "join" : {
+      "condition" : {
+        "type" : "BOOLEAN",
+        "operand" : [ {
+          "column" : 0,
+          "type" : "INTEGER"
+        }, {
+          "column" : 1,
+          "type" : "INTEGER"
+        } ],
+        "operator" : "pred"
+      },
+      "left" : {
+        "scan" : 0
+      },
+      "kind" : "INNER",
+      "right" : {
+        "scan" : 1
+      }
+    }
+  }, {
+    "project" : {
+      "source" : {
+        "join" : {
+          "condition" : {
+            "type" : "BOOLEAN",
+            "operand" : [ {
+              "column" : 1,
+              "type" : "INTEGER"
+            }, {
+              "column" : 0,
+              "type" : "INTEGER"
+            } ],
+            "operator" : "pred"
+          },
+          "left" : {
+            "scan" : 1
+          },
+          "kind" : "INNER",
+          "right" : {
+            "scan" : 0
+          }
+        }
+      },
+      "target" : [ {
+        "column" : 1,
+        "type" : "INTEGER"
+      }, {
+        "column" : 0,
+        "type" : "INTEGER"
+      } ]
+    }
+  } ]
+}
