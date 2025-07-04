@@ -1,0 +1,39 @@
+package org.qed.Generated;
+
+import org.apache.calcite.plan.RelOptRuleCall;
+import org.apache.calcite.plan.RelRule;
+import org.apache.calcite.rel.RelNode;
+import org.apache.calcite.rel.core.JoinRelType;
+import org.apache.calcite.rel.logical.*;
+
+public class PruneEmptyUnion extends RelRule<PruneEmptyUnion.Config> {
+	protected PruneEmptyUnion(Config config) {
+		super(config);
+	}
+
+	@Override
+	public void onMatch(RelOptRuleCall call) {
+		var var_3 = call.builder();
+		call.transformTo(var_3.empty().build());
+	}
+
+	public interface Config extends EmptyConfig {
+		Config DEFAULT = new Config() {};
+
+		@Override
+		default PruneEmptyUnion toRule() {
+			return new PruneEmptyUnion(this);
+		}
+
+		@Override
+		default String description() {
+			return "PruneEmptyUnion";
+		}
+
+		@Override
+		default RelRule.OperandTransform operandSupplier() {
+			return s_2 -> s_2.operand(LogicalUnion.class).inputs(s_0 -> s_0.operand(LogicalValues.class).noInputs(), s_1 -> s_1.operand(LogicalValues.class).noInputs());
+		}
+
+	}
+}

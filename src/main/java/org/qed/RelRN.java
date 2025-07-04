@@ -112,6 +112,10 @@ public interface RelRN {
         return new Empty(this);
     }
 
+    default Aggregate aggregate(Seq<RexRN> groupSet, Seq<AggCall> aggCalls) {
+        return new Aggregate(this, groupSet, aggCalls);
+    }
+
     record Scan(String name, RelType.VarType ty, boolean unique) implements RelRN {
 
         @Override
@@ -197,6 +201,23 @@ public interface RelRN {
         @Override
         public RelNode semantics() {
             return RuleBuilder.create().values(sourceType.semantics().getRowType()).build();
+        }
+    }
+
+    record AggCall(String name, boolean distinct, RelType type, Seq<RexRN> operands) {
+    }
+
+    record Aggregate(RelRN source, Seq<RexRN> groupSet, Seq<AggCall> aggCalls) implements RelRN {
+        @Override
+        public RelNode semantics() {
+            var builder = RuleBuilder.create();
+            builder.push(source.semantics());
+            var groupKey = builder.groupKey(groupSet.map(RexRN::semantics));
+            var calls = aggCalls.map(agg -> {
+                var aggFunc = builder.genericAggregateOp(agg.name(), agg.type());
+                return builder.aggregateCall(aggFunc, agg.distinct(), null, agg.name(), agg.operands().map(RexRN::semantics).asJava());
+            });
+            return builder.aggregate(groupKey, calls).build();
         }
     }
 
