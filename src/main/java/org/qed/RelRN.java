@@ -207,7 +207,7 @@ public interface RelRN {
     record AggCall(String name, boolean distinct, RelType type, Seq<RexRN> operands) {
     }
 
-    record Aggregate(RelRN source, Seq<RexRN> groupSet, Seq<AggCall> aggCalls) implements RelRN {
+    record Aggregate(org.qed.RelRN source, Seq<RexRN> groupSet, Seq<org.qed.RelRN.AggCall> aggCalls) implements org.qed.RelRN {
         @Override
         public RelNode semantics() {
             var builder = RuleBuilder.create();
