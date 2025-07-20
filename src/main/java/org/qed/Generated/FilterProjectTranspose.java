@@ -14,7 +14,7 @@ public class FilterProjectTranspose extends RelRule<FilterProjectTranspose.Confi
 	@Override
 	public void onMatch(RelOptRuleCall call) {
 		var var_3 = call.builder();
-		call.transformTo(var_3.push(call.rel(2)).project(((LogicalProject) call.rel(0)).getProjects()).filter(((LogicalFilter) call.rel(1)).getCondition()).build());
+		call.transformTo(var_3.push(call.rel(2)).filter(((LogicalFilter) call.rel(0)).getCondition()).project(((LogicalProject) call.rel(1)).getProjects()).build());
 	}
 
 	public interface Config extends EmptyConfig {
@@ -32,7 +32,7 @@ public class FilterProjectTranspose extends RelRule<FilterProjectTranspose.Confi
 
 		@Override
 		default RelRule.OperandTransform operandSupplier() {
-			return s_2 -> s_2.operand(LogicalProject.class).oneInput(s_1 -> s_1.operand(LogicalFilter.class).oneInput(s_0 -> s_0.operand(RelNode.class).anyInputs()));
+			return s_2 -> s_2.operand(LogicalFilter.class).oneInput(s_1 -> s_1.operand(LogicalProject.class).oneInput(s_0 -> s_0.operand(RelNode.class).anyInputs()));
 		}
 
 	}

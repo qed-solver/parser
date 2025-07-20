@@ -19,16 +19,16 @@ public class ProjectFilterTransposeTest {
         var scan = builder.scan(table.getName()).build();
 
         var before = builder
-                .push(scan)
-                .project(builder.field(0))
-                .filter(builder.equals(builder.field(0), builder.literal(10)))
-                .build();
-
+            .push(scan)
+            .filter(builder.equals(builder.field(0), builder.literal(10)))
+            .project(builder.field(0))
+            .build();
+            
         var after = builder
-                .push(scan)
-                .filter(builder.equals(builder.field(0), builder.literal(10)))
-                .project(builder.field(0))
-                .build();
+            .push(scan)
+            .project(builder.field(0))
+            .filter(builder.equals(builder.field(0), builder.literal(10)))
+            .build();
 
         var runner = CalciteTester.loadRule(org.qed.Generated.ProjectFilterTranspose.Config.DEFAULT.toRule());
         tester.verify(runner, before, after);

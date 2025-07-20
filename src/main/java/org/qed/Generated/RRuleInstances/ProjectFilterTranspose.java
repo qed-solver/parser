@@ -10,11 +10,11 @@ public record ProjectFilterTranspose() implements RRule {
 
     @Override
     public RelRN before() {
-        return source.project(proj).filter("pred");
+        return source.filter(proj.pred("pred")).project(proj);
     }
 
     @Override
     public RelRN after() {
-        return source.filter(proj.pred("pred")).project(proj);
+        return source.project(proj).filter("pred");
     }
 }
