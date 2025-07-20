@@ -116,12 +116,12 @@ public class CalciteGenerator implements CodeGenerator<CalciteGenerator.Env> {
         String andSymbol = "and_" + env.varId.getAndIncrement();
         // Store the current expression as this AND node's symbol
         current_env = current_env.symbol(andSymbol, current_env.current());
-        
+
         // Process each child source in the AND condition
         for (var source : and.sources()) {
             current_env = onMatch(current_env, source);
         }
-        
+
         return current_env;
     }
 
@@ -129,11 +129,11 @@ public class CalciteGenerator implements CodeGenerator<CalciteGenerator.Env> {
     public Env onMatchUnion(Env env, RelRN.Union union) {
         // Get the all flag from the union
         boolean all = union.all();
-        
+
         // Process each source in the union
         var current_env = env;
         var skeletons = Seq.empty();
-        
+
         // Process all sources in the sequence
         for (var source : union.sources()) {
             var next_env = current_env.next();
@@ -141,7 +141,7 @@ public class CalciteGenerator implements CodeGenerator<CalciteGenerator.Env> {
             skeletons = skeletons.appended(source_env.skeleton());
             current_env = source_env;
         }
-        
+
         // Build the input skeletons string for the operand
         StringBuilder inputsBuilder = new StringBuilder();
         for (int i = 0; i < skeletons.size(); i++) {
@@ -150,7 +150,7 @@ public class CalciteGenerator implements CodeGenerator<CalciteGenerator.Env> {
             }
             inputsBuilder.append(skeletons.get(i).toString());
         }
-        
+
         // Create the union operand with the appropriate class based on the all flag
         String operatorClass = all ? "LogicalUnionAll" : "LogicalUnion";
         return current_env.grow("operand(" + operatorClass + ".class).inputs(" + inputsBuilder.toString() + ")");
@@ -160,11 +160,11 @@ public class CalciteGenerator implements CodeGenerator<CalciteGenerator.Env> {
     public Env onMatchIntersect(Env env, RelRN.Intersect intersect) {
         // Get the all flag from the intersect
         boolean all = intersect.all();
-        
+
         // Process each source in the intersect
         var current_env = env;
         var skeletons = Seq.empty();
-        
+
         // Process all sources in the sequence
         for (var source : intersect.sources()) {
             var next_env = current_env.next();
@@ -172,7 +172,7 @@ public class CalciteGenerator implements CodeGenerator<CalciteGenerator.Env> {
             skeletons = skeletons.appended(source_env.skeleton());
             current_env = source_env;
         }
-        
+
         // Build the input skeletons string for the operand
         StringBuilder inputsBuilder = new StringBuilder();
         for (int i = 0; i < skeletons.size(); i++) {
@@ -181,7 +181,7 @@ public class CalciteGenerator implements CodeGenerator<CalciteGenerator.Env> {
             }
             inputsBuilder.append(skeletons.get(i).toString());
         }
-        
+
         // Create the intersect operand with the appropriate class based on the all flag
         String operatorClass = all ? "LogicalIntersectAll" : "LogicalIntersect";
         return current_env.grow("operand(" + operatorClass + ".class).inputs(" + inputsBuilder.toString() + ")");
@@ -191,11 +191,11 @@ public class CalciteGenerator implements CodeGenerator<CalciteGenerator.Env> {
     public Env onMatchMinus(Env env, RelRN.Minus minus) {
         // Get the all flag from the minus
         boolean all = minus.all();
-        
+
         // Process each source in the minus
         var current_env = env;
         var skeletons = Seq.empty();
-        
+
         // Process all sources in the sequence
         for (var source : minus.sources()) {
             var next_env = current_env.next();
@@ -203,7 +203,7 @@ public class CalciteGenerator implements CodeGenerator<CalciteGenerator.Env> {
             skeletons = skeletons.appended(source_env.skeleton());
             current_env = source_env;
         }
-        
+
         // Build the input skeletons string for the operand
         StringBuilder inputsBuilder = new StringBuilder();
         for (int i = 0; i < skeletons.size(); i++) {
@@ -212,7 +212,7 @@ public class CalciteGenerator implements CodeGenerator<CalciteGenerator.Env> {
             }
             inputsBuilder.append(skeletons.get(i).toString());
         }
-        
+
         // Create the minus operand
         return current_env.grow("operand(LogicalMinus.class).inputs(" + inputsBuilder.toString() + ")");
     }
@@ -221,7 +221,7 @@ public class CalciteGenerator implements CodeGenerator<CalciteGenerator.Env> {
     public Env onMatchField(Env env, RexRN.Field field) {
         // Generate a unique symbolic name for this field
         String fieldSymbol = "field_" + env.varId.getAndIncrement();
-        
+
         // Store the field expression in the environment's symbol table
         return env.symbol(fieldSymbol, env.current());
     }
@@ -230,7 +230,7 @@ public class CalciteGenerator implements CodeGenerator<CalciteGenerator.Env> {
     public Env onMatchTrue(Env env, RexRN literal) {
         // Create a unique symbol name for this true literal
         String trueSymbol = "true_" + env.varId.getAndIncrement();
-        
+
         // Store the current expression as this true literal's symbol
         return env.symbol(trueSymbol, env.current());
     }
@@ -239,7 +239,7 @@ public class CalciteGenerator implements CodeGenerator<CalciteGenerator.Env> {
     public Env onMatchFalse(Env env, RexRN literal) {
         // Create a unique symbol name for this false literal
         String falseSymbol = "false_" + env.varId.getAndIncrement();
-        
+
         // Store the current expression as this false literal's symbol
         return env.symbol(falseSymbol, env.current());
     }
@@ -290,28 +290,28 @@ public class CalciteGenerator implements CodeGenerator<CalciteGenerator.Env> {
             pred.sources().get(1) instanceof RexRN.JoinField joinField2 &&
             joinField1.ordinal() == 1 &&  // First arg is ordinal 1 (left -> right in swap)
             joinField2.ordinal() == 0;    // Second arg is ordinal 0 (right -> left in swap)
-        
+
         if (isExactJoinCommuteSwapPattern) {
             // This is the JoinCommute swapped predicate - transform with swapped arguments
             var currentEnv = env;
             var transformedArgs = Seq.<String>empty();
-            
+
             // Process arguments in reverse order to swap them back
             var sources = pred.sources();
             var reversedSources = Seq.of(sources.get(1), sources.get(0));
-            
+
             for (var arg : reversedSources) {
                 currentEnv = transform(currentEnv, arg);
                 transformedArgs = transformedArgs.appended(currentEnv.current());
                 currentEnv = currentEnv.focus(env.current());
             }
-            
+
             // Create a new predicate call with transformed arguments
             String argsString = transformedArgs.joinToString(", ");
-            
+
             // Extract operator from the original join condition
             String operatorCall = "((org.apache.calcite.rex.RexCall) ((LogicalJoin) call.rel(0)).getCondition()).getOperator()";
-            
+
             return currentEnv.focus(env.current() + ".call(" + operatorCall + ", " + argsString + ")");
         } else {
             return env.focus(env.symbols().get(pred.operator().getName()));
@@ -327,30 +327,30 @@ public class CalciteGenerator implements CodeGenerator<CalciteGenerator.Env> {
         var envWithOrigJoin = origJoinDecl.getValue();
         var conditionDecl = envWithOrigJoin.declare("(org.apache.calcite.rex.RexCall) " + origJoinDecl.getKey() + ".getCondition()");
         var envWithCondition = conditionDecl.getValue();
-        
+
         if (joinField.ordinal() == 0) {
-            // Ordinal 0 = Left table in original join 
-            // Extract the left operand field index from original condition  
+            // Ordinal 0 = Left table in original join
+            // Extract the left operand field index from original condition
             var leftFieldDecl = envWithCondition.declare("((org.apache.calcite.rex.RexInputRef) " + conditionDecl.getKey() + ".getOperands().get(0)).getIndex()");
             var envWithLeftField = leftFieldDecl.getValue();
-            
+
             // In swapped join: Left table is now at input 1
             // Use field(2, 1, leftFieldIndex) syntax
             return envWithLeftField.focus(env.current() + ".field(2, 1, " + leftFieldDecl.getKey() + ")");
-        } 
+        }
         else if (joinField.ordinal() == 1) {
-            // Ordinal 1 = Right table in original join 
+            // Ordinal 1 = Right table in original join
             // Extract the right operand field index from original condition
             var rightFieldDecl = envWithCondition.declare("((org.apache.calcite.rex.RexInputRef) " + conditionDecl.getKey() + ".getOperands().get(1)).getIndex()");
             var envWithRightField = rightFieldDecl.getValue();
-            
+
             // Right table field index needs to be adjusted since it was originally after left table
             var leftColCountDecl = envWithRightField.declare("call.rel(1).getRowType().getFieldCount()");
             var envWithLeftCount = leftColCountDecl.getValue();
             var adjustedRightFieldDecl = envWithLeftCount.declare(rightFieldDecl.getKey() + " - " + leftColCountDecl.getKey());
             var envWithAdjustedRightField = adjustedRightFieldDecl.getValue();
-            
-            // In swapped join: Right table is now at input 0  
+
+            // In swapped join: Right table is now at input 0
             // Use field(2, 0, adjustedRightFieldIndex) syntax
             return envWithAdjustedRightField.focus(env.current() + ".field(2, 0, " + adjustedRightFieldDecl.getKey() + ")");
         } else {
@@ -391,16 +391,16 @@ public class CalciteGenerator implements CodeGenerator<CalciteGenerator.Env> {
     public Env transformUnion(Env env, RelRN.Union union) {
         // Get the all flag from the union
         boolean all = union.all();
-        
+
         // The number of sources
         int sourceCount = union.sources().size();
-        
+
         // Transform each source
         var current_env = env;
         for (var source : union.sources()) {
             current_env = transform(current_env, source);
         }
-        
+
         // Use the union method with the all flag and source count
         // This matches the Calcite RelBuilder.union(boolean all, int n) signature
         return current_env.focus(current_env.current() + ".union(" + all + ", " + sourceCount + ")");
@@ -410,16 +410,16 @@ public class CalciteGenerator implements CodeGenerator<CalciteGenerator.Env> {
     public Env transformIntersect(Env env, RelRN.Intersect intersect) {
         // Get the all flag from the intersect
         boolean all = intersect.all();
-        
+
         // The number of sources
         int sourceCount = intersect.sources().size();
-        
+
         // Transform each source
         var current_env = env;
         for (var source : intersect.sources()) {
             current_env = transform(current_env, source);
         }
-        
+
         // Use the intersect method with the all flag and source count
         // This matches the expected Calcite RelBuilder.intersect(boolean all, int n) signature
         String methodName = all ? "intersectAll" : "intersect";
@@ -430,16 +430,16 @@ public class CalciteGenerator implements CodeGenerator<CalciteGenerator.Env> {
     public Env transformMinus(Env env, RelRN.Minus minus) {
         // Get the all flag from the minus
         boolean all = minus.all();
-        
+
         // The number of sources
         int sourceCount = minus.sources().size();
-        
+
         // Transform each source
         var current_env = env;
         for (var source : minus.sources()) {
             current_env = transform(current_env, source);
         }
-        
+
         // Use the minus method with the all flag and source count
         // This matches the expected Calcite RelBuilder.minus(boolean all, int n) signature
         return current_env.focus(current_env.current() + ".minus(" + all + ", " + sourceCount + ")");
@@ -449,7 +449,7 @@ public class CalciteGenerator implements CodeGenerator<CalciteGenerator.Env> {
     public Env transformField(Env env, RexRN.Field field) {
         // In Calcite, field references are typically created with a "field" method
         // We'll need to pass some identifier for the field - use toString() if no specific field accessor is available
-        
+
         // Assuming field has a method that returns some kind of identifier or name
         // If not, we may need to adjust this implementation
         return env.focus(env.current() + ".field(" + field + ")");
@@ -459,13 +459,13 @@ public class CalciteGenerator implements CodeGenerator<CalciteGenerator.Env> {
     public Env transformProj(Env env, RexRN.Proj proj) {
         // In Calcite, projections are typically created using the operator name
         // This is similar to your transformPred implementation
-        
+
         // Look up the symbol from the matching phase
         if (!env.symbols().containsKey(proj.operator().getName())) {
-            throw new RuntimeException("Operator symbol not found: " + proj.operator().getName() + 
+            throw new RuntimeException("Operator symbol not found: " + proj.operator().getName() +
                                     ". Make sure onMatchProj is properly implemented.");
         }
-        
+
         // Return an environment focused on the expression for this projection
         return env.focus(env.symbols().get(proj.operator().getName()));
     }
@@ -475,10 +475,10 @@ public class CalciteGenerator implements CodeGenerator<CalciteGenerator.Env> {
         // First transform the source relation
         var source_transform = transform(env, project.source());
         var source_expression = source_transform.current();
-        
+
         // Then transform the projection map
         var map_transform = transform(source_transform, project.map());
-        
+
         // Combine the source and projection using the project operation
         // This creates a projection on top of the source relation
         return map_transform.focus(source_expression + ".project(" + map_transform.current() + ")");
@@ -486,14 +486,14 @@ public class CalciteGenerator implements CodeGenerator<CalciteGenerator.Env> {
 
     @Override
     public Env transformTrue(Env env, RexRN literal) {
-        // In Calcite, true literals are typically represented using the 
+        // In Calcite, true literals are typically represented using the
         // rexBuilder.makeLiteral(true) method or just "TRUE"
         return env.focus(env.current() + ".literal(true)");
     }
 
     @Override
     public Env transformFalse(Env env, RexRN literal) {
-        // In Calcite, false literals are represented using the 
+        // In Calcite, false literals are represented using the
         // rexBuilder.makeLiteral(false) method or just "FALSE"
         return env.focus(env.current() + ".literal(false)");
     }
@@ -505,43 +505,43 @@ public class CalciteGenerator implements CodeGenerator<CalciteGenerator.Env> {
         return env.focus(env.current() + ".empty()");
     }
 
-    
+
     @Override
     public Env transformCustom(Env env, RelRN custom) {
         return switch (custom) {
             case org.qed.Generated.RRuleInstances.JoinCommute.ProjectionRelRN projection -> {
                 // Transform the source first - this builds the join
                 var sourceEnv = transform(env, projection.source());
-                
+
                 // Get original table column counts
                 var leftTableDecl = sourceEnv.declare("call.rel(1)");
                 var envWithLeftTable = leftTableDecl.getValue();
                 var rightTableDecl = envWithLeftTable.declare("call.rel(2)");
                 var envWithRightTable = rightTableDecl.getValue();
-                
+
                 var leftColCountDecl = envWithRightTable.declare(leftTableDecl.getKey() + ".getRowType().getFieldCount()");
                 var envWithLeftCount = leftColCountDecl.getValue();
                 var rightColCountDecl = envWithLeftCount.declare(rightTableDecl.getKey() + ".getRowType().getFieldCount()");
                 var envWithRightCount = rightColCountDecl.getValue();
-                
+
                 // Create the projection indices as a List<Integer>
                 var projectionIndicesDecl = envWithRightCount.declare(
                     "java.util.stream.IntStream.concat(" +
                         // Left columns: rightColCount + 0, rightColCount + 1, ..., rightColCount + leftColCount - 1
-                        "java.util.stream.IntStream.range(" + rightColCountDecl.getKey() + ", " + 
+                        "java.util.stream.IntStream.range(" + rightColCountDecl.getKey() + ", " +
                             rightColCountDecl.getKey() + " + " + leftColCountDecl.getKey() + "), " +
                         // Right columns: 0, 1, ..., rightColCount - 1
                         "java.util.stream.IntStream.range(0, " + rightColCountDecl.getKey() + ")" +
                     ").boxed().collect(java.util.stream.Collectors.toList())"
                 );
                 var envWithProjectionIndices = projectionIndicesDecl.getValue();
-                
+
                 // Convert List<Integer> to field references using RelBuilder.fields()
                 var fieldRefsDecl = envWithProjectionIndices.declare(
                     sourceEnv.current() + ".fields(" + projectionIndicesDecl.getKey() + ")"
                 );
                 var envWithFieldRefs = fieldRefsDecl.getValue();
-                
+
                 // Apply projection using the field references list
                 yield envWithFieldRefs.focus(sourceEnv.current() + ".project(" + fieldRefsDecl.getKey() + ")");
             }
@@ -581,5 +581,31 @@ public class CalciteGenerator implements CodeGenerator<CalciteGenerator.Env> {
             var vn = "s_" + varId.getAndIncrement();
             return new Env(varId, rel, current, vn + " -> " + vn + "." + requirement, statements, symbols);
         }
+    }
+
+    @Override
+    public Env onMatchAggregate(Env env, RelRN.Aggregate aggregate) {
+        var sourceMatch = onMatch(env.next(), aggregate.source());
+        return sourceMatch.grow("operand(LogicalAggregate.class).oneInput(" + sourceMatch.skeleton() + ")");
+    }
+
+    @Override
+    public Env transformAggregate(Env env, RelRN.Aggregate aggregate) {
+        var sourceTransform = transform(env, aggregate.source());
+        String builderWithSource = sourceTransform.current();
+        String originalAgg = "((LogicalAggregate) call.rel(0))";
+        var groupSetDecl = sourceTransform.declare(originalAgg + ".getGroupSet()");
+        var envWithGroupSet = groupSetDecl.getValue();
+        var groupKeyDecl = envWithGroupSet.declare(
+                builderWithSource + ".groupKey(" + groupSetDecl.getKey() + ")"
+        );
+        var envWithGroupKey = groupKeyDecl.getValue();
+        var aggCallsDecl = envWithGroupKey.declare(originalAgg + ".getAggCallList()");
+        var envWithAggCalls = aggCallsDecl.getValue();
+        return envWithAggCalls.focus(
+                builderWithSource + ".aggregate(" +
+                        groupKeyDecl.getKey() + ", " +
+                        aggCallsDecl.getKey() + ")"
+        );
     }
 }
