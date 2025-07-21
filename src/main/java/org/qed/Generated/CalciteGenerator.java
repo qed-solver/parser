@@ -36,6 +36,8 @@ public class CalciteGenerator implements CodeGenerator<CalciteGenerator.Env> {
         var builder = new StringBuilder("package org.qed.Generated;\n\n");
         builder.append("import org.apache.calcite.plan.RelOptRuleCall;\n");
         builder.append("import org.apache.calcite.plan.RelRule;\n");
+        builder.append("import org.apache.calcite.plan.RelOptUtil;\n");
+        builder.append("import java.util.List;\n");
         builder.append("import org.apache.calcite.rel.RelNode;\n");
         builder.append("import org.apache.calcite.rel.core.JoinRelType;\n");
         builder.append("import org.apache.calcite.rel.logical.*;\n\n");
@@ -313,7 +315,14 @@ public class CalciteGenerator implements CodeGenerator<CalciteGenerator.Env> {
             String operatorCall = "((org.apache.calcite.rex.RexCall) ((LogicalJoin) call.rel(0)).getCondition()).getOperator()";
 
             return currentEnv.focus(env.current() + ".call(" + operatorCall + ", " + argsString + ")");
-        } else {
+        } 
+        else if (pred.sources().anyMatch(source -> source instanceof RexRN.Proj)) {
+            return env.focus(
+                "RelOptUtil.pushFilterPastProject(((LogicalFilter) call.rel(0)).getCondition(), " +
+                "((LogicalProject) call.rel(1)))"
+            );
+        }
+        else {
             return env.focus(env.symbols().get(pred.operator().getName()));
         }
     }
@@ -472,15 +481,9 @@ public class CalciteGenerator implements CodeGenerator<CalciteGenerator.Env> {
 
     @Override
     public Env transformProject(Env env, RelRN.Project project) {
-        // First transform the source relation
         var source_transform = transform(env, project.source());
         var source_expression = source_transform.current();
-
-        // Then transform the projection map
         var map_transform = transform(source_transform, project.map());
-
-        // Combine the source and projection using the project operation
-        // This creates a projection on top of the source relation
         return map_transform.focus(source_expression + ".project(" + map_transform.current() + ")");
     }
 

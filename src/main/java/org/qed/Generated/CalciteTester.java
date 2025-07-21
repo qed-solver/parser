@@ -16,6 +16,7 @@ import org.apache.calcite.rex.RexNode;
 import org.apache.calcite.sql.fun.SqlStdOperatorTable;
 import org.qed.*;
 import org.reflections.Reflections;
+import org.apache.calcite.rel.rules.*;
 
 import java.io.File;
 import java.io.IOException;
@@ -52,7 +53,8 @@ public class CalciteTester {
         var concreteRuleClasses = ruleClasses.stream()
                 .filter(clazz -> !clazz.isInterface() && 
                             !Modifier.isAbstract(clazz.getModifiers()) && 
-                            !clazz.getName().contains("$")) 
+                            !clazz.getName().contains("$") && 
+                            clazz.getSimpleName().equals("FilterProjectTranspose"))
                 .collect(Collectors.toSet());
         
         var individuals = Seq.from(concreteRuleClasses)
@@ -84,18 +86,20 @@ public class CalciteTester {
 
     public static void runAllTests() {
         try {
-            org.qed.Generated.Tests.FilterIntoJoinTest.runTest();
-            org.qed.Generated.Tests.FilterMergeTest.runTest();
+            // org.qed.Generated.Tests.FilterIntoJoinTest.runTest();
+            // org.qed.Generated.Tests.FilterMergeTest.runTest();
             org.qed.Generated.Tests.FilterProjectTransposeTest.runTest();
-            org.qed.Generated.Tests.UnionMergeTest.runTest();
-            org.qed.Generated.Tests.IntersectMergeTest.runTest();
-            org.qed.Generated.Tests.FilterSetOpTransposeTest.runTest();
-            org.qed.Generated.Tests.JoinExtractFilterTest.runTest();
-            org.qed.Generated.Tests.SemiJoinFilterTransposeTest.runTest();
-            org.qed.Generated.Tests.MinusMergeTest.runTest();
-            org.qed.Generated.Tests.ProjectFilterTransposeTest.runTest();
-            org.qed.Generated.Tests.JoinPushTransitivePredicatesTest.runTest();
-            org.qed.Generated.Tests.JoinCommuteTest.runTest();
+            // org.qed.Generated.Tests.UnionMergeTest.runTest();
+            // org.qed.Generated.Tests.IntersectMergeTest.runTest();
+            // org.qed.Generated.Tests.FilterSetOpTransposeTest.runTest();
+            // org.qed.Generated.Tests.JoinExtractFilterTest.runTest();
+            // org.qed.Generated.Tests.SemiJoinFilterTransposeTest.runTest();
+            // org.qed.Generated.Tests.MinusMergeTest.runTest();
+            // org.qed.Generated.Tests.ProjectFilterTransposeTest.runTest();
+            // org.qed.Generated.Tests.JoinPushTransitivePredicatesTest.runTest();
+            // org.qed.Generated.Tests.JoinCommuteTest.runTest();
+            // org.qed.Generated.Tests.JoinConditionPushTest.runTest();
+            // org.qed.Generated.Tests.AggregateProjectMergeTest.runTest();
         } catch (Exception e) {
             System.out.println("Test failed: " + e.getMessage());
             e.printStackTrace();
@@ -103,7 +107,7 @@ public class CalciteTester {
     }
 
     public static void main(String[] args) throws IOException {
-        var rule = new org.qed.Generated.RRuleInstances.JoinCommute();
+        var rule = new org.qed.Generated.RRuleInstances.FilterProjectTranspose();
         System.out.println(rule.explain());
         Files.createDirectories(Path.of(rulePath));
         new ObjectMapper().writerWithDefaultPrettyPrinter().writeValue(Path.of(rulePath, rule.name() + "-" + rule.info() + ".json").toFile(), rule.toJson());
@@ -154,7 +158,13 @@ public class CalciteTester {
                 System.out.println("> Actual rewritten RelNode:\n" + answerExplain);
                 System.out.println("> Expected rewritten RelNode:\n" + targetExplain);
             }
-            else System.out.println("succeeded");
+            else 
+            {
+                System.out.println("succeeded");
+                System.out.println("> Given source RelNode:\n" + source.explain());
+                System.out.println("> Actual rewritten RelNode:\n" + answerExplain);
+                System.out.println("> Expected rewritten RelNode:\n" + targetExplain);
+            }
             return;
         }
         System.out.println("failed");
