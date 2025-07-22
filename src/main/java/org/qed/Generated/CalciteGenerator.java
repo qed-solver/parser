@@ -16,8 +16,8 @@ import javax.annotation.processing.Generated;
 public class CalciteGenerator implements CodeGenerator<CalciteGenerator.Env> {
 
     @Override
-    public Env preMatch() {
-        return Env.empty();
+    public Env preMatch(String rulename) {
+        return Env.empty(rulename);
     }
 
     @Override
@@ -36,13 +36,56 @@ public class CalciteGenerator implements CodeGenerator<CalciteGenerator.Env> {
         var builder = new StringBuilder("package org.qed.Generated;\n\n");
         builder.append("import org.apache.calcite.plan.RelOptRuleCall;\n");
         builder.append("import org.apache.calcite.plan.RelRule;\n");
+        builder.append("import org.apache.calcite.plan.RelOptUtil;\n");
+        builder.append("import java.util.List;\n");
         builder.append("import org.apache.calcite.rel.RelNode;\n");
         builder.append("import org.apache.calcite.rel.core.JoinRelType;\n");
-        builder.append("import org.apache.calcite.rel.logical.*;\n\n");
+        builder.append("import org.apache.calcite.rel.logical.*;\n");
+        if (name.equals("ProjectFilterTranspose")) {
+            builder.append("import org.apache.calcite.rex.RexInputRef;\n");
+            builder.append("import org.apache.calcite.rex.RexShuttle;\n");
+            builder.append("import java.util.HashMap;\n");
+        }
+        builder.append("\n");
         builder.append("public class " + name + " extends RelRule<" + name + ".Config> {\n");
         builder.append("\tprotected " + name + "(Config config) {\n");
         builder.append("\t\tsuper(config);\n");
         builder.append("\t}\n\n");
+
+        if(name.equals("ProjectFilterTranspose")) {
+            builder.append(
+                """
+                \tprivate static org.apache.calcite.rex.RexNode mapFilterToProjectedColumns(RelOptRuleCall call) {
+                \t\tvar filter = (LogicalFilter) call.rel(1);
+                \t\tvar project = (LogicalProject) call.rel(0);
+                \t\tvar rexBuilder = project.getCluster().getRexBuilder();
+                \t\t
+                \t\t// Create mapping from table column index to projected position
+                \t\tvar tableToProjectMapping = new HashMap<Integer, Integer>();
+                \t\tfor (int projectedPos = 0; projectedPos < project.getProjects().size(); projectedPos++) {
+                \t\t\tvar projectExpr = project.getProjects().get(projectedPos);
+                \t\t\tif (projectExpr instanceof RexInputRef inputRef) {
+                \t\t\t\ttableToProjectMapping.put(inputRef.getIndex(), projectedPos);
+                \t\t\t}
+                \t\t}
+                \t\t
+                \t\t// Rewrite filter condition to use projected positions
+                \t\treturn filter.getCondition().accept(new RexShuttle() {
+                \t\t\t@Override
+                \t\t\tpublic org.apache.calcite.rex.RexNode visitInputRef(RexInputRef inputRef) {
+                \t\t\t\tInteger projectedPos = tableToProjectMapping.get(inputRef.getIndex());
+                \t\t\t\tif (projectedPos != null) {
+                \t\t\t\t\treturn rexBuilder.makeInputRef(inputRef.getType(), projectedPos);
+                \t\t\t\t}
+                \t\t\t\treturn inputRef;
+                \t\t\t}
+                \t\t});
+                \t}
+                
+                """
+            );
+        }
+
         builder.append("\t@Override\n\tpublic void onMatch(RelOptRuleCall call) {\n");
         transform.statements().forEach(statement -> builder.append("\t\t").append(statement).append("\n"));
         builder.append("\t}\n\n");
@@ -313,7 +356,17 @@ public class CalciteGenerator implements CodeGenerator<CalciteGenerator.Env> {
             String operatorCall = "((org.apache.calcite.rex.RexCall) ((LogicalJoin) call.rel(0)).getCondition()).getOperator()";
 
             return currentEnv.focus(env.current() + ".call(" + operatorCall + ", " + argsString + ")");
-        } else {
+        } 
+        else if (pred.sources().anyMatch(source -> source instanceof RexRN.Proj)) {
+            return env.focus(
+                "RelOptUtil.pushFilterPastProject(((LogicalFilter) call.rel(0)).getCondition(), " +
+                "((LogicalProject) call.rel(1)))"
+            );
+        }
+        else if (env.rulename.equals("ProjectFilterTranspose")) {
+            return env.focus("mapFilterToProjectedColumns(call)");
+        }
+        else {
             return env.focus(env.symbols().get(pred.operator().getName()));
         }
     }
@@ -472,15 +525,9 @@ public class CalciteGenerator implements CodeGenerator<CalciteGenerator.Env> {
 
     @Override
     public Env transformProject(Env env, RelRN.Project project) {
-        // First transform the source relation
         var source_transform = transform(env, project.source());
         var source_expression = source_transform.current();
-
-        // Then transform the projection map
         var map_transform = transform(source_transform, project.map());
-
-        // Combine the source and projection using the project operation
-        // This creates a projection on top of the source relation
         return map_transform.focus(source_expression + ".project(" + map_transform.current() + ")");
     }
 
@@ -550,26 +597,26 @@ public class CalciteGenerator implements CodeGenerator<CalciteGenerator.Env> {
     }
 
     public record Env(AtomicInteger varId, int rel, String current, String skeleton, Seq<String> statements,
-                      ImmutableMap<String, String> symbols) {
-        public static Env empty() {
+                      ImmutableMap<String, String> symbols, String rulename) {
+        public static Env empty(String rulename) {
             return new Env(new AtomicInteger(), 0, "call.rel(0)", "/* Unspecified skeleton */", Seq.empty(),
-                    ImmutableMap.empty());
+                    ImmutableMap.empty(), rulename);
         }
 
         public Env next() {
-            return new Env(varId, rel + 1, "call.rel(" + (rel + 1) + ")", skeleton, statements, symbols);
+            return new Env(varId, rel + 1, "call.rel(" + (rel + 1) + ")", skeleton, statements, symbols, rulename);
         }
 
         public Env focus(String target) {
-            return new Env(varId, rel, target, skeleton, statements, symbols);
+            return new Env(varId, rel, target, skeleton, statements, symbols, rulename);
         }
 
         public Env state(String statement) {
-            return new Env(varId, rel, current, skeleton, statements.appended(statement), symbols);
+            return new Env(varId, rel, current, skeleton, statements.appended(statement), symbols, rulename);
         }
 
         public Env symbol(String symbol, String expression) {
-            return new Env(varId, rel, current, skeleton, statements, symbols.putted(symbol, expression));
+            return new Env(varId, rel, current, skeleton, statements, symbols.putted(symbol, expression), rulename);
         }
 
         public Tuple2<String, Env> declare(String expression) {
@@ -579,7 +626,7 @@ public class CalciteGenerator implements CodeGenerator<CalciteGenerator.Env> {
 
         public Env grow(String requirement) {
             var vn = "s_" + varId.getAndIncrement();
-            return new Env(varId, rel, current, vn + " -> " + vn + "." + requirement, statements, symbols);
+            return new Env(varId, rel, current, vn + " -> " + vn + "." + requirement, statements, symbols, rulename);
         }
     }
 
