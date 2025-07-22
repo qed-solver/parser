@@ -54,7 +54,7 @@ public class CalciteTester {
                 .filter(clazz -> !clazz.isInterface() && 
                             !Modifier.isAbstract(clazz.getModifiers()) && 
                             !clazz.getName().contains("$") && 
-                            clazz.getSimpleName().equals("FilterProjectTranspose"))
+                            clazz.getSimpleName().equals("ProjectFilterTranspose"))
                 .collect(Collectors.toSet());
         
         var individuals = Seq.from(concreteRuleClasses)
@@ -88,14 +88,14 @@ public class CalciteTester {
         try {
             // org.qed.Generated.Tests.FilterIntoJoinTest.runTest();
             // org.qed.Generated.Tests.FilterMergeTest.runTest();
-            org.qed.Generated.Tests.FilterProjectTransposeTest.runTest();
+            // org.qed.Generated.Tests.FilterProjectTransposeTest.runTest();
             // org.qed.Generated.Tests.UnionMergeTest.runTest();
             // org.qed.Generated.Tests.IntersectMergeTest.runTest();
             // org.qed.Generated.Tests.FilterSetOpTransposeTest.runTest();
             // org.qed.Generated.Tests.JoinExtractFilterTest.runTest();
             // org.qed.Generated.Tests.SemiJoinFilterTransposeTest.runTest();
             // org.qed.Generated.Tests.MinusMergeTest.runTest();
-            // org.qed.Generated.Tests.ProjectFilterTransposeTest.runTest();
+            org.qed.Generated.Tests.ProjectFilterTransposeTest.runTest();
             // org.qed.Generated.Tests.JoinPushTransitivePredicatesTest.runTest();
             // org.qed.Generated.Tests.JoinCommuteTest.runTest();
             // org.qed.Generated.Tests.JoinConditionPushTest.runTest();

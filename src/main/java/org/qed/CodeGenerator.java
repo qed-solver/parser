@@ -16,7 +16,7 @@ public interface CodeGenerator<E> {
         return env;
     }
 
-    E preMatch();
+    E preMatch(String rulename);
 
     default E onMatch(E env, RelRN pattern) {
         return switch (pattern) {
@@ -96,9 +96,9 @@ public interface CodeGenerator<E> {
 
     default String generate(RRule rule) {
         System.out.printf("Generating Rule: %s\n", rule.name());
-        var onMatch = postMatch(onMatch(preMatch(), rule.before()));
+        var onMatch = postMatch(onMatch(preMatch(rule.name()), rule.before()));
         var transform = postTransform(transform(preTransform(onMatch), rule.after()));
-        return translate(rule.getClass().getSimpleName(), onMatch, transform);
+        return translate(rule.name(), onMatch, transform);
     }
 
     default E onMatchScan(E env, RelRN.Scan scan) {
