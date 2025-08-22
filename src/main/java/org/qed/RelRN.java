@@ -3,9 +3,15 @@ package org.qed;
 import kala.collection.Seq;
 import kala.collection.Set;
 import org.apache.calcite.rel.RelNode;
+import org.apache.calcite.rel.core.Aggregate;
 import org.apache.calcite.rel.core.JoinRelType;
+import org.apache.calcite.rex.RexNode;
+import org.apache.calcite.sql.SqlAggFunction;
 import org.apache.calcite.sql.SqlOperator;
+import org.apache.calcite.tools.RelBuilder;
+import org.apache.calcite.tools.RelBuilder.AggCall;
 import org.apache.calcite.util.ImmutableBitSet;
+import org.qed.RelRN.Scan;
 
 import java.util.Arrays;
 import java.util.stream.IntStream;
@@ -112,9 +118,9 @@ public interface RelRN {
         return new Empty(this);
     }
 
-    default Aggregate aggregate(Seq<RexRN> groupSet, Seq<AggCall> aggCalls) {
-        return new Aggregate(this, groupSet, aggCalls);
-    }
+    // default Aggregate aggregate(Seq<RexRN> groupSet, Seq<AggCall> aggCalls) {
+    //     return new Aggregate(this, groupSet, aggCalls);
+    // }
 
     record Scan(String name, RelType.VarType ty, boolean unique) implements RelRN {
 
@@ -204,21 +210,96 @@ public interface RelRN {
         }
     }
 
-    record AggCall(String name, boolean distinct, RelType type, Seq<RexRN> operands) {
+    // record AggCall(String name, boolean distinct, RelType type, Seq<RexRN> operands) {
+    // }
+
+    // record Aggregate(org.qed.RelRN source, Seq<RexRN> groupSet, Seq<org.qed.RelRN.AggCall> aggCalls) implements org.qed.RelRN {
+    //     @Override
+    //     public RelNode semantics() {
+    //         var builder = RuleBuilder.create();
+    //         builder.push(source.semantics());
+    //         var groupKey = builder.groupKey(groupSet.map(RexRN::semantics));
+    //         var calls = aggCalls.map(agg -> {
+    //             var aggFunc = builder.genericAggregateOp(agg.name(), agg.type());
+    //             return builder.aggregateCall(aggFunc, agg.distinct(), null, agg.name(), agg.operands().map(RexRN::semantics).asJava());
+    //         });
+    //         return builder.aggregate(groupKey, calls).build();
+    //     }
+    // }
+    // Add these methods to RelRN.java:
+
+    default Aggregate aggregate(RexRN groupName, AggCall aggCall) {
+        return new Aggregate(this, Seq.of(groupName), Seq.of(aggCall));
     }
 
-    record Aggregate(org.qed.RelRN source, Seq<RexRN> groupSet, Seq<org.qed.RelRN.AggCall> aggCalls) implements org.qed.RelRN {
+    default Aggregate aggregate(String groupName, String aggName) {
+        return aggregate(groupBy(groupName), aggCall(aggName));
+    }
+
+    // default Aggregate aggregate(RexRN groupField, AggCall aggCall) {
+    //     return aggregate(Seq.of(groupField), Seq.of(aggCall));
+    // }
+
+    default RexRN.GroupBy groupBy(String name) {
+        return new RexRN.GroupBy(
+            RuleBuilder.create().genericProjectionOp(name, new RelType.VarType(name + "_type", true)), 
+            fields()
+        );
+    }
+
+    default RexRN.GroupBy groupBy(SqlOperator op) {
+        return new RexRN.GroupBy(op, fields());
+    }
+
+    default AggCall aggCall(String name) {
+        return new AggCall(
+            name,
+            RuleBuilder.create().genericAggregateOp(name, new RelType.VarType(name + "_type", true)),
+            false, 
+            new RelType.VarType(name + "_type", true), 
+            fields()
+        );
+    }
+
+    // default AggCall aggCall(String name, String returnTypeName, boolean distinct) {
+    //     return new AggCall(
+    //         name,
+    //         RuleBuilder.create().genericAggregateOp(name, new RelType.VarType(returnTypeName, true)),
+    //         distinct, 
+    //         new RelType.VarType(returnTypeName, true), 
+    //         fields()
+    //     );
+    // }
+
+    // default AggCall aggCall(String name, String returnTypeName, Seq<RexRN> operands) {
+    //     return new AggCall(
+    //         name,
+    //         RuleBuilder.create().genericAggregateOp(name, new RelType.VarType(returnTypeName, true)),
+    //         false, 
+    //         new RelType.VarType(returnTypeName, true), 
+    //         operands
+    //     );
+    // }
+
+    record AggCall(String name, SqlAggFunction operator, boolean distinct, RelType type, Seq<RexRN> operands) {
+        public AggCall(String name, boolean distinct, RelType type, Seq<RexRN> operands){
+            this(name, null, distinct, type, operands);
+        }
+    }
+
+    record Aggregate(RelRN source, Seq<RexRN> groupSet, Seq<AggCall> aggCalls) implements RelRN {
         @Override
         public RelNode semantics() {
             var builder = RuleBuilder.create();
             builder.push(source.semantics());
+
             var groupKey = builder.groupKey(groupSet.map(RexRN::semantics));
             var calls = aggCalls.map(agg -> {
-                var aggFunc = builder.genericAggregateOp(agg.name(), agg.type());
+                var aggFunc = agg.operator() != null ? agg.operator() : builder.genericAggregateOp(agg.name(), agg.type());
                 return builder.aggregateCall(aggFunc, agg.distinct(), null, agg.name(), agg.operands().map(RexRN::semantics).asJava());
             });
+
             return builder.aggregate(groupKey, calls).build();
         }
     }
-
 }

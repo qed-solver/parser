@@ -3,7 +3,6 @@ package org.qed.Generated;
 import org.apache.calcite.plan.RelOptRuleCall;
 import org.apache.calcite.plan.RelRule;
 import org.apache.calcite.plan.RelOptUtil;
-import java.util.List;
 import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.core.JoinRelType;
 import org.apache.calcite.rel.logical.*;

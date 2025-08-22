@@ -32,6 +32,23 @@ public class CalciteTester {
     public static String genPath = "src/main/java/org/qed/Generated";
     public static String rulePath = "rules";
 
+    public static HepPlanner loadRules(java.util.List<RelOptRule> rules) {
+        System.out.printf("Verifying Rules: %s\n", 
+            rules.stream()
+                .map(rule -> rule.getClass().getSimpleName())
+                .collect(java.util.stream.Collectors.joining(", ")));
+        
+        var builder = new HepProgramBuilder();
+        for (var rule : rules) {
+            builder.addRuleInstance(rule);
+        }
+        return new HepPlanner(builder.build());
+    }
+
+    public static HepPlanner loadRules(RelOptRule... rules) {
+        return loadRules(java.util.Arrays.asList(rules));
+    }
+
     public static HepPlanner loadRule(RelOptRule rule) {
         System.out.printf("Verifying Rule: %s\n", rule.getClass());
         var builder = new HepProgramBuilder().addRuleInstance(rule);
@@ -53,8 +70,12 @@ public class CalciteTester {
         var concreteRuleClasses = ruleClasses.stream()
                 .filter(clazz -> !clazz.isInterface() && 
                             !Modifier.isAbstract(clazz.getModifiers()) && 
-                            !clazz.getName().contains("$") && 
-                            clazz.getSimpleName().equals("ProjectFilterTranspose"))
+                            !clazz.getName().contains("$") 
+                            && !clazz.getSimpleName().equals("UnionPullUpConstants")
+                            && !clazz.getSimpleName().equals("AggregateProjectConstantToDummyJoin")
+                            && !clazz.getSimpleName().equals("ProjectAggregateMerge")
+                            && !clazz.getSimpleName().equals("UnionToDistinct")
+                        )
                 .collect(Collectors.toSet());
         
         var individuals = Seq.from(concreteRuleClasses)
@@ -86,20 +107,22 @@ public class CalciteTester {
 
     public static void runAllTests() {
         try {
-            // org.qed.Generated.Tests.FilterIntoJoinTest.runTest();
-            // org.qed.Generated.Tests.FilterMergeTest.runTest();
-            // org.qed.Generated.Tests.FilterProjectTransposeTest.runTest();
-            // org.qed.Generated.Tests.UnionMergeTest.runTest();
-            // org.qed.Generated.Tests.IntersectMergeTest.runTest();
-            // org.qed.Generated.Tests.FilterSetOpTransposeTest.runTest();
-            // org.qed.Generated.Tests.JoinExtractFilterTest.runTest();
-            // org.qed.Generated.Tests.SemiJoinFilterTransposeTest.runTest();
-            // org.qed.Generated.Tests.MinusMergeTest.runTest();
+            org.qed.Generated.Tests.FilterIntoJoinTest.runTest();
+            org.qed.Generated.Tests.FilterMergeTest.runTest();
+            org.qed.Generated.Tests.FilterProjectTransposeTest.runTest();
+            org.qed.Generated.Tests.UnionMergeTest.runTest();
+            org.qed.Generated.Tests.IntersectMergeTest.runTest();
+            org.qed.Generated.Tests.FilterSetOpTransposeTest.runTest();
+            org.qed.Generated.Tests.JoinExtractFilterTest.runTest();
+            org.qed.Generated.Tests.SemiJoinFilterTransposeTest.runTest();
+            org.qed.Generated.Tests.MinusMergeTest.runTest();
             org.qed.Generated.Tests.ProjectFilterTransposeTest.runTest();
-            // org.qed.Generated.Tests.JoinPushTransitivePredicatesTest.runTest();
-            // org.qed.Generated.Tests.JoinCommuteTest.runTest();
-            // org.qed.Generated.Tests.JoinConditionPushTest.runTest();
-            // org.qed.Generated.Tests.AggregateProjectMergeTest.runTest();
+            org.qed.Generated.Tests.JoinPushTransitivePredicatesTest.runTest();
+            org.qed.Generated.Tests.JoinCommuteTest.runTest();
+            org.qed.Generated.Tests.JoinConditionPushTest.runTest();
+            org.qed.Generated.Tests.AggregateProjectMergeTest.runTest();
+            org.qed.Generated.Tests.AggregateFilterTransposeTest.runTest();
+            org.qed.Generated.Tests.FilterAggregateTransposeTest.runTest();
         } catch (Exception e) {
             System.out.println("Test failed: " + e.getMessage());
             e.printStackTrace();
@@ -107,7 +130,7 @@ public class CalciteTester {
     }
 
     public static void main(String[] args) throws IOException {
-        var rule = new org.qed.Generated.RRuleInstances.FilterProjectTranspose();
+        var rule = new org.qed.Generated.RRuleInstances.JoinConditionPush();
         System.out.println(rule.explain());
         Files.createDirectories(Path.of(rulePath));
         new ObjectMapper().writerWithDefaultPrettyPrinter().writeValue(Path.of(rulePath, rule.name() + "-" + rule.info() + ".json").toFile(), rule.toJson());
@@ -161,9 +184,9 @@ public class CalciteTester {
             else 
             {
                 System.out.println("succeeded");
-                System.out.println("> Given source RelNode:\n" + source.explain());
-                System.out.println("> Actual rewritten RelNode:\n" + answerExplain);
-                System.out.println("> Expected rewritten RelNode:\n" + targetExplain);
+                // System.out.println("> Given source RelNode:\n" + source.explain());
+                // System.out.println("> Actual rewritten RelNode:\n" + answerExplain);
+                // System.out.println("> Expected rewritten RelNode:\n" + targetExplain);
             }
             return;
         }
