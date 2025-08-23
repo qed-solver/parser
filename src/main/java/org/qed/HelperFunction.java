@@ -1,20 +1,26 @@
 package org.qed;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.Map;
 
 import org.apache.calcite.plan.RelOptRuleCall;
 import org.apache.calcite.rel.logical.LogicalFilter;
 import org.apache.calcite.rel.logical.LogicalProject;
+import org.apache.calcite.rel.RelNode;
+import org.apache.calcite.rel.core.AggregateCall;
 import org.apache.calcite.rel.logical.LogicalAggregate;
 import org.apache.calcite.rex.RexCall;
 import org.apache.calcite.rex.RexInputRef;
 import org.apache.calcite.rex.RexNode;
 import org.apache.calcite.rex.RexShuttle;
 import org.apache.calcite.rex.RexUtil;
+import org.apache.calcite.sql.type.SqlTypeName;
+import org.apache.calcite.util.ImmutableBitSet;
 
 public class HelperFunction {
     public static org.apache.calcite.rex.RexNode mapFilterToProjectedColumns(RelOptRuleCall call) {
@@ -320,5 +326,77 @@ public class HelperFunction {
             }
             return node;
         }
+    }
+
+    public static org.apache.calcite.tools.RelBuilder extractProjectForAggregate(RelOptRuleCall call) {
+        var builder = call.builder();
+        LogicalAggregate aggregate = (LogicalAggregate) call.rel(0);
+        RelNode input = call.rel(1);
+        
+        // Collect all fields used by the aggregate
+        Set<Integer> usedFields = new HashSet<>();
+        
+        // 1. Add fields from groupSet
+        for (int field : aggregate.getGroupSet()) {
+            usedFields.add(field);
+        }
+        
+        // 2. Add fields from aggregate calls
+        for (AggregateCall aggCall : aggregate.getAggCallList()) {
+            for (int field : aggCall.getArgList()) {
+                usedFields.add(field);
+            }
+            if (aggCall.filterArg >= 0) {
+                usedFields.add(aggCall.filterArg);
+            }
+        }
+        
+        // Create projection with only used fields (in order)
+        List<Integer> sortedFields = new ArrayList<>(usedFields);
+        Collections.sort(sortedFields);
+        
+        // Build mapping from old index to new index
+        Map<Integer, Integer> fieldMapping = new HashMap<>();
+        for (int i = 0; i < sortedFields.size(); i++) {
+            fieldMapping.put(sortedFields.get(i), i);
+        }
+        
+        // Create the projection
+        builder.push(input);
+        List<RexNode> projectedFields = new ArrayList<>();
+        for (int field : sortedFields) {
+            projectedFields.add(builder.field(field));
+        }
+        builder.project(projectedFields);
+        
+        // Adjust aggregate to use new field indices
+        ImmutableBitSet.Builder newGroupSet = ImmutableBitSet.builder();
+        for (int field : aggregate.getGroupSet()) {
+            newGroupSet.set(fieldMapping.get(field));
+        }
+        
+        List<AggregateCall> newAggCalls = new ArrayList<>();
+        for (AggregateCall aggCall : aggregate.getAggCallList()) {
+            List<Integer> newArgList = new ArrayList<>();
+            for (int field : aggCall.getArgList()) {
+                newArgList.add(fieldMapping.get(field));
+            }
+            int newFilterArg = aggCall.filterArg >= 0 ? fieldMapping.get(aggCall.filterArg) : -1;
+            
+            newAggCalls.add(aggCall.adaptTo(
+                builder.peek(),  // The projected input
+                newArgList,
+                newFilterArg,
+                aggregate.getGroupCount(),
+                aggregate.getGroupCount()
+            ));
+        }
+        
+        builder.aggregate(
+            builder.groupKey(newGroupSet.build()),
+            newAggCalls
+        );
+        
+        return builder;
     }
 }

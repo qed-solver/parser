@@ -107,22 +107,23 @@ public class CalciteTester {
 
     public static void runAllTests() {
         try {
-            org.qed.Generated.Tests.FilterIntoJoinTest.runTest();
-            org.qed.Generated.Tests.FilterMergeTest.runTest();
-            org.qed.Generated.Tests.FilterProjectTransposeTest.runTest();
-            org.qed.Generated.Tests.UnionMergeTest.runTest();
-            org.qed.Generated.Tests.IntersectMergeTest.runTest();
-            org.qed.Generated.Tests.FilterSetOpTransposeTest.runTest();
-            org.qed.Generated.Tests.JoinExtractFilterTest.runTest();
-            org.qed.Generated.Tests.SemiJoinFilterTransposeTest.runTest();
-            org.qed.Generated.Tests.MinusMergeTest.runTest();
-            org.qed.Generated.Tests.ProjectFilterTransposeTest.runTest();
-            org.qed.Generated.Tests.JoinPushTransitivePredicatesTest.runTest();
-            org.qed.Generated.Tests.JoinCommuteTest.runTest();
-            org.qed.Generated.Tests.JoinConditionPushTest.runTest();
-            org.qed.Generated.Tests.AggregateProjectMergeTest.runTest();
-            org.qed.Generated.Tests.AggregateFilterTransposeTest.runTest();
-            org.qed.Generated.Tests.FilterAggregateTransposeTest.runTest();
+            // org.qed.Generated.Tests.FilterIntoJoinTest.runTest();
+            // org.qed.Generated.Tests.FilterMergeTest.runTest();
+            // org.qed.Generated.Tests.FilterProjectTransposeTest.runTest();
+            // org.qed.Generated.Tests.UnionMergeTest.runTest();
+            // org.qed.Generated.Tests.IntersectMergeTest.runTest();
+            // org.qed.Generated.Tests.FilterSetOpTransposeTest.runTest();
+            // org.qed.Generated.Tests.JoinExtractFilterTest.runTest();
+            // org.qed.Generated.Tests.SemiJoinFilterTransposeTest.runTest();
+            // org.qed.Generated.Tests.MinusMergeTest.runTest();
+            // org.qed.Generated.Tests.ProjectFilterTransposeTest.runTest();
+            // org.qed.Generated.Tests.JoinPushTransitivePredicatesTest.runTest();
+            // org.qed.Generated.Tests.JoinCommuteTest.runTest();
+            // org.qed.Generated.Tests.JoinConditionPushTest.runTest();
+            // org.qed.Generated.Tests.AggregateProjectMergeTest.runTest();
+            // org.qed.Generated.Tests.AggregateFilterTransposeTest.runTest();
+            // org.qed.Generated.Tests.FilterAggregateTransposeTest.runTest();
+            org.qed.Generated.Tests.AggregateExtractProjectTest.runTest();
         } catch (Exception e) {
             System.out.println("Test failed: " + e.getMessage());
             e.printStackTrace();
@@ -130,7 +131,7 @@ public class CalciteTester {
     }
 
     public static void main(String[] args) throws IOException {
-        var rule = new org.qed.Generated.RRuleInstances.JoinConditionPush();
+        var rule = new org.qed.Generated.RRuleInstances.AggregateExtractProject();
         System.out.println(rule.explain());
         Files.createDirectories(Path.of(rulePath));
         new ObjectMapper().writerWithDefaultPrettyPrinter().writeValue(Path.of(rulePath, rule.name() + "-" + rule.info() + ".json").toFile(), rule.toJson());

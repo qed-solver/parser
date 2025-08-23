@@ -487,26 +487,15 @@ public class CalciteGenerator implements CodeGenerator<CalciteGenerator.Env> {
 
     @Override
     public Env transformField(Env env, RexRN.Field field) {
-        // In Calcite, field references are typically created with a "field" method
-        // We'll need to pass some identifier for the field - use toString() if no specific field accessor is available
-
-        // Assuming field has a method that returns some kind of identifier or name
-        // If not, we may need to adjust this implementation
         return env.focus(env.current() + ".field(" + field + ")");
     }
 
     @Override
     public Env transformProj(Env env, RexRN.Proj proj) {
-        // In Calcite, projections are typically created using the operator name
-        // This is similar to your transformPred implementation
-
-        // Look up the symbol from the matching phase
         if (!env.symbols().containsKey(proj.operator().getName())) {
             throw new RuntimeException("Operator symbol not found: " + proj.operator().getName() +
                                     ". Make sure onMatchProj is properly implemented.");
         }
-
-        // Return an environment focused on the expression for this projection
         return env.focus(env.symbols().get(proj.operator().getName()));
     }
 
@@ -524,22 +513,16 @@ public class CalciteGenerator implements CodeGenerator<CalciteGenerator.Env> {
 
     @Override
     public Env transformTrue(Env env, RexRN literal) {
-        // In Calcite, true literals are typically represented using the
-        // rexBuilder.makeLiteral(true) method or just "TRUE"
         return env.focus(env.current() + ".literal(true)");
     }
 
     @Override
     public Env transformFalse(Env env, RexRN literal) {
-        // In Calcite, false literals are represented using the
-        // rexBuilder.makeLiteral(false) method or just "FALSE"
         return env.focus(env.current() + ".literal(false)");
     }
 
     @Override
     public Env transformEmpty(Env env, RelRN.Empty empty) {
-        // In Calcite, empty relations are created using the values() method with no tuples
-        // This creates a LogicalValues node with no rows
         return env.focus(env.current() + ".empty()");
     }
 
@@ -631,6 +614,9 @@ public class CalciteGenerator implements CodeGenerator<CalciteGenerator.Env> {
     public Env transformAggregate(Env env, RelRN.Aggregate aggregate) {
         if (env.rulename.equals("AggregateProjectMerge")) {
             return env.focus("org.qed.HelperFunction.createMergedAggregateProject(call)");
+        }
+        else if (env.rulename.equals("AggregateExtractProject")) {
+            return env.focus("org.qed.HelperFunction.extractProjectForAggregate(call)");
         }
         
         // Default aggregate transformation for other rules
