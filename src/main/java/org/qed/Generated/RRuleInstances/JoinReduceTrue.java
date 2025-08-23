@@ -1,10 +1,11 @@
 package org.qed.Generated.RRuleInstances;
 
 import org.apache.calcite.rel.core.JoinRelType;
+import org.qed.RRule;
 import org.qed.RelRN;
 import org.qed.RexRN;
 
-public record JoinReduceTrue() {
+public record JoinReduceTrue() implements RRule {
     static final RelRN left = RelRN.scan("Left", "Left_Type");
     static final RelRN right = RelRN.scan("Right", "Right_Type");
     static final RexRN afterJoinCond = left.joinPred("join", right);
@@ -15,6 +16,6 @@ public record JoinReduceTrue() {
     }
 
     public RelRN after() {
-        return left.join(JoinRelType.LEFT, afterJoinCond, right);
+        return left.join(JoinRelType.INNER, afterJoinCond, right);
     }
 }
