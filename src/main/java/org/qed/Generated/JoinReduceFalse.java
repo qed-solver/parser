@@ -16,7 +16,7 @@ public class JoinReduceFalse extends RelRule<JoinReduceFalse.Config> {
 	@Override
 	public void onMatch(RelOptRuleCall call) {
 		var var_5 = call.builder();
-		call.transformTo(var_5.push(call.rel(1)).push(call.rel(2)).join(JoinRelType.LEFT, var_5.push(call.rel(1)).push(call.rel(2)).literal(false)).build());
+		call.transformTo(var_5.push(call.rel(1)).push(call.rel(2)).join(JoinRelType.INNER, var_5.push(call.rel(1)).push(call.rel(2)).literal(false)).build());
 	}
 
 	public interface Config extends EmptyConfig {

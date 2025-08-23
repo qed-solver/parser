@@ -15,6 +15,6 @@ public record JoinReduceFalse() implements RRule {
     }
 
     public RelRN after() {
-        return left.join(JoinRelType.LEFT, RexRN.falseLiteral(), right);
+        return left.join(JoinRelType.INNER, RexRN.falseLiteral(), right);
     }
 }

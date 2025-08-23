@@ -16,6 +16,6 @@ public record JoinReduceTrue() implements RRule {
     }
 
     public RelRN after() {
-        return left.join(JoinRelType.LEFT, afterJoinCond, right);
+        return left.join(JoinRelType.INNER, afterJoinCond, right);
     }
 }

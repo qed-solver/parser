@@ -29,7 +29,7 @@ public class JoinReduceFalseTest {
 
         var after = builder.scan(leftTable.getName())
                 .scan(rightTable.getName())
-                .join(JoinRelType.LEFT, builder.literal(false))
+                .join(JoinRelType.INNER, builder.literal(false))
                 .build();
 
         var runner = CalciteTester.loadRule(org.qed.Generated.JoinReduceFalse.Config.DEFAULT.toRule());

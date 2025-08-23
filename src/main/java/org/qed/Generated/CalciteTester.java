@@ -54,7 +54,7 @@ public class CalciteTester {
                 .filter(clazz -> !clazz.isInterface() && 
                             !Modifier.isAbstract(clazz.getModifiers()) && 
                             !clazz.getName().contains("$") && 
-                            clazz.getSimpleName().equals("ProjectFilterTranspose"))
+                            clazz.getSimpleName().contains("JoinReduce"))
                 .collect(Collectors.toSet());
         
         var individuals = Seq.from(concreteRuleClasses)
