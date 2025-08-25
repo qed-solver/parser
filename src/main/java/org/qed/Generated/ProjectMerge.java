@@ -2,6 +2,7 @@ package org.qed.Generated;
 
 import org.apache.calcite.plan.RelOptRuleCall;
 import org.apache.calcite.plan.RelRule;
+import org.apache.calcite.plan.RelOptUtil;
 import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.core.JoinRelType;
 import org.apache.calcite.rel.logical.*;
@@ -14,7 +15,7 @@ public class ProjectMerge extends RelRule<ProjectMerge.Config> {
 	@Override
 	public void onMatch(RelOptRuleCall call) {
 		var var_3 = call.builder();
-		call.transformTo(var_3.push(call.rel(2)).project(((LogicalProject) call.rel(0)).getProjects()).build());
+		call.transformTo(org.qed.HelperFunction.mergeProjections(call).build());
 	}
 
 	public interface Config extends EmptyConfig {

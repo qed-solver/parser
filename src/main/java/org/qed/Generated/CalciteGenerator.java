@@ -37,55 +37,14 @@ public class CalciteGenerator implements CodeGenerator<CalciteGenerator.Env> {
         builder.append("import org.apache.calcite.plan.RelOptRuleCall;\n");
         builder.append("import org.apache.calcite.plan.RelRule;\n");
         builder.append("import org.apache.calcite.plan.RelOptUtil;\n");
-        builder.append("import java.util.List;\n");
         builder.append("import org.apache.calcite.rel.RelNode;\n");
         builder.append("import org.apache.calcite.rel.core.JoinRelType;\n");
         builder.append("import org.apache.calcite.rel.logical.*;\n");
-        if (name.equals("ProjectFilterTranspose")) {
-            builder.append("import org.apache.calcite.rex.RexInputRef;\n");
-            builder.append("import org.apache.calcite.rex.RexShuttle;\n");
-            builder.append("import java.util.HashMap;\n");
-        }
         builder.append("\n");
         builder.append("public class " + name + " extends RelRule<" + name + ".Config> {\n");
         builder.append("\tprotected " + name + "(Config config) {\n");
         builder.append("\t\tsuper(config);\n");
         builder.append("\t}\n\n");
-
-        if(name.equals("ProjectFilterTranspose")) {
-            builder.append(
-                """
-                \tprivate static org.apache.calcite.rex.RexNode mapFilterToProjectedColumns(RelOptRuleCall call) {
-                \t\tvar filter = (LogicalFilter) call.rel(1);
-                \t\tvar project = (LogicalProject) call.rel(0);
-                \t\tvar rexBuilder = project.getCluster().getRexBuilder();
-                \t\t
-                \t\t// Create mapping from table column index to projected position
-                \t\tvar tableToProjectMapping = new HashMap<Integer, Integer>();
-                \t\tfor (int projectedPos = 0; projectedPos < project.getProjects().size(); projectedPos++) {
-                \t\t\tvar projectExpr = project.getProjects().get(projectedPos);
-                \t\t\tif (projectExpr instanceof RexInputRef inputRef) {
-                \t\t\t\ttableToProjectMapping.put(inputRef.getIndex(), projectedPos);
-                \t\t\t}
-                \t\t}
-                \t\t
-                \t\t// Rewrite filter condition to use projected positions
-                \t\treturn filter.getCondition().accept(new RexShuttle() {
-                \t\t\t@Override
-                \t\t\tpublic org.apache.calcite.rex.RexNode visitInputRef(RexInputRef inputRef) {
-                \t\t\t\tInteger projectedPos = tableToProjectMapping.get(inputRef.getIndex());
-                \t\t\t\tif (projectedPos != null) {
-                \t\t\t\t\treturn rexBuilder.makeInputRef(inputRef.getType(), projectedPos);
-                \t\t\t\t}
-                \t\t\t\treturn inputRef;
-                \t\t\t}
-                \t\t});
-                \t}
-                
-                """
-            );
-        }
-
         builder.append("\t@Override\n\tpublic void onMatch(RelOptRuleCall call) {\n");
         transform.statements().forEach(statement -> builder.append("\t\t").append(statement).append("\n"));
         builder.append("\t}\n\n");
@@ -324,22 +283,10 @@ public class CalciteGenerator implements CodeGenerator<CalciteGenerator.Env> {
 
     @Override
     public Env transformPred(Env env, RexRN.Pred pred) {
-        // ONLY apply to the very specific JoinCommute pattern where:
-        // 1. We have exactly 2 JoinField sources
-        // 2. The first JoinField has ordinal 1 and second has ordinal 0 (indicating argument swap)
-        // This is the EXACT pattern from JoinCommute rule: pred($1, $0) vs pred($0, $1)
-        boolean isExactJoinCommuteSwapPattern = pred.sources().size() == 2 &&
-            pred.sources().get(0) instanceof RexRN.JoinField joinField1 &&
-            pred.sources().get(1) instanceof RexRN.JoinField joinField2 &&
-            joinField1.ordinal() == 1 &&  // First arg is ordinal 1 (left -> right in swap)
-            joinField2.ordinal() == 0;    // Second arg is ordinal 0 (right -> left in swap)
-
-        if (isExactJoinCommuteSwapPattern) {
-            // This is the JoinCommute swapped predicate - transform with swapped arguments
+        if (env.rulename.equals("JoinCommute")) {
             var currentEnv = env;
             var transformedArgs = Seq.<String>empty();
 
-            // Process arguments in reverse order to swap them back
             var sources = pred.sources();
             var reversedSources = Seq.of(sources.get(1), sources.get(0));
 
@@ -349,22 +296,25 @@ public class CalciteGenerator implements CodeGenerator<CalciteGenerator.Env> {
                 currentEnv = currentEnv.focus(env.current());
             }
 
-            // Create a new predicate call with transformed arguments
             String argsString = transformedArgs.joinToString(", ");
-
-            // Extract operator from the original join condition
             String operatorCall = "((org.apache.calcite.rex.RexCall) ((LogicalJoin) call.rel(0)).getCondition()).getOperator()";
 
             return currentEnv.focus(env.current() + ".call(" + operatorCall + ", " + argsString + ")");
+        }
+        else if (env.rulename.equals("ProjectFilterTranspose")) {
+            return env.focus("org.qed.HelperFunction.mapFilterToProjectedColumns(call)");
         } 
-        else if (pred.sources().anyMatch(source -> source instanceof RexRN.Proj)) {
+        else if (env.rulename.equals("FilterProjectTranspose")) {
             return env.focus(
                 "RelOptUtil.pushFilterPastProject(((LogicalFilter) call.rel(0)).getCondition(), " +
                 "((LogicalProject) call.rel(1)))"
             );
         }
-        else if (env.rulename.equals("ProjectFilterTranspose")) {
-            return env.focus("mapFilterToProjectedColumns(call)");
+        else if (env.rulename.equals("AggregateFilterTranspose")) {
+            return env.focus("org.qed.HelperFunction.mapFilterToAggregatedColumns(call)");
+        }
+        else if (env.rulename.equals("FilterAggregateTranspose")) {
+            return env.focus("org.qed.HelperFunction.pushFilterPastAggregate(call)");
         }
         else {
             return env.focus(env.symbols().get(pred.operator().getName()));
@@ -374,7 +324,6 @@ public class CalciteGenerator implements CodeGenerator<CalciteGenerator.Env> {
     @Override
     public Env transformJoinField(Env env, RexRN.JoinField joinField) {
         // For JoinCommute: we need to calculate absolute field positions in the swapped join
-
         // Get the original join condition to extract the actual field indices
         var origJoinDecl = env.declare("(LogicalJoin) call.rel(0)");
         var envWithOrigJoin = origJoinDecl.getValue();
@@ -413,19 +362,57 @@ public class CalciteGenerator implements CodeGenerator<CalciteGenerator.Env> {
 
     @Override
     public Env transformJoin(Env env, RelRN.Join join) {
-        var left_source_transform = transform(env, join.left());
-        var right_source_transform = transform(left_source_transform, join.right());
-        var source_expression = right_source_transform.current();
-        var cond_transform = transform(right_source_transform, join.cond());
-        var join_type = switch (join.ty().semantics()) {
-            case INNER -> "JoinRelType.INNER";
-            case LEFT -> "JoinRelType.LEFT";
-            case RIGHT -> "JoinRelType.RIGHT";
-            case FULL -> "JoinRelType.FULL";
-            case SEMI -> "JoinRelType.SEMI";
-            case ANTI -> "JoinRelType.ANTI";
-        };
-        return cond_transform.focus(source_expression + ".join(" + join_type + ", " + cond_transform.current() + ")");
+        if (env.rulename.equals("JoinConditionPush")) {
+            var builderDecl = env.declare("call.builder()");
+            var envWithBuilder = builderDecl.getValue();
+            
+            var leftCondDecl = envWithBuilder.declare(
+                "org.qed.HelperFunction.ConditionDecomposer.extractLeftOnlyConditions(" +
+                "((LogicalJoin) call.rel(0)).getCondition(), " +
+                "call.rel(1).getRowType().getFieldCount(), call)"
+            );
+            var envWithLeftCond = leftCondDecl.getValue();
+            
+            var rightCondDecl = envWithLeftCond.declare(
+                "org.qed.HelperFunction.ConditionDecomposer.extractRightOnlyConditions(" +
+                "((LogicalJoin) call.rel(0)).getCondition(), " +
+                "call.rel(1).getRowType().getFieldCount(), " +
+                "call.rel(1).getRowType().getFieldCount() + call.rel(2).getRowType().getFieldCount(), call)"
+            );
+            var envWithRightCond = rightCondDecl.getValue();
+            
+            var joinCondDecl = envWithRightCond.declare(
+                "org.qed.HelperFunction.ConditionDecomposer.extractJoinConditions(" +
+                "((LogicalJoin) call.rel(0)).getCondition(), " +
+                "call.rel(1).getRowType().getFieldCount(), " +
+                "call.rel(1).getRowType().getFieldCount() + call.rel(2).getRowType().getFieldCount(), call)"
+            );
+            var envWithJoinCond = joinCondDecl.getValue();
+            
+            return envWithJoinCond.focus(
+                builderDecl.getKey() + 
+                ".push(call.rel(1))" +
+                ".filter(" + leftCondDecl.getKey() + ")" +
+                ".push(call.rel(2))" +
+                ".filter(" + rightCondDecl.getKey() + ")" +
+                ".join(JoinRelType.INNER, " + joinCondDecl.getKey() + ")"
+            );
+        }
+        else {
+            var left_source_transform = transform(env, join.left());
+            var right_source_transform = transform(left_source_transform, join.right());
+            var source_expression = right_source_transform.current();
+            var cond_transform = transform(right_source_transform, join.cond());
+            var join_type = switch (join.ty().semantics()) {
+                case INNER -> "JoinRelType.INNER";
+                case LEFT -> "JoinRelType.LEFT";
+                case RIGHT -> "JoinRelType.RIGHT";
+                case FULL -> "JoinRelType.FULL";
+                case SEMI -> "JoinRelType.SEMI";
+                case ANTI -> "JoinRelType.ANTI";
+            };
+            return cond_transform.focus(source_expression + ".join(" + join_type + ", " + cond_transform.current() + ")");
+        }
     }
 
     @Override
@@ -500,31 +487,24 @@ public class CalciteGenerator implements CodeGenerator<CalciteGenerator.Env> {
 
     @Override
     public Env transformField(Env env, RexRN.Field field) {
-        // In Calcite, field references are typically created with a "field" method
-        // We'll need to pass some identifier for the field - use toString() if no specific field accessor is available
-
-        // Assuming field has a method that returns some kind of identifier or name
-        // If not, we may need to adjust this implementation
         return env.focus(env.current() + ".field(" + field + ")");
     }
 
     @Override
     public Env transformProj(Env env, RexRN.Proj proj) {
-        // In Calcite, projections are typically created using the operator name
-        // This is similar to your transformPred implementation
-
-        // Look up the symbol from the matching phase
         if (!env.symbols().containsKey(proj.operator().getName())) {
             throw new RuntimeException("Operator symbol not found: " + proj.operator().getName() +
                                     ". Make sure onMatchProj is properly implemented.");
         }
-
-        // Return an environment focused on the expression for this projection
         return env.focus(env.symbols().get(proj.operator().getName()));
     }
 
     @Override
     public Env transformProject(Env env, RelRN.Project project) {
+        if (env.rulename.equals("ProjectMerge")) {
+            return env.focus("org.qed.HelperFunction.mergeProjections(call)");
+        }
+
         var source_transform = transform(env, project.source());
         var source_expression = source_transform.current();
         var map_transform = transform(source_transform, project.map());
@@ -533,22 +513,16 @@ public class CalciteGenerator implements CodeGenerator<CalciteGenerator.Env> {
 
     @Override
     public Env transformTrue(Env env, RexRN literal) {
-        // In Calcite, true literals are typically represented using the
-        // rexBuilder.makeLiteral(true) method or just "TRUE"
         return env.focus(env.current() + ".literal(true)");
     }
 
     @Override
     public Env transformFalse(Env env, RexRN literal) {
-        // In Calcite, false literals are represented using the
-        // rexBuilder.makeLiteral(false) method or just "FALSE"
         return env.focus(env.current() + ".literal(false)");
     }
 
     @Override
     public Env transformEmpty(Env env, RelRN.Empty empty) {
-        // In Calcite, empty relations are created using the values() method with no tuples
-        // This creates a LogicalValues node with no rows
         return env.focus(env.current() + ".empty()");
     }
 
@@ -638,9 +612,24 @@ public class CalciteGenerator implements CodeGenerator<CalciteGenerator.Env> {
 
     @Override
     public Env transformAggregate(Env env, RelRN.Aggregate aggregate) {
+        if (env.rulename.equals("AggregateProjectMerge")) {
+            return env.focus("org.qed.HelperFunction.createMergedAggregateProject(call)");
+        }
+        else if (env.rulename.equals("AggregateExtractProject")) {
+            return env.focus("org.qed.HelperFunction.extractProjectForAggregate(call)");
+        }
+        
+        // Default aggregate transformation for other rules
         var sourceTransform = transform(env, aggregate.source());
         String builderWithSource = sourceTransform.current();
-        String originalAgg = "((LogicalAggregate) call.rel(0))";
+
+        String originalAgg;
+        if (env.rulename.equals("FilterAggregateTranspose")) {
+            originalAgg = "((LogicalAggregate) call.rel(1))";
+        }
+        else { 
+            originalAgg = "((LogicalAggregate) call.rel(0))";
+        }
         var groupSetDecl = sourceTransform.declare(originalAgg + ".getGroupSet()");
         var envWithGroupSet = groupSetDecl.getValue();
         var groupKeyDecl = envWithGroupSet.declare(

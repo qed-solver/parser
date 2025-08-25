@@ -1,8 +1,17 @@
 package org.qed;
 
 import kala.collection.Seq;
+
+import org.apache.calcite.rel.core.Aggregate;
 import org.apache.calcite.rex.RexNode;
+import org.apache.calcite.sql.SqlAggFunction;
 import org.apache.calcite.sql.SqlOperator;
+import org.qed.RexRN.And;
+import org.qed.RexRN.False;
+import org.qed.RexRN.GroupBy;
+import org.qed.RexRN.Pred;
+import org.qed.RexRN.Proj;
+import org.qed.RexRN.True;
 
 public interface RexRN {
 
@@ -40,6 +49,53 @@ public interface RexRN {
         return proj(RuleBuilder.create().genericProjectionOp(name, new RelType.VarType(type_name, true)));
     }
 
+    default GroupBy groupBy(SqlOperator op) {
+        return new GroupBy(op, Seq.of(this));
+    }
+
+    default GroupBy groupBy(String name) {
+        return groupBy(RuleBuilder.create().genericProjectionOp(name, new RelType.VarType(name + "_type", true)));
+    }
+
+    default RelRN.AggCall aggCall(String name) {
+        return new RelRN.AggCall(
+            name,
+            RuleBuilder.create().genericAggregateOp(name, new RelType.VarType(name + "_type", true)),
+            false,
+            new RelType.VarType(name + "_type", true),
+            Seq.of(this)
+        );
+    }
+
+    // default RelRN.AggCall aggCall(String name, String returnTypeName, boolean distinct) {
+    //     return new RelRN.AggCall(
+    //         name,
+    //         RuleBuilder.create().genericAggregateOp(name, new RelType.VarType(returnTypeName, true)),
+    //         distinct,
+    //         new RelType.VarType(returnTypeName, true),
+    //         Seq.of(this)
+    //     );
+    // }
+
+    // default RelRN.AggCall aggCall(SqlAggFunction aggFunction, String name, String returnTypeName) {
+    //     return new RelRN.AggCall(
+    //         name,
+    //         aggFunction,
+    //         false,
+    //         new RelType.VarType(returnTypeName, true),
+    //         Seq.of(this)
+    //     );
+    // }
+
+    // default RelRN.AggCall aggCall(SqlAggFunction aggFunction, String name, String returnTypeName, boolean distinct) {
+    //     return new RelRN.AggCall(
+    //         name,
+    //         aggFunction,
+    //         distinct,
+    //         new RelType.VarType(returnTypeName, true),
+    //         Seq.of(this)
+    //     );
+    // }
 
     record Field(int ordinal, RelRN source) implements RexRN {
 
@@ -64,7 +120,7 @@ public interface RexRN {
         @Override
         public RexNode semantics() {
             var builder = RuleBuilder.create();
-//            builder.genericPredicateOp(name, nullable)
+            // builder.genericPredicateOp(name, nullable)
             return builder.call(operator, sources.map(RexRN::semantics));
         }
     }
@@ -74,9 +130,17 @@ public interface RexRN {
         @Override
         public RexNode semantics() {
             var builder = RuleBuilder.create();
-//            builder.genericProjectionOp(name, varType(type_name, nullable))
-            return builder.call(operator,
-                    sources.map(RexRN::semantics));
+            // builder.genericProjectionOp(name, varType(type_name, nullable))
+            return builder.call(operator, sources.map(RexRN::semantics));
+        }
+    }
+
+    record GroupBy(SqlOperator operator, Seq<RexRN> sources) implements RexRN {
+        
+        @Override
+        public RexNode semantics() {
+            var builder = RuleBuilder.create();
+            return builder.call(operator, sources.map(RexRN::semantics));
         }
     }
 
@@ -119,5 +183,4 @@ public interface RexRN {
             return RuleBuilder.create().literal(true);
         }
     }
-
 }
