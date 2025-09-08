@@ -19,6 +19,9 @@ public class MySQLTester {
 
         var projectRule = new org.qed.Generated.RRuleInstances.ProjectMerge();
         new MySQLTester().serializeWithNumericSuffix(projectRule, genPath);
+
+        var joinCommute = new org.qed.Generated.RRuleInstances.JoinCommute();
+        new MySQLTester().serializeWithNumericSuffix(joinCommute, genPath);
     }
 
     public void serializeWithNumericSuffix(RRule rule, String path) {
