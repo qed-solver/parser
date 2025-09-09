@@ -33,7 +33,7 @@ CLASSPATH="target/classes:${MAVEN_CP}"
 javac -cp "$CLASSPATH" JsonGenerator.java
 
 # Generate JSON for each rule
-find src/main/java/org/qed/Generated/RRuleInstances -name '*.java' | while read file; do
+find src/main/java/org/qed/RRuleInstances -name '*.java' | while read file; do
     className=$(echo "$file" | sed 's|src/main/java/||; s|/|.|g; s|\.java$||')
     echo "Generating JSON for: $className"
     java -cp ".:$CLASSPATH" JsonGenerator "$className"
