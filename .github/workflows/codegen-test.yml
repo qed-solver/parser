@@ -39,8 +39,8 @@ jobs:
         with:
           name: generated-code
           path: |
-            src/main/java/org/qed/Generated/*.java
-            !src/main/java/org/qed/Generated/CalciteTester.java
-            !src/main/java/org/qed/Generated/CalciteGenerator.java
-            !src/main/java/org/qed/Generated/CalciteUtilities.java
-            !src/main/java/org/qed/Generated/EmptyConfig.java
+            src/main/java/org/qed/Backends/Calcite/Generated/*.java
+            !src/main/java/org/qed/Backends/Calcite/CalciteTester.java
+            !src/main/java/org/qed/Backends/Calcite/CalciteGenerator.java
+            !src/main/java/org/qed/Backends/Calcite/CalciteUtilities.java
+            !src/main/java/org/qed/Backends/Calcite/EmptyConfig.java
