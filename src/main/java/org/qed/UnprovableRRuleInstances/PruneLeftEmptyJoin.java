@@ -1,0 +1,21 @@
+package org.qed.UnprovableRRuleInstances;
+
+import org.apache.calcite.rel.core.JoinRelType;
+import org.qed.RRule;
+import org.qed.RelRN;
+import org.qed.RexRN;
+
+public record PruneLeftEmptyJoin() implements RRule {
+    static final RelRN left = RelRN.scan("Left", "Left_Type");
+    static final RelRN right = RelRN.scan("Right", "Right_Type");
+
+    @Override
+    public RelRN before() {
+        return left.empty().join(JoinRelType.RIGHT, "pred", right);
+    }
+
+    @Override
+    public RelRN after() {
+        return right;
+    }
+}
