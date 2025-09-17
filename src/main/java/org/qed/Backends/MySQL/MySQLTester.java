@@ -16,7 +16,6 @@ public class MySQLTester {
     public static String genPath = "src/main/java/org/qed/Backends/MySQL/Generated";
     public static String testPath = "src/main/java/org/qed/Backends/MySQL/Tests";
     
-    // MySQL connection settings
     private static final String DB_URL = "jdbc:mysql://localhost:3306/test_db";
     private static final String USER = "root";
     private static final String PASSWORD = "xys6279462"; 
@@ -96,11 +95,17 @@ public class MySQLTester {
             for (String statement : statements) {
                 String trimmed = statement.trim();
                 if (!trimmed.isEmpty()) {
-                    stmt.execute(trimmed);
+                    try {
+                        stmt.execute(trimmed);
+                    } catch (SQLException e) {
+                        System.err.println("x Failed to execute: " + trimmed);
+                        System.err.println("  Error: " + e.getMessage());
+                        throw e;
+                    }
                 }
             }
         } catch (IOException ioe) {
-            System.err.println(ioe.getMessage());
+            System.err.println("Failed loading rule: " + ioe.getMessage());
         }
     }
     
@@ -125,31 +130,25 @@ public class MySQLTester {
     private String executeSQL(String source) throws SQLException {
         Statement stmt = connection.createStatement();
 
-        // Use a timestamp to filter queries instead of deleting
         stmt.execute("SET GLOBAL general_log = 1");
         stmt.execute("SET GLOBAL log_output = 'TABLE'");
         
-        // Get current timestamp as a baseline
         ResultSet timeResult = stmt.executeQuery("SELECT NOW(6)");
         timeResult.next();
         String startTime = timeResult.getString(1);
         timeResult.close();
         
-        // Get connection ID
         ResultSet connId = stmt.executeQuery("SELECT CONNECTION_ID()");
         connId.next();
         long connectionId = connId.getLong(1);
         connId.close();
         
         try {
-            // Execute the source query
             ResultSet rs = stmt.executeQuery(source);
             rs.close();
         } catch (SQLException e) {
-            // Query might fail, but we still want to see what was attempted
         }
         
-        // Get queries executed after our start time by our connection
         ResultSet result = stmt.executeQuery(
             "SELECT argument FROM mysql.general_log " +
             "WHERE thread_id = " + connectionId + " " +
@@ -180,22 +179,15 @@ public class MySQLTester {
             try {
                 Class<?> testClass = Class.forName(className);
                 testClass.getMethod("runTest").invoke(null);
-            } catch (Exception e) {
-                System.err.println(className + " failed: " + e.getMessage());
-            }
+            } catch (Exception e) {}
         }
-        // System.out.println("haha1");
         cleanupRules();
-        // System.out.println("haha2");
         disconnect();
     }
 
     private void cleanupRules() throws SQLException {
-        // System.out.println("test1");
         Statement stmt = connection.createStatement();
-        // System.out.println("test2");
         stmt.execute("DELETE FROM query_rewrite.rewrite_rules");
-        // System.out.println("test3");
         stmt.execute("CALL query_rewrite.flush_rewrite_rules()");
     }
 
@@ -212,7 +204,7 @@ public class MySQLTester {
             throw new RuntimeException("MySQL Driver not found!", e);
         }
         MySQLTester tester = new MySQLTester();
-        // tester.generate();
+        tester.generate();
         try {
             tester.runAllTests();
         } catch (SQLException e) {

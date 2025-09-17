@@ -163,18 +163,7 @@ public class MySQLGenerator implements CodeGenerator<MySQLGenerator.MySQLEnv> {
     @Override
     public String translate(String name, MySQLEnv onMatch, MySQLEnv transform) {
         StringBuilder sql = new StringBuilder();
-        
-        sql.append("-- MySQL Query Rewriter Rule: ").append(name).append("\n");
-        sql.append("-- Auto-generated from RRule instance\n\n");
-        
-        sql.append("-- Enable the rewriter\n");
         sql.append("SET GLOBAL rewriter_enabled = ON;\n\n");
-        
-        sql.append("-- Clear any existing rule with same message\n");
-        sql.append("DELETE FROM query_rewrite.rewrite_rules WHERE message = '")
-           .append(name).append("';\n\n");
-        
-        sql.append("-- Insert the rewrite rule\n");
         sql.append("INSERT INTO query_rewrite.rewrite_rules (pattern, replacement, enabled, message)\n");
         sql.append("VALUES(\n");
         sql.append("    '").append(onMatch.pattern.toString()).append("',\n");
@@ -182,19 +171,9 @@ public class MySQLGenerator implements CodeGenerator<MySQLGenerator.MySQLEnv> {
         sql.append("    'YES',\n");
         sql.append("    '").append(name).append("'\n");
         sql.append(");\n\n");
-        
-        sql.append("-- Load the rule\n");
         sql.append("CALL query_rewrite.flush_rewrite_rules();\n\n");
-        
-        sql.append("-- Verify the rule\n");
-        sql.append("SELECT pattern, replacement, enabled, message\n");
-        sql.append("FROM query_rewrite.rewrite_rules\n");
-        sql.append("WHERE message = '").append(name).append("';\n");
-        
         return sql.toString();
     }
-    
-    // Additional operator support methods
     
     @Override
     public MySQLEnv onMatchProject(MySQLEnv env, RelRN.Project project) {
