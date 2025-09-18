@@ -1,0 +1,1 @@
+SELECT id, status FROM (SELECT id, status FROM testdb.users) AS t0;

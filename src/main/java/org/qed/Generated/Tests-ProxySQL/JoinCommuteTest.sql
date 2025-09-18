@@ -1,0 +1,1 @@
+SELECT * FROM testdb.users AS u INNER JOIN testdb.orders AS o ON u.id = o.user_id;
