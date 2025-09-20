@@ -1,0 +1,2 @@
+SELECT * FROM (SELECT * FROM testdb.users WHERE status = 'active') AS t0
+WHERE id = 1;
