@@ -11,29 +11,25 @@ public class FilterProjectTransposeTest {
     public static void runTest() {
         var tester = new CalciteTester();
         var builder = RuleBuilder.create();
-        
-        // Create table with 3 columns: id, salary, dept_id
         var table = builder.createQedTable(Seq.of(
-            Tuple.of(RelType.fromString("INTEGER", true), false),  // id (col 0)
-            Tuple.of(RelType.fromString("INTEGER", true), false),  // salary (col 1)
-            Tuple.of(RelType.fromString("INTEGER", true), false)   // dept_id (col 2)
+            Tuple.of(RelType.fromString("INTEGER", true), false),
+            Tuple.of(RelType.fromString("INTEGER", true), false),
+            Tuple.of(RelType.fromString("INTEGER", true), false)
         ));
         builder.addTable(table);
         
         var scan = builder.scan(table.getName()).build();
 
-        // Project: SELECT salary, dept_id (reordered columns)
-        // Filter: WHERE salary > 50000 AND dept_id = 5
         var before = builder
             .push(scan)
             .project(
-                builder.field(1),  // salary -> position 0 in projection
-                builder.field(2)   // dept_id -> position 1 in projection
+                builder.field(1),
+                builder.field(2)
             )
             .filter(
                 builder.and(
-                    builder.greaterThan(builder.field(0), builder.literal(50000)), // projected salary > 50000
-                    builder.equals(builder.field(1), builder.literal(5))           // projected dept_id = 5
+                    builder.greaterThan(builder.field(0), builder.literal(50000)),
+                    builder.equals(builder.field(1), builder.literal(5))
                 )
             )
             .build();
@@ -42,13 +38,13 @@ public class FilterProjectTransposeTest {
             .push(scan)
             .filter(
                 builder.and(
-                    builder.greaterThan(builder.field(1), builder.literal(50000)), // table salary > 50000
-                    builder.equals(builder.field(2), builder.literal(5))           // table dept_id = 5
+                    builder.greaterThan(builder.field(1), builder.literal(50000)),
+                    builder.equals(builder.field(2), builder.literal(5))
                 )
             )
             .project(
-                builder.field(1),  // salary
-                builder.field(2)   // dept_id
+                builder.field(1),
+                builder.field(2)
             )
             .build();
             

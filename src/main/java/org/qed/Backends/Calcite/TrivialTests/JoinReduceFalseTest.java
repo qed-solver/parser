@@ -5,7 +5,6 @@ import kala.tuple.Tuple;
 import org.apache.calcite.rel.core.JoinRelType;
 import org.apache.calcite.sql.fun.SqlStdOperatorTable;
 import org.qed.Backends.Calcite.CalciteTester;
-import org.qed.RRuleInstances.JoinReduceFalse;
 import org.qed.RelType;
 import org.qed.RuleBuilder;
 
@@ -32,7 +31,7 @@ public class JoinReduceFalseTest {
                 .join(JoinRelType.INNER, builder.literal(false))
                 .build();
 
-        var runner = CalciteTester.loadRule(org.qed.Generated.JoinReduceFalse.Config.DEFAULT.toRule());
+        var runner = CalciteTester.loadRule(org.qed.Backends.Calcite.Generated.JoinReduceFalse.Config.DEFAULT.toRule());
         tester.verify(runner, before, after);
     }
 

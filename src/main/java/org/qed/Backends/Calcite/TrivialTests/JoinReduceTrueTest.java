@@ -1,11 +1,10 @@
-package org.qed.Generated.Tests;
+package org.qed.Backends.Calcite.TrivialTests;
 
 import kala.collection.Seq;
 import kala.tuple.Tuple;
 import org.apache.calcite.rel.core.JoinRelType;
 import org.apache.calcite.sql.fun.SqlStdOperatorTable;
-import org.qed.Generated.CalciteTester;
-import org.qed.RRuleInstances.JoinReduceTrue;
+import org.qed.Backends.Calcite.CalciteTester;
 import org.qed.RelType;
 import org.qed.RuleBuilder;
 
@@ -32,7 +31,7 @@ public class JoinReduceTrueTest {
                 .join(JoinRelType.INNER, builder.call(builder.genericPredicateOp("join", true), builder.joinFields()))
                 .build();
 
-        var runner = CalciteTester.loadRule(org.qed.Generated.JoinReduceTrue.Config.DEFAULT.toRule());
+        var runner = CalciteTester.loadRule(org.qed.Backends.Calcite.Generated.JoinReduceTrue.Config.DEFAULT.toRule());
         tester.verify(runner, before, after);
     }
 

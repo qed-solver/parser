@@ -50,7 +50,7 @@ public class PruneEmptyUnionTest {
                 .build();
 
         var runner = CalciteTester.loadRule(
-                org.qed.Generated.PruneEmptyUnion.Config.DEFAULT.toRule()
+                org.qed.Backends.Calcite.Generated.PruneEmptyUnion.Config.DEFAULT.toRule()
         );
         tester.verify(runner, before, after);
     }

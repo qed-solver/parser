@@ -10,7 +10,7 @@ import java.util.List;
 
 public class MySQLTester {
 
-    public static String genPath = "src/main/java/org/qed/Generated/mysql";
+    public static String genPath = "src/main/java/org/qed/Backends/MySQL/Generated";
 
     public static String tableName = "testdb.users";
     public static List<String> columnNames = List.of("id", "status");

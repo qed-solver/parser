@@ -6,7 +6,6 @@ import kala.tuple.Tuple;
 import org.apache.calcite.rel.core.JoinRelType;
 import org.apache.calcite.sql.fun.SqlStdOperatorTable;
 import org.qed.Backends.Calcite.CalciteTester;
-import org.qed.RRuleInstances.FilterIntoJoin;
 import org.qed.RelType;
 import org.qed.RuleBuilder;
 

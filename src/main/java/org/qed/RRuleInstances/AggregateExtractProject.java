@@ -1,14 +1,8 @@
 package org.qed.RRuleInstances;
 
-import org.apache.calcite.rel.RelNode;
 import org.qed.RelRN;
 import org.qed.RRule;
-import org.qed.RuleBuilder;
-import org.qed.RelType;
 import org.qed.RexRN;
-
-import kala.collection.Seq;
-import kala.tuple.Tuple;
 
 public record AggregateExtractProject() implements RRule {
     static final RelRN source = RelRN.scan("Source", "Source_Type");

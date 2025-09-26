@@ -1,9 +1,8 @@
-package org.qed.Backends.Calcite.TrivialTests;
+package org.qed.Backends.Calcite.Tests;
 
 import kala.collection.Seq;
 import kala.tuple.Tuple;
 import org.qed.Backends.Calcite.CalciteTester;
-import org.qed.RRuleInstances.UnionMerge;
 import org.qed.RelType;
 import org.qed.RuleBuilder;
 

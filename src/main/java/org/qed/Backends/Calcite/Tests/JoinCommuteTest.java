@@ -12,29 +12,26 @@ public class JoinCommuteTest {
     public static void runTest() {
         var tester = new CalciteTester();
         var builder = RuleBuilder.create();
-        
-        // Create EMP table (8 columns like the real Calcite test)
+
         var empTable = builder.createQedTable(Seq.of(
-            Tuple.of(RelType.fromString("INTEGER", true), false),  // EMPNO
-            Tuple.of(RelType.fromString("VARCHAR", true), false),  // ENAME  
-            Tuple.of(RelType.fromString("VARCHAR", true), false),  // JOB
-            Tuple.of(RelType.fromString("INTEGER", true), false),  // MGR
-            Tuple.of(RelType.fromString("DATE", true), false),     // HIREDATE
-            Tuple.of(RelType.fromString("DECIMAL", true), false),  // SAL
-            Tuple.of(RelType.fromString("DECIMAL", true), false),  // COMM
-            Tuple.of(RelType.fromString("INTEGER", true), false)   // DEPTNO
+            Tuple.of(RelType.fromString("INTEGER", true), false),
+            Tuple.of(RelType.fromString("VARCHAR", true), false),
+            Tuple.of(RelType.fromString("VARCHAR", true), false),
+            Tuple.of(RelType.fromString("INTEGER", true), false),
+            Tuple.of(RelType.fromString("DATE", true), false),
+            Tuple.of(RelType.fromString("DECIMAL", true), false),
+            Tuple.of(RelType.fromString("DECIMAL", true), false),
+            Tuple.of(RelType.fromString("INTEGER", true), false)
         ));
         builder.addTable(empTable);
-        
-        // Create DEPT table (3 columns like the real Calcite test)
+
         var deptTable = builder.createQedTable(Seq.of(
-            Tuple.of(RelType.fromString("INTEGER", true), false),  // DEPTNO
-            Tuple.of(RelType.fromString("VARCHAR", true), false),  // DNAME
-            Tuple.of(RelType.fromString("VARCHAR", true), false)   // LOC
+            Tuple.of(RelType.fromString("INTEGER", true), false),
+            Tuple.of(RelType.fromString("VARCHAR", true), false),
+            Tuple.of(RelType.fromString("VARCHAR", true), false)
         ));
         builder.addTable(deptTable);
-        
-        // Build the "before" pattern: EMP JOIN DEPT ON EMP.DEPTNO = DEPT.DEPTNO
+
         var empScan = builder.scan(empTable.getName()).build();
         var deptScan = builder.scan(deptTable.getName()).build();
         
@@ -42,34 +39,30 @@ public class JoinCommuteTest {
             .push(empScan)
             .push(deptScan)
             .join(JoinRelType.INNER, builder.call(builder.genericPredicateOp("equals", true), 
-                  builder.field(2, 0, 7), // EMP.DEPTNO (8th column, index 7)
-                  builder.field(2, 1, 0)  // DEPT.DEPTNO (1st column, index 0)
+                  builder.field(2, 0, 7),
+                  builder.field(2, 1, 0)
             ))
             .build();
-            
-        // Build the "after" pattern: DEPT JOIN EMP ON DEPT.DEPTNO = EMP.DEPTNO
-        // followed by projection to restore original column order
+
         var after = builder
             .push(deptScan)
             .push(empScan)
             .join(JoinRelType.INNER, builder.call(builder.genericPredicateOp("equals", true),
-                  builder.field(2, 1, 7), // EMP.DEPTNO (now at input 1, field 7)
-                  builder.field(2, 0, 0)  // DEPT.DEPTNO (now at input 0, field 0)
+                  builder.field(2, 1, 7),
+                  builder.field(2, 0, 0)
             ))
             .project(
-                // EMP columns first (now at positions 3-10 in the swapped join)
-                builder.field(3),  // EMPNO
-                builder.field(4),  // ENAME
-                builder.field(5),  // JOB
-                builder.field(6),  // MGR
-                builder.field(7),  // HIREDATE
-                builder.field(8),  // SAL
-                builder.field(9),  // COMM
-                builder.field(10), // DEPTNO
-                // DEPT columns second (now at positions 0-2 in the swapped join)
-                builder.field(0),  // DEPTNO0
-                builder.field(1),  // DNAME
-                builder.field(2)   // LOC
+                builder.field(3),
+                builder.field(4),
+                builder.field(5),
+                builder.field(6),
+                builder.field(7),
+                builder.field(8),
+                builder.field(9),
+                builder.field(10),
+                builder.field(0),
+                builder.field(1),
+                builder.field(2)
             )
             .build();
             

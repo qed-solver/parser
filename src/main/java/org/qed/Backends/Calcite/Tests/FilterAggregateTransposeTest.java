@@ -13,16 +13,15 @@ public class FilterAggregateTransposeTest {
         var builder = RuleBuilder.create();
         
         var sourceTable = builder.createQedTable(Seq.of(
-            Tuple.of(RelType.fromString("INTEGER", true), false),   // ID (index 0)
-            Tuple.of(RelType.fromString("VARCHAR", true), false),   // CATEGORY1 (index 1)
-            Tuple.of(RelType.fromString("VARCHAR", true), false),   // CATEGORY2 (index 2)
-            Tuple.of(RelType.fromString("DECIMAL", true), false)    // AMOUNT (index 3)
+            Tuple.of(RelType.fromString("INTEGER", true), false),
+            Tuple.of(RelType.fromString("VARCHAR", true), false),
+            Tuple.of(RelType.fromString("VARCHAR", true), false),
+            Tuple.of(RelType.fromString("DECIMAL", true), false)
         ));
         builder.addTable(sourceTable);
         
         var sourceScan = builder.scan(sourceTable.getName()).build();
-        
-        // Before: Filter after aggregate (HAVING clause)
+
         var before = builder
             .push(sourceScan)
             .aggregate(
@@ -31,16 +30,14 @@ public class FilterAggregateTransposeTest {
             )
             .filter(builder.call(
                 builder.genericPredicateOp("pred", true),
-                builder.field(0), builder.field(1)  // Filter on grouped columns (post-aggregate positions)
+                builder.field(0), builder.field(1)
             ))
             .build();
-            
-        // After: Push filter down before aggregate (WHERE clause)
         var after = builder
             .push(sourceScan)
             .filter(builder.call(
                 builder.genericPredicateOp("pred", true),
-                builder.field(1), builder.field(2)  // Filter on original columns (pre-aggregate positions)
+                builder.field(1), builder.field(2)
             ))
             .aggregate(
                 builder.groupKey(builder.field(1), builder.field(2)),  

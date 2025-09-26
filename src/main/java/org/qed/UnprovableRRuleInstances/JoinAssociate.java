@@ -1,4 +1,4 @@
-package org.qed.Generated.RRuleInstances;
+package org.qed.UnprovableRRuleInstances;
 
 import kala.collection.Map;
 import kala.collection.Seq;

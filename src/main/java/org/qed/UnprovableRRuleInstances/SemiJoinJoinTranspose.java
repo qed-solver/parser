@@ -1,4 +1,4 @@
-package org.qed.Generated.RRuleInstances;
+package org.qed.UnprovableRRuleInstances;
 
 import org.apache.calcite.rel.core.JoinRelType;
 import org.qed.RRule;

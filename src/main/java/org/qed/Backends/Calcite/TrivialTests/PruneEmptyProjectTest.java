@@ -1,8 +1,8 @@
-package org.qed.Generated.Tests;
+package org.qed.Backends.Calcite.TrivialTests;
 
 import kala.collection.Seq;
 import kala.tuple.Tuple;
-import org.qed.Generated.CalciteTester;
+import org.qed.Backends.Calcite.CalciteTester;
 import org.qed.RelType;
 import org.qed.RuleBuilder;
 
@@ -29,7 +29,7 @@ public class PruneEmptyProjectTest {
                 .build();
 
         var runner = CalciteTester.loadRule(
-                org.qed.Generated.PruneEmptyProject.Config.DEFAULT.toRule()
+                org.qed.Backends.Calcite.Generated.PruneEmptyProject.Config.DEFAULT.toRule()
         );
         tester.verify(runner, before, after);
     }

@@ -66,36 +66,7 @@ public interface RexRN {
             Seq.of(this)
         );
     }
-
-    // default RelRN.AggCall aggCall(String name, String returnTypeName, boolean distinct) {
-    //     return new RelRN.AggCall(
-    //         name,
-    //         RuleBuilder.create().genericAggregateOp(name, new RelType.VarType(returnTypeName, true)),
-    //         distinct,
-    //         new RelType.VarType(returnTypeName, true),
-    //         Seq.of(this)
-    //     );
-    // }
-
-    // default RelRN.AggCall aggCall(SqlAggFunction aggFunction, String name, String returnTypeName) {
-    //     return new RelRN.AggCall(
-    //         name,
-    //         aggFunction,
-    //         false,
-    //         new RelType.VarType(returnTypeName, true),
-    //         Seq.of(this)
-    //     );
-    // }
-
-    // default RelRN.AggCall aggCall(SqlAggFunction aggFunction, String name, String returnTypeName, boolean distinct) {
-    //     return new RelRN.AggCall(
-    //         name,
-    //         aggFunction,
-    //         distinct,
-    //         new RelType.VarType(returnTypeName, true),
-    //         Seq.of(this)
-    //     );
-    // }
+    
 
     record Field(int ordinal, RelRN source) implements RexRN {
 

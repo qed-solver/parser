@@ -1,11 +1,8 @@
 package org.qed.RRuleInstances;
 
-import kala.collection.Seq;
-import org.apache.calcite.rel.core.JoinRelType;
 import org.qed.RelRN;
 import org.qed.RexRN;
 import org.qed.RRule;
-import org.qed.RelType;
 
 public record AggregateFilterTranspose() implements RRule {
     static final RelRN source = RelRN.scan("Source", "Source_Type");

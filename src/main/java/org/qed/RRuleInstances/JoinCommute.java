@@ -31,16 +31,14 @@ public record JoinCommute() implements RRule {
 
         return new ProjectionRelRN(swappedJoin);
     }
-    
-    // implementation for the column reordering projection
     public static record ProjectionRelRN(RelRN source) implements RelRN {
         @Override
         public RelNode semantics() {
             RuleBuilder builder = RuleBuilder.create();
             builder.push(source.semantics());
             
-            RexNode leftField = builder.field(1);   // Left columns (now at position 1)
-            RexNode rightField = builder.field(0);  // Right columns (now at position 0)
+            RexNode leftField = builder.field(1);
+            RexNode rightField = builder.field(0);
             
             builder.project(leftField, rightField);
             

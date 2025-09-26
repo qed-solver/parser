@@ -27,7 +27,6 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 public class CalciteTester {
-    // Assuming that current working directory is the root of the project
     public static String genPath = "src/main/java/org/qed/Backends/Calcite/Generated";
     public static String rulePath = "rules";
 

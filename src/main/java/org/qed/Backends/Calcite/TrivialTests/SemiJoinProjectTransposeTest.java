@@ -1,9 +1,9 @@
-package org.qed.Generated.Tests;
+package org.qed.Backends.Calcite.TrivialTests;
 
 import kala.collection.Seq;
 import kala.tuple.Tuple;
 import org.apache.calcite.rel.core.JoinRelType;
-import org.qed.Generated.CalciteTester;
+import org.qed.Backends.Calcite.CalciteTester;
 import org.qed.RelType;
 import org.qed.RuleBuilder;
 
@@ -44,7 +44,7 @@ public class SemiJoinProjectTransposeTest {
         var after = builder.join(JoinRelType.SEMI, afterJoinPred).build();
 
         var runner = CalciteTester.loadRule(
-                org.qed.Generated.SemiJoinProjectTranspose.Config.DEFAULT.toRule());
+                org.qed.Backends.Calcite.Generated.SemiJoinProjectTranspose.Config.DEFAULT.toRule());
         tester.verify(runner, before, after);
     }
 
