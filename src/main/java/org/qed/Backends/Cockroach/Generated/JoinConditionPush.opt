@@ -1,0 +1,20 @@
+[JoinConditionPush, Normalize]
+(InnerJoin
+    $input_0:*
+    $input_1:*
+    (And $cond_2:* $cond_3:* $cond_4:*)
+    $private_5:*
+)
+=>
+(InnerJoin
+    (Select
+    $input_0
+    $cond_3
+)
+    (Select
+    $input_1
+    $cond_4
+)
+    $cond_2
+    $private_5
+)

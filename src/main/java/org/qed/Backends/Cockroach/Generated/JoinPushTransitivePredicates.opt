@@ -1,0 +1,17 @@
+[JoinPushTransitivePredicates, Normalize]
+(Select
+    (InnerJoin
+    $input_0:*
+    $input_1:*
+    $cond_2:*
+    $private_3:*
+)
+    $cond_4:*
+)
+=>
+(InnerJoin
+    $input_0
+    $input_1
+    (ConcatFilters $cond_2 $cond_4)
+    $private_3
+)

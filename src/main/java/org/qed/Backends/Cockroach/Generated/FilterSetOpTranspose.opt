@@ -1,0 +1,21 @@
+[FilterSetOpTranspose, Normalize]
+(Select
+    (Union
+    $input_0:*
+    $input_1:*
+    $private_2:*
+)
+    $cond_3:*
+)
+=>
+(Union
+    (Select
+    $input_0
+    $cond_3
+)
+    (Select
+    $input_1
+    $cond_3
+)
+    $private_2
+)
