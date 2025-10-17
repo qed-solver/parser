@@ -1,0 +1,14 @@
+[JoinCommute, Normalize]
+(InnerJoin
+    $input_0:*
+    $input_1:*
+    $cond_2:*
+    $private_3:*
+)
+=>
+(InnerJoin
+    $input_1
+    $input_0
+    $cond_2
+    $private_3
+)

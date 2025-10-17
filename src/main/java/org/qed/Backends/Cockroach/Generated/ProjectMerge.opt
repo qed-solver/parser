@@ -1,16 +1,23 @@
 [ProjectMerge, Normalize]
 (Project
-    (Project
-    $input_0:*
-    $proj_1:*
-    $passthrough_2:*
-)
-    $proj_3:*
+    $input:(Project
+    $input_1:*
+    $proj_2:*
+    $innerPassthrough_3:*)
+    $proj_0:* &
+        (CanMergeProjections $proj_0 $proj_2)
     $passthrough_4:*
 )
 =>
 (Project
-    $input_0
-    $proj_3
-    $passthrough_4
+    $input_1
+    (MergeProjections
+        $proj_0
+        $proj_2
+        $passthrough_4
+    )
+    (DifferenceCols
+        $innerPassthrough_3
+        (ProjectionCols $proj_2)
+    )
 )
