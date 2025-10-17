@@ -70,13 +70,6 @@ public class CockroachGenerator implements CodeGenerator<CockroachGenerator.Env>
 
     @Override
     public Env onMatchJoin(Env env, RelRN.Join join) {
-        if (env.rulename.equals("AggregateJoinRemove") || env.rulename.equals("AggregateJoinJoinRemove")) {
-            if (isUnusedJoinInAggregateRules(join)) {
-                String joinType = getJoinType(join.ty().semantics());
-                String pattern = "(" + joinType + "\n    *:*\n    *:*\n    *:*\n    *:*\n)";
-                return env.setPattern(pattern).focus(pattern);
-            }
-        }   
         Env leftEnv = onMatch(env, join.left());
         String leftPattern = leftEnv.current();
         Env rightEnv = onMatch(leftEnv, join.right());
