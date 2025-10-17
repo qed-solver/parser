@@ -1,0 +1,18 @@
+[ProjectFilterTranspose, Normalize]
+(Project
+    (Select
+    $input_0:*
+    $cond_1:*
+)
+    $proj_2:*
+    $passthrough_3:*
+)
+=>
+(Select
+    (Project
+    $input_0
+    $proj_2
+    $passthrough_3
+)
+    $cond_1
+)

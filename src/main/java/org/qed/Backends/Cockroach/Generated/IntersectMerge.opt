@@ -1,0 +1,20 @@
+[IntersectMerge, Normalize]
+(Intersect
+    (Intersect
+    $input_0:*
+    $input_1:*
+    $private_2:*
+)
+    $input_3:*
+    $private_4:*
+)
+=>
+(Intersect
+    $input_0
+    (Intersect
+    $input_1
+    $input_3
+    $private_2
+)
+    $private_4
+)

@@ -8,7 +8,7 @@ echo "" >> $GITHUB_STEP_SUMMARY
 # Step 1: Generate code for each rule in RRuleInstances
 # Create temporary Java file for code generation
 cat > RuleGenerator.java << 'EOF'
-import org.qed.Generated.CalciteTester;
+import org.qed.Backends.Calcite.CalciteTester;
 import org.qed.*;
 import java.nio.file.*;
 
@@ -34,17 +34,15 @@ CLASSPATH="target/classes:${MAVEN_CP}"
 javac -cp "$CLASSPATH" RuleGenerator.java
 
 # Generate code for each rule
-find src/main/java/org/qed/Generated/RRuleInstances -name '*.java' -not -path '*/RRuleInstances-unprovable/*' | while read file; do
+find src/main/java/org/qed/RRuleInstances -name '*.java' -not -path '*/RRuleInstances-unprovable/*' | while read file; do
     className=$(echo "$file" | sed 's|src/main/java/||; s|/|.|g; s|\.java$||')
     java -cp ".:$CLASSPATH" RuleGenerator "$className"
 done
 
 # Step 2: Check for missing tests
-missing_tests=""
-missing_count=0
-for rule_file in src/main/java/org/qed/Generated/RRuleInstances/*.java; do
+for rule_file in src/main/java/org/qed/RRuleInstances/*.java; do
     rule_name=$(basename "$rule_file" .java)
-    if [ ! -f "src/main/java/org/qed/Generated/Tests/${rule_name}Test.java" ]; then
+    if [ ! -f "src/main/java/org/qed/Backends/Calcite/Tests/${rule_name}Test.java" ]; then
         missing_tests="${missing_tests}- ${rule_name}\n"
         missing_count=$((missing_count + 1))
     fi
@@ -65,7 +63,7 @@ passed_tests=0
 total_tests=0
 passed_tests=0
 
-for test_file in src/main/java/org/qed/Generated/Tests/*Test.java; do
+for test_file in src/main/java/org/qed/Backends/Calcite/Tests/*Test.java; do
     class_name=${test_file#src/main/java/}
     class_name=${class_name%.java}
     class_name=${class_name//\//.}

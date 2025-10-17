@@ -1,0 +1,18 @@
+[FilterAggregateTranspose, Normalize]
+(Select
+    (GroupBy
+    $input_0:*
+    $aggregations_2:*
+    $private_4:*
+)
+    $cond_5:*
+)
+=>
+(GroupBy
+    (Select
+    $input_0
+    $cond_5
+)
+    $aggregations_2
+    $private_4
+)

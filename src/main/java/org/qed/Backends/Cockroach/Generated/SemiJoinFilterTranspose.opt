@@ -1,0 +1,20 @@
+[SemiJoinFilterTranspose, Normalize]
+(Select
+    (SemiJoin
+    $input_0:*
+    $input_1:*
+    $cond_2:*
+    $private_3:*
+)
+    $cond_4:*
+)
+=>
+(SemiJoin
+    (Select
+    $input_0
+    $cond_4
+)
+    $input_1
+    $cond_2
+    $private_3
+)

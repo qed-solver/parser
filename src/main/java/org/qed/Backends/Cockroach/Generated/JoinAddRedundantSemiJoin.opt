@@ -1,0 +1,19 @@
+[JoinAddRedundantSemiJoin, Normalize]
+(InnerJoin
+    $input_0:*
+    $input_1:*
+    $cond_2:*
+    $private_3:*
+)
+=>
+(InnerJoin
+    (SemiJoin
+    $input_0
+    $input_1
+    $cond_2
+    $private_3
+)
+    $input_1
+    $cond_2
+    $private_3
+)

@@ -1,0 +1,41 @@
+package org.qed.Backends.Calcite.Generated;
+
+import org.apache.calcite.plan.RelOptRuleCall;
+import org.apache.calcite.plan.RelRule;
+import org.apache.calcite.plan.RelOptUtil;
+import org.apache.calcite.rel.RelNode;
+import org.apache.calcite.rel.core.JoinRelType;
+import org.apache.calcite.rel.logical.*;
+import org.qed.Backends.Calcite.EmptyConfig;
+
+public class FilterReduceTrue extends RelRule<FilterReduceTrue.Config> {
+	protected FilterReduceTrue(Config config) {
+		super(config);
+	}
+
+	@Override
+	public void onMatch(RelOptRuleCall call) {
+		var var_3 = call.builder();
+		call.transformTo(var_3.push(call.rel(1)).build());
+	}
+
+	public interface Config extends EmptyConfig {
+		Config DEFAULT = new Config() {};
+
+		@Override
+		default FilterReduceTrue toRule() {
+			return new FilterReduceTrue(this);
+		}
+
+		@Override
+		default String description() {
+			return "FilterReduceTrue";
+		}
+
+		@Override
+		default RelRule.OperandTransform operandSupplier() {
+			return s_1 -> s_1.operand(LogicalFilter.class).oneInput(s_0 -> s_0.operand(RelNode.class).anyInputs());
+		}
+
+	}
+}

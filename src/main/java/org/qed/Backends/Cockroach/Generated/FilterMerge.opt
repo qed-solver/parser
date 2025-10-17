@@ -1,0 +1,13 @@
+[FilterMerge, Normalize]
+(Select
+    (Select
+    $input_0:*
+    $cond_1:*
+)
+    $cond_2:*
+)
+=>
+(Select
+    $input_0
+    (ConcatFilters $cond_1 $cond_2)
+)
