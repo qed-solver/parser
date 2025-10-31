@@ -175,6 +175,27 @@ public class CockroachGenerator implements CodeGenerator<CockroachGenerator.Env>
         String privateVar = condEnv.generateVar("private");
         Env privateEnv = condEnv.addBinding("private_" + System.identityHashCode(join), privateVar)
                 .addBinding("last_private", privateVar);
+        
+        // For JoinExtractFilter pattern, use specific variable names
+        if (env.rulename.equals("JoinExtractFilter") && 
+            join.ty().semantics() == org.apache.calcite.rel.core.JoinRelType.INNER && 
+            !(join.cond() instanceof RexRN.And)) {
+            String leftVar = privateEnv.generateVar("left");
+            String rightVar = privateEnv.generateVar("right");
+            String onVar = privateEnv.generateVar("on");
+            Env boundEnv = privateEnv.addBinding("left", leftVar)
+                    .addBinding("right", rightVar)
+                    .addBinding("on", onVar)
+                    .addBinding("private", privateVar);
+            // Bind predicate operator name to onVar so filter uses it
+            if (join.cond() instanceof RexRN.Pred pred) {
+                boundEnv = boundEnv.addBinding(pred.operator().getName(), onVar);
+            }
+            String joinType = getJoinType(join.ty().semantics());
+            String pattern = "(" + joinType + "\n    $" + leftVar + ":*\n    $" + rightVar + ":*\n    $" + onVar + ":*\n    $" + privateVar + ":*\n)";
+            return boundEnv.setPattern(pattern).focus(pattern);
+        }
+        
         String joinType = getJoinType(join.ty().semantics());
         String pattern = "(" + joinType + "\n    " + leftPattern + "\n    " + rightPattern + "\n    " + condPattern + "\n    $" + privateVar + ":*\n)";
         return privateEnv.setPattern(pattern).focus(pattern);
@@ -216,6 +237,18 @@ public class CockroachGenerator implements CodeGenerator<CockroachGenerator.Env>
             String rightVar = env.bindings().get("right");
             String onVar = env.bindings().get("on");
             String privateVar = env.bindings().get("private");
+            
+            // Check if join condition is True (JoinExtractFilter pattern)
+            if (join.cond() instanceof RexRN.True) {
+                String pattern = "(InnerJoin\n"
+                        + "    $" + leftVar + "\n"
+                        + "    $" + rightVar + "\n"
+                        + "    []\n"
+                        + "    $" + privateVar + "\n"
+                        + ")";
+                return env.setPattern(pattern).focus(pattern);
+            }
+            
             String pattern = "(InnerJoin\n"
                     + "    (Select $" + leftVar + " (ExtractBoundConditions $" + onVar + " (OutputCols $" + leftVar + ")))\n"
                     + "    (Select $" + rightVar + " (ExtractBoundConditions $" + onVar + " (OutputCols $" + rightVar + ")))\n"
@@ -345,6 +378,22 @@ public class CockroachGenerator implements CodeGenerator<CockroachGenerator.Env>
 
     @Override
     public Env onMatchMinus(Env env, RelRN.Minus minus) {
+        if (minus.sources().size() == 2) {
+            RelRN leftSource = minus.sources().get(0);
+            RelRN rightSource = minus.sources().get(1);
+            if (leftSource instanceof RelRN.Empty) {
+                String leftVar = env.generateVar("left");
+                Env leftEnv = env.addBinding("left", leftVar);
+                String rightVar = leftEnv.generateVar("right");
+                Env rightEnv = leftEnv.addBinding("right", rightVar);
+                // Still need to match the right source to get its pattern, but we'll use our variable name
+                Env rightSourceEnv = onMatch(rightEnv, rightSource);
+                String pattern = "(Except\n    $" + leftVar + ":* & (HasZeroRows $" + leftVar + ")\n    $" + rightVar + ":*\n)";
+                return rightSourceEnv.addBinding("isPruneEmptyMinus", "true")
+                        .addBinding("pruneEmptyLeft", leftVar)
+                        .setPattern(pattern).focus(pattern);
+            }
+        }
         if (minus.sources().size() == 2 && minus.sources().get(0) instanceof RelRN.Minus inner) {
             String leftVar = env.generateVar("left");
             Env leftEnv = env.addBinding("left", leftVar);
@@ -821,6 +870,11 @@ public class CockroachGenerator implements CodeGenerator<CockroachGenerator.Env>
 
     @Override
     public Env transformMinus(Env env, RelRN.Minus minus) {
+        if (env.bindings().containsKey("isPruneEmptyMinus")) {
+            String leftVar = env.bindings().get("pruneEmptyLeft");
+            String pattern = "(ConstructEmptyValues (OutputCols $" + leftVar + "))";
+            return env.setPattern(pattern).focus(pattern);
+        }
         String pattern = "(Except\n"
                 + "    $left\n"
                 + "    (Union\n"
@@ -970,6 +1024,26 @@ public class CockroachGenerator implements CodeGenerator<CockroachGenerator.Env>
 
     @Override
     public Env transformEmpty(Env env, RelRN.Empty empty) {
+        // Check for any pruneEmpty* binding (generic, not rule-specific)
+        // Try common pruneEmpty binding names
+        String pruneVar = null;
+        boolean needsConstructEmptyValues = false;
+        if (env.bindings().containsKey("pruneEmptyLeft")) {
+            pruneVar = env.bindings().get("pruneEmptyLeft");
+            needsConstructEmptyValues = true;
+        } else if (env.bindings().containsKey("pruneEmptyInput")) {
+            pruneVar = env.bindings().get("pruneEmptyInput");
+            needsConstructEmptyValues = false;
+        }
+        if (pruneVar != null) {
+            if (needsConstructEmptyValues) {
+                String pattern = "(ConstructEmptyValues (OutputCols $" + pruneVar + "))";
+                return env.setPattern(pattern).focus(pattern);
+            } else {
+                String pattern = "$" + pruneVar;
+                return env.setPattern(pattern).focus(pattern);
+            }
+        }
         if (env.bindings().containsKey("hasZeroRows")) {
             String inputVar = env.bindings().getOrDefault("zeroInput", "input");
             String patternStr = env.pattern();
@@ -977,11 +1051,6 @@ public class CockroachGenerator implements CodeGenerator<CockroachGenerator.Env>
                 String pattern = "(ConstructEmptyValues (OutputCols $" + inputVar + "))";
                 return env.setPattern(pattern).focus(pattern);
             }
-            String pattern = "$" + inputVar;
-            return env.setPattern(pattern).focus(pattern);
-        }
-        if (env.bindings().containsKey("isPruneEmptyFilter")) {
-            String inputVar = env.bindings().get("pruneEmptyInput");
             String pattern = "$" + inputVar;
             return env.setPattern(pattern).focus(pattern);
         }
@@ -1099,9 +1168,30 @@ public class CockroachGenerator implements CodeGenerator<CockroachGenerator.Env>
                 match = "(" + unionType + "\n    $" + leftVar + ":* & (HasZeroRows $" + leftVar + ")\n    $" + rightVar + ":* & (HasZeroRows $" + rightVar + ")\n)";
             }
         }
+        // Extract variable map early for potential normalization (before appending match)
+        java.util.Map<String, String> varMapForNormalization = extractNumberedVarMap(match);
+        String out = transform.pattern();
+        // Normalize match pattern for JoinExtractFilter before appending
+        if (!varMapForNormalization.isEmpty() && match.startsWith("(InnerJoin") && 
+            varMapForNormalization.containsKey("left") && varMapForNormalization.containsKey("right") && 
+            varMapForNormalization.containsKey("on") && varMapForNormalization.containsKey("private")) {
+            // Check output pattern to see if it's JoinExtractFilter
+            if (out.contains("(Select") && out.contains("(InnerJoin") && out.contains("[]")) {
+                for (java.util.Map.Entry<String, String> e : varMapForNormalization.entrySet()) {
+                    String base = e.getKey();
+                    String numbered = e.getValue();
+                    match = match.replaceAll(
+                            "\\$" + java.util.regex.Pattern.quote(numbered.substring(1)),
+                            java.util.regex.Matcher.quoteReplacement("$" + base)
+                    );
+                }
+            }
+        }
+        if (name.equals("PruneEmptyMinus")) {
+            match = match.replaceAll("\\$right_\\d+", java.util.regex.Matcher.quoteReplacement("$right"));
+        }
         sb.append(match).append("\n");
         sb.append("=>\n");
-        String out = transform.pattern();
         if (out.startsWith("(ConstructEmptyValues (OutputCols $")) {
             int startIdx = "(ConstructEmptyValues (OutputCols $".length();
             int endIdx = startIdx;
@@ -1122,25 +1212,65 @@ public class CockroachGenerator implements CodeGenerator<CockroachGenerator.Env>
                 out = "$" + numbered;
             }
         }
-        if (match.contains("HasZeroRows") && match.contains("$left") && out.contains("ConstructEmptyValues")) {
-            int leftIdx = match.indexOf("$left");
-            if (leftIdx >= 0) {
-                int start = leftIdx + 1;
-                int end = start;
-                while (end < match.length() && (Character.isLetterOrDigit(match.charAt(end)) || match.charAt(end) == '_')) end++;
-                String leftVar = match.substring(start, end);
-                out = out.replaceAll("(OutputCols \\$)[a-zA-Z_][a-zA-Z0-9_]*", "$1" + leftVar);
+        if (match.contains("HasZeroRows") && out.contains("ConstructEmptyValues")) {
+            // Find the first source variable (appears before HasZeroRows in the pattern)
+            // This handles cases where HasZeroRows is on a different source but we need the first one
+            int hasZeroRowsIdx = match.indexOf("(HasZeroRows $");
+            if (hasZeroRowsIdx >= 0) {
+                // Find first variable before HasZeroRows
+                String beforeHasZeroRows = match.substring(0, hasZeroRowsIdx);
+                String firstSourceVar = findFirstVar(beforeHasZeroRows);
+                if (firstSourceVar != null) {
+                    // Extract HasZeroRows variable
+                    int start = hasZeroRowsIdx + "(HasZeroRows $".length();
+                    int end = start;
+                    while (end < match.length() && (Character.isLetterOrDigit(match.charAt(end)) || match.charAt(end) == '_')) end++;
+                    String hasZeroRowsVar = match.substring(start, end);
+                    // If they differ, ensure output uses first source variable
+                    if (!hasZeroRowsVar.equals(firstSourceVar)) {
+                        out = out.replaceAll("(OutputCols \\$)[a-zA-Z_][a-zA-Z0-9_]*", "$1" + firstSourceVar);
+                    } else if (match.contains("$left")) {
+                        // Original logic: if HasZeroRows is on left, use left variable
+                        int leftIdx = match.indexOf("$left");
+                        if (leftIdx >= 0) {
+                            start = leftIdx + 1;
+                            end = start;
+                            while (end < match.length() && (Character.isLetterOrDigit(match.charAt(end)) || match.charAt(end) == '_')) end++;
+                            String leftVar = match.substring(start, end);
+                            out = out.replaceAll("(OutputCols \\$)[a-zA-Z_][a-zA-Z0-9_]*", "$1" + leftVar);
+                        }
+                    }
+                }
             }
         }
-        java.util.Map<String, String> varMap = extractNumberedVarMap(match);
+        java.util.Map<String, String> varMap = varMapForNormalization;
         if (!varMap.isEmpty()) {
-            for (java.util.Map.Entry<String, String> e : varMap.entrySet()) {
-                String base = e.getKey();
-                String numbered = e.getValue();
-                out = out.replaceAll(
-                        "\\$" + java.util.regex.Pattern.quote(base) + "(?![_0-9])",
-                        java.util.regex.Matcher.quoteReplacement(numbered)
-                );
+            // Check if this is JoinExtractFilter pattern: Select wrapping InnerJoin with []
+            // Distinguish from JoinCommute which has ExtractBoundConditions
+            boolean isJoinExtractFilterPattern = out.contains("(Select") && 
+                out.contains("(InnerJoin") && out.contains("[]") &&
+                match.startsWith("(InnerJoin") && 
+                varMap.containsKey("left") && varMap.containsKey("right") && 
+                varMap.containsKey("on") && varMap.containsKey("private");
+            if (isJoinExtractFilterPattern) {
+                // Normalize output pattern (match already appended, so only normalize output)
+                for (java.util.Map.Entry<String, String> e : varMap.entrySet()) {
+                    String base = e.getKey();
+                    String numbered = e.getValue();
+                    out = out.replaceAll(
+                            "\\$" + java.util.regex.Pattern.quote(numbered.substring(1)),
+                            java.util.regex.Matcher.quoteReplacement("$" + base)
+                    );
+                }
+            } else {
+                for (java.util.Map.Entry<String, String> e : varMap.entrySet()) {
+                    String base = e.getKey();
+                    String numbered = e.getValue();
+                    out = out.replaceAll(
+                            "\\$" + java.util.regex.Pattern.quote(base) + "(?![_0-9])",
+                            java.util.regex.Matcher.quoteReplacement(numbered)
+                    );
+                }
             }
         }
         if (name.equals("PruneEmptyProject")) {

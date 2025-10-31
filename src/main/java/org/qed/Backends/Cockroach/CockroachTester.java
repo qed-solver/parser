@@ -92,6 +92,20 @@ public class CockroachTester {
     }
 
     public static void generate() {
+        // Clean up any duplicate files with " 2.opt" or " 3.opt" suffixes (macOS/IDE artifacts)
+        try {
+            java.io.File genDir = new java.io.File(genPath);
+            if (genDir.exists()) {
+                java.io.File[] files = genDir.listFiles((dir, name) -> name.matches(".*\\s+[0-9]+\\.opt$"));
+                if (files != null) {
+                    for (java.io.File file : files) {
+                        file.delete();
+                    }
+                }
+            }
+        } catch (Exception e) {
+            // Ignore cleanup errors
+        }
         var tester = new CockroachTester();
         ruleList().forEach(r -> tester.serialize(r, genPath));
     }

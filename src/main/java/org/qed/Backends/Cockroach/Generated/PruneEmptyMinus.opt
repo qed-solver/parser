@@ -1,8 +1,7 @@
 [PruneEmptyMinus, Normalize]
 (Except
-    $empty_0:(Values)
-    $input_1:*
-    $private_2:*
+    $left_0:* & (HasZeroRows $left_0)
+    $right:*
 )
 =>
-(ConstructEmptyValues (OutputCols $input_0))
+(ConstructEmptyValues (OutputCols $left_0))
