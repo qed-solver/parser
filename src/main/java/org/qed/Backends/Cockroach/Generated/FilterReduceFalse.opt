@@ -1,0 +1,11 @@
+[FilterReduceFalse, Normalize]
+(Select
+    $input_0:*
+    $on_1:[
+        ...
+        $item_2:(FiltersItem (False))
+        ...
+    ]
+)
+=>
+(ConstructEmptyValues (OutputCols $input_0_0))

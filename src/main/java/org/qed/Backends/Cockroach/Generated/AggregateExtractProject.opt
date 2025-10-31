@@ -1,0 +1,19 @@
+[AggregateExtractProject, Normalize]
+(GroupBy
+    $input_5:*
+    $aggregations_6:*
+    $groupingPrivate_7:*
+)
+=>
+(GroupBy
+    (Project
+        $input_5
+        []
+        (UnionCols
+            (GroupingCols $groupingPrivate_7)
+            (AggregationOuterCols $aggregations_6)
+        )
+    )
+    $aggregations_6
+    $groupingPrivate_7
+)

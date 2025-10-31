@@ -1,0 +1,7 @@
+[PruneEmptyFilter, Normalize]
+(Select
+    $input_2:* & (HasZeroRows $input_2)
+    $filters_3:*
+)
+=>
+$input_2
