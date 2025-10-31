@@ -1,0 +1,8 @@
+[PruneEmptyProject, Normalize]
+(Project
+    $input_0:* & (HasZeroRows $input_0)
+    $projections:*
+    $passthrough:*
+)
+=>
+$input_0

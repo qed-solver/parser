@@ -1,0 +1,7 @@
+[PruneEmptyUnion, Normalize]
+(Union
+    $left_0:* & (HasZeroRows $left_0)
+    $right_1:* & (HasZeroRows $right_1)
+)
+=>
+(ConstructEmptyValues (OutputCols $left_0))

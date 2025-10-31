@@ -1,0 +1,20 @@
+[MinusMerge, Normalize]
+(Except
+    (Except
+        $left_0:*
+        $rightB_1:*
+        $pInner_2:*
+    )
+    $rightC_3:*
+    $pOuter_4:*
+)
+=>
+(Except
+    $left_0
+    (Union
+        $rightB_1
+        $rightC_3
+        (MakeUnionPrivateForExcept $pInner_2 $pOuter_4)
+    )
+    $pOuter_4
+)
