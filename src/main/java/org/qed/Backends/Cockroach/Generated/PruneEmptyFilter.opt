@@ -1,7 +1,7 @@
 [PruneEmptyFilter, Normalize]
 (Select
     $input_2:* & (HasZeroRows $input_2)
-    $filters_3:*
+    $filters:*
 )
 =>
 $input_2

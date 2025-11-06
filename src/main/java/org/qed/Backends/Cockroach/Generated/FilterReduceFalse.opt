@@ -8,4 +8,4 @@
     ]
 )
 =>
-(ConstructEmptyValues (OutputCols $input_0_0))
+(ConstructEmptyValues (OutputCols $input_0))
