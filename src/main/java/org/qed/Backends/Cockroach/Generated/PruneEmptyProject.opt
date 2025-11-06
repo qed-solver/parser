@@ -1,8 +1,8 @@
 [PruneEmptyProject, Normalize]
 (Project
     $input_0:* & (HasZeroRows $input_0)
-    $projections:*
-    $passthrough:*
+    $projections_1:*
+    $passthrough_2:*
 )
 =>
 $input_0

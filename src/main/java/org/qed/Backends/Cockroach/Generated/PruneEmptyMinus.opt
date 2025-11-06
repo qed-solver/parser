@@ -5,4 +5,4 @@
     $private_2:*
 )
 =>
-(ConstructEmptyValues (OutputCols $input_0))
+(ConstructEmptyValues (OutputCols $empty_0))
