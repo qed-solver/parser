@@ -1,0 +1,17 @@
+[JoinConditionPush, Normalize]
+(InnerJoin
+    $left_0:* & ^(HasOuterCols $left_0)
+    $right_1:* & ^(HasOuterCols $right_1)
+    $on_2:*
+    $private_3:*
+)
+=>
+(InnerJoin
+    (Select $left_0 (ExtractBoundConditions $on_2 (OutputCols $left_0)))
+    (Select $right_1 (ExtractBoundConditions $on_2 (OutputCols $right_1)))
+    (ExtractUnboundConditions
+        (ExtractUnboundConditions $on_2 (OutputCols $left_0))
+        (OutputCols $right_1)
+    )
+    $private_3
+)

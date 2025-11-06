@@ -28,7 +28,6 @@ public class CockroachGenerator implements CodeGenerator<CockroachGenerator.Env>
         Env condEnv = onMatch(sourceEnv, filter.cond());
         String condPattern;
         
-        // Check for PruneEmptyFilter pattern: filter on empty source
         if (filter.source() instanceof RelRN.Empty) {
             String inputVar = condEnv.generateVar("input");
             String filtersVar = condEnv.generateVar("filters");
@@ -42,7 +41,6 @@ public class CockroachGenerator implements CodeGenerator<CockroachGenerator.Env>
             String pattern = "(Select\n    " + sourcePattern + "\n    []\n)";
             return condEnv.setPattern(pattern).focus(pattern);
         } else if (filter.cond() instanceof RexRN.False) {
-            // FilterReduceFalse pattern: Select with False condition
             String onVar = condEnv.generateVar("on");
             Env onEnv = condEnv.addBinding("on", onVar);
             String itemVar = onEnv.generateVar("item");
@@ -57,7 +55,6 @@ public class CockroachGenerator implements CodeGenerator<CockroachGenerator.Env>
     }
 
     public Env onMatchProject(Env env, RelRN.Project project) {
-        // Generic handling for Project over empty input (PruneEmptyProject)
         if (project.source() instanceof RelRN.Empty) {
             String inputVar = env.generateVar("input");
             Env inputEnv = env.addBinding("zeroInput", inputVar)
@@ -99,25 +96,23 @@ public class CockroachGenerator implements CodeGenerator<CockroachGenerator.Env>
 
     @Override
     public Env onMatchJoin(Env env, RelRN.Join join) {
-        // Check for JoinReduceTrue/JoinReduceFalse patterns
         if (join.cond() instanceof RexRN.And and) {
             if (and.sources().size() == 2) {
                 boolean hasTrue = false;
                 boolean hasFalse = false;
                 RexRN otherCond = null;
                 
-                for (RexRN source : and.sources()) {
-                    if (source instanceof RexRN.True) {
+                for (RexRN side : and.sources()) {
+                    if (side instanceof RexRN.True) {
                         hasTrue = true;
-                    } else if (source instanceof RexRN.False) {
+                    } else if (side instanceof RexRN.False) {
                         hasFalse = true;
                     } else {
-                        otherCond = source;
+                        otherCond = side;
                     }
                 }
                 
                 if (hasTrue && otherCond != null) {
-                    // JoinReduceTrue pattern: And(cond, True) -> cond
                     Env leftEnv = onMatch(env, join.left());
                     String leftPattern = leftEnv.current();
                     Env rightEnv = onMatch(leftEnv, join.right());
@@ -134,7 +129,6 @@ public class CockroachGenerator implements CodeGenerator<CockroachGenerator.Env>
                     String pattern = "(" + joinType + "\n    " + leftPattern + "\n    " + rightPattern + "\n    $" + onVar + ":[\n        ...\n        $" + itemVar + ":(FiltersItem (True))\n        ...\n    ]\n    $" + privateVar + ":*\n)";
                     return privateEnv.setPattern(pattern).focus(pattern);
                 } else if (hasFalse && otherCond != null) {
-                    // JoinReduceFalse pattern: And(cond, False) -> False
                     Env leftEnv = onMatch(env, join.left());
                     String leftPattern = leftEnv.current();
                     Env rightEnv = onMatch(leftEnv, join.right());
@@ -151,6 +145,24 @@ public class CockroachGenerator implements CodeGenerator<CockroachGenerator.Env>
                     String pattern = "(" + joinType + "\n    " + leftPattern + "\n    " + rightPattern + "\n    $" + onVar + ":[\n        ...\n        $" + itemVar + ":(FiltersItem (False))\n        ...\n    ]\n    $" + privateVar + ":*\n)";
                     return privateEnv.setPattern(pattern).focus(pattern);
                 }
+            }
+            if (join.ty().semantics() == org.apache.calcite.rel.core.JoinRelType.INNER
+                    && and.sources().size() > 2) {
+                String leftVar = env.generateVar("left");
+                Env leftEnv = env.addBinding("left", leftVar);
+                String rightVar = leftEnv.generateVar("right");
+                Env rightEnv = leftEnv.addBinding("right", rightVar);
+                String onVar = rightEnv.generateVar("on");
+                Env onEnv = rightEnv.addBinding("on", onVar);
+                String privateVar = onEnv.generateVar("private");
+                Env privateEnv = onEnv.addBinding("private", privateVar);
+                String pattern = "(InnerJoin\n"
+                        + "    $" + leftVar + ":* & ^(HasOuterCols $" + leftVar + ")\n"
+                        + "    $" + rightVar + ":* & ^(HasOuterCols $" + rightVar + ")\n"
+                        + "    $" + onVar + ":*\n"
+                        + "    $" + privateVar + ":*\n"
+                        + ")";
+                return privateEnv.setPattern(pattern).focus(pattern);
             }
         }
         
@@ -170,9 +182,7 @@ public class CockroachGenerator implements CodeGenerator<CockroachGenerator.Env>
 
     @Override
     public Env transformJoin(Env env, RelRN.Join join) {
-        // Check for JoinReduceTrue/JoinReduceFalse patterns
         if (env.bindings().containsKey("joinReduceTrue")) {
-            // JoinReduceTrue: simplify to RemoveFiltersItem
             Env leftEnv = transform(env, join.left());
             String leftPattern = leftEnv.current();
             Env rightEnv = transform(leftEnv, join.right());
@@ -185,7 +195,6 @@ public class CockroachGenerator implements CodeGenerator<CockroachGenerator.Env>
             String pattern = "(" + joinType + "\n    " + leftPattern + "\n    " + rightPattern + "\n    (RemoveFiltersItem $" + onVar + " $" + itemVar + ")\n    $" + privateVar + "\n)";
             return rightEnv.setPattern(pattern).focus(pattern);
         } else if (env.bindings().containsKey("joinReduceFalse")) {
-            // JoinReduceFalse: simplify to FiltersItem (False)
             Env leftEnv = transform(env, join.left());
             String leftPattern = leftEnv.current();
             Env rightEnv = transform(leftEnv, join.right());
@@ -195,6 +204,28 @@ public class CockroachGenerator implements CodeGenerator<CockroachGenerator.Env>
             String joinType = getJoinType(join.ty().semantics());
             String pattern = "(" + joinType + "\n    " + leftPattern + "\n    " + rightPattern + "\n    [ (FiltersItem (False)) ]\n    $" + privateVar + "\n)";
             return rightEnv.setPattern(pattern).focus(pattern);
+        }
+        if (join.ty().semantics() == org.apache.calcite.rel.core.JoinRelType.INNER
+                && env.bindings().containsKey("left")
+                && env.bindings().containsKey("right")
+                && env.bindings().containsKey("on")
+                && env.bindings().containsKey("private")
+                && !env.bindings().containsKey("joinReduceTrue")
+                && !env.bindings().containsKey("joinReduceFalse")) {
+            String leftVar = env.bindings().get("left");
+            String rightVar = env.bindings().get("right");
+            String onVar = env.bindings().get("on");
+            String privateVar = env.bindings().get("private");
+            String pattern = "(InnerJoin\n"
+                    + "    (Select $" + leftVar + " (ExtractBoundConditions $" + onVar + " (OutputCols $" + leftVar + ")))\n"
+                    + "    (Select $" + rightVar + " (ExtractBoundConditions $" + onVar + " (OutputCols $" + rightVar + ")))\n"
+                    + "    (ExtractUnboundConditions\n"
+                    + "        (ExtractUnboundConditions $" + onVar + " (OutputCols $" + leftVar + "))\n"
+                    + "        (OutputCols $" + rightVar + ")\n"
+                    + "    )\n"
+                    + "    $" + privateVar + "\n"
+                    + ")";
+            return env.setPattern(pattern).focus(pattern);
         }
         
         Env leftEnv = transform(env, join.left());
@@ -216,7 +247,6 @@ public class CockroachGenerator implements CodeGenerator<CockroachGenerator.Env>
 
     @Override
     public Env onMatchUnion(Env env, RelRN.Union union) {
-        // If both inputs are Empty, emit a HasZeroRows pattern generically
         if (union.sources().size() == 2) {
             RelRN leftSource = union.sources().get(0);
             RelRN rightSource = union.sources().get(1);
@@ -264,7 +294,6 @@ public class CockroachGenerator implements CodeGenerator<CockroachGenerator.Env>
 
     @Override
     public Env onMatchIntersect(Env env, RelRN.Intersect intersect) {
-        // Check for PruneEmptyIntersect pattern: intersect with empty right source
         if (intersect.sources().size() == 2) {
             RelRN leftSource = intersect.sources().get(0);
             RelRN rightSource = intersect.sources().get(1);
@@ -316,7 +345,6 @@ public class CockroachGenerator implements CodeGenerator<CockroachGenerator.Env>
 
     @Override
     public Env onMatchMinus(Env env, RelRN.Minus minus) {
-        // Handle MinusMerge: (Except (Except left rightB pInner) rightC pOuter)
         if (minus.sources().size() == 2 && minus.sources().get(0) instanceof RelRN.Minus inner) {
             String leftVar = env.generateVar("left");
             Env leftEnv = env.addBinding("left", leftVar);
@@ -339,7 +367,6 @@ public class CockroachGenerator implements CodeGenerator<CockroachGenerator.Env>
                     + ")";
             return pOuterEnv.setPattern(pattern).focus(pattern);
         }
-        // Fallback generic formatting
         Env leftEnv = onMatch(env, minus.sources().get(0));
         String leftPattern = leftEnv.current();
         Env rightEnv = onMatch(leftEnv, minus.sources().get(1));
@@ -352,12 +379,10 @@ public class CockroachGenerator implements CodeGenerator<CockroachGenerator.Env>
 
     @Override
     public Env onMatchAggregate(Env env, RelRN.Aggregate aggregate) {
-        // Handle Aggregate over a nested LeftJoin (LeftJoin (LeftJoin left middle ...) right topOn topPrivate)
         if (aggregate.source() instanceof RelRN.Join topJoin
                 && topJoin.ty().semantics() == org.apache.calcite.rel.core.JoinRelType.LEFT
                 && topJoin.left() instanceof RelRN.Join bottomJoin
                 && bottomJoin.ty().semantics() == org.apache.calcite.rel.core.JoinRelType.LEFT) {
-            // Bind variables
             String topJoinVar = env.generateVar("topJoin");
             Env topEnv = env.addBinding("topJoin", topJoinVar);
             String bottomJoinVar = topEnv.generateVar("bottomJoin");
@@ -422,9 +447,7 @@ public class CockroachGenerator implements CodeGenerator<CockroachGenerator.Env>
                     + ")";
             return orderingEnv.setPattern(pattern).focus(pattern);
         }
-        // Special handling for Aggregate over LeftJoin to enable removing the join
         if (aggregate.source() instanceof RelRN.Join join && join.ty().semantics() == org.apache.calcite.rel.core.JoinRelType.LEFT) {
-            // Allocate and bind variables used across match and transform
             String inputVar = env.generateVar("input");
             Env inputEnv = env.addBinding("input", inputVar);
             String leftVar = inputEnv.generateVar("left");
@@ -459,32 +482,30 @@ public class CockroachGenerator implements CodeGenerator<CockroachGenerator.Env>
                     + ")";
             return orderingEnv.setPattern(matchPattern).focus(matchPattern);
         }
-        // Check if source is a Project (for AggregateProjectMerge)
         if (aggregate.source() instanceof RelRN.Project project) {
-            Env innerInputEnv = onMatch(env, project.source());
-            String innerInputPattern = innerInputEnv.current();
-            Env projEnv = onMatch(innerInputEnv, project.map());
-            String projPattern = projEnv.current();
-            String passthroughVar = projEnv.generateVar("passthrough");
-            Env passthroughEnv = projEnv.addBinding("passthrough", passthroughVar);
+            String inputVar = env.generateVar("input");
+            Env inputEnv = env.addBinding("input", inputVar);
+            String projectionsVar = inputEnv.generateVar("projections");
+            Env projectionsEnv = inputEnv.addBinding("projections", projectionsVar);
+            String passthroughVar = projectionsEnv.generateVar("passthrough");
+            Env passthroughEnv = projectionsEnv.addBinding("passthrough", passthroughVar);
             
-            // Format as $input:(Project $innerInput:*) pattern (single line)
-            String inputVar = passthroughEnv.generateVar("input");
-            Env inputEnv = passthroughEnv.addBinding("input", inputVar);
-            String projectPattern = "Project " + innerInputPattern;
-            String sourcePattern = "$" + inputVar + ":(" + projectPattern + ")";
+            String aggregationsVar = passthroughEnv.generateVar("aggregations");
+            Env aggregationsBindEnv = passthroughEnv.addBinding("aggregations", aggregationsVar);
+            String groupingPrivateVar = aggregationsBindEnv.generateVar("groupingPrivate");
+            Env groupingPrivateBindEnv = aggregationsBindEnv.addBinding("groupingPrivate", groupingPrivateVar);
             
-            Env aggsEnv = onMatchAggCalls(inputEnv, aggregate.aggCalls());
-            String aggsPattern = aggsEnv.current();
-            Env groupingEnv = onMatchGroupSet(aggsEnv, aggregate.groupSet());
-            String groupingPattern = groupingEnv.current();
-            String privateVar = groupingEnv.generateVar("private");
-            String innerInputVar = innerInputPattern.replace("$", "").replace(":*", "");
-            Env privateEnv = groupingEnv.addBinding("aggregate_private", privateVar)
-                    .addBinding("innerInput", innerInputVar);
             String aggregateType = determineAggregateType(aggregate);
-            String pattern = "(" + aggregateType + "\n    " + sourcePattern + "\n    " + aggsPattern + "\n    $" + privateVar + ":*\n)";
-            return privateEnv.setPattern(pattern).focus(pattern);
+            String pattern = "(" + aggregateType + "\n"
+                    + "    (Project\n"
+                    + "        $" + inputVar + ":*\n"
+                    + "        $" + projectionsVar + ":*\n"
+                    + "        $" + passthroughVar + ":*\n"
+                    + "    )\n"
+                    + "    $" + aggregationsVar + ":*\n"
+                    + "    $" + groupingPrivateVar + ":* & (CanRemapGroupingColsThroughProject $" + groupingPrivateVar + " $" + projectionsVar + " $" + passthroughVar + ")\n"
+                    + ")";
+            return groupingPrivateBindEnv.setPattern(pattern).focus(pattern);
         }
         
         Env sourceEnv = onMatch(env, aggregate.source());
@@ -497,10 +518,8 @@ public class CockroachGenerator implements CodeGenerator<CockroachGenerator.Env>
         Env privateEnv = groupingEnv.addBinding("aggregate_private", privateVar);
         String aggregateType = determineAggregateType(aggregate);
         
-        // Check if this is an AggregateExtractProject pattern
         boolean hasProjectionExpressions = hasProjectionExpressionsInAggregate(aggregate);
         if (hasProjectionExpressions) {
-            // Generate numbered variables for input, aggregations, groupingPrivate
             String inputVar = privateEnv.generateVar("input");
             Env inputEnv = privateEnv.addBinding("input", inputVar);
             String aggregationsVar = inputEnv.generateVar("aggregations");
@@ -520,11 +539,9 @@ public class CockroachGenerator implements CodeGenerator<CockroachGenerator.Env>
         Seq<String> aggPatterns = Seq.empty();
         boolean hasProjOperand = false;
         for (RelRN.AggCall aggCall : aggCalls) {
-            // Check if aggCall has a Proj operand (for AggregateProjectMerge)
             if (aggCall.operands().size() == 1) {
                 RexRN operand = aggCall.operands().get(0);
                 if (operand instanceof RexRN.Proj proj) {
-                    // Reference the proj variable if it exists
                     String projVar = currentEnv.bindings().getOrDefault(proj.operator().getName(), null);
                     if (projVar != null) {
                         aggPatterns = aggPatterns.appended("$" + projVar + ":*");
@@ -540,7 +557,6 @@ public class CockroachGenerator implements CodeGenerator<CockroachGenerator.Env>
         }
         String pattern;
         if (aggCalls.size() == 1 && hasProjOperand) {
-            // Use the proj reference directly
             pattern = aggPatterns.get(0);
             return currentEnv.setPattern(pattern).focus(pattern);
         } else if (aggCalls.size() == 1) {
@@ -599,11 +615,9 @@ public class CockroachGenerator implements CodeGenerator<CockroachGenerator.Env>
     }
 
     public Env onMatchGroupBy(Env env, RexRN.GroupBy groupBy) {
-        // Check if GroupBy wraps a Proj expression (for AggregateProjectMerge)
         if (groupBy.sources().size() == 1) {
             RexRN innerExpr = groupBy.sources().get(0);
             if (innerExpr instanceof RexRN.Proj proj) {
-                // Bind the proj operator name to reference the proj variable
                 String projVar = env.bindings().getOrDefault(proj.operator().getName(), null);
                 if (projVar != null) {
                     return env.focus("$" + projVar + ":*");
@@ -671,7 +685,6 @@ public class CockroachGenerator implements CodeGenerator<CockroachGenerator.Env>
 
     @Override
     public Env transformFilter(Env env, RelRN.Filter filter) {
-        // Check for PruneEmptyFilter pattern
         if (env.bindings().containsKey("isPruneEmptyFilter")) {
             String inputVar = env.bindings().get("pruneEmptyInput");
             String pattern = "$" + inputVar;
@@ -685,7 +698,6 @@ public class CockroachGenerator implements CodeGenerator<CockroachGenerator.Env>
             return transform(env, filter.source());
         }
         if (filter.cond() instanceof RexRN.False) {
-            // FilterReduceFalse: transform to ConstructEmptyValues
             Env sourceEnv = transform(env, filter.source());
             String sourcePattern = sourceEnv.current();
             String pattern = "(ConstructEmptyValues (OutputCols " + sourcePattern + "))";
@@ -709,7 +721,6 @@ public class CockroachGenerator implements CodeGenerator<CockroachGenerator.Env>
 
     @Override
     public Env transformProject(Env env, RelRN.Project project) {
-        // If input is known to have zero rows, return the input reference
         if (env.bindings().containsKey("hasZeroRows")) {
             String inputVar = env.bindings().getOrDefault("zeroInput", "input");
             String pattern = "$" + inputVar;
@@ -730,7 +741,6 @@ public class CockroachGenerator implements CodeGenerator<CockroachGenerator.Env>
 
     @Override
     public Env transformUnion(Env env, RelRN.Union union) {
-        // If onMatch indicated zero rows, construct empty using the first zero-input's schema
         if (env.bindings().containsKey("hasZeroRows")) {
             String leftVar = env.bindings().getOrDefault("zeroInput", "input");
             String pattern = "(ConstructEmptyValues (OutputCols $" + leftVar + "))";
@@ -767,7 +777,6 @@ public class CockroachGenerator implements CodeGenerator<CockroachGenerator.Env>
 
     @Override
     public Env transformIntersect(Env env, RelRN.Intersect intersect) {
-        // Check for PruneEmptyIntersect pattern
         if (env.bindings().containsKey("isPruneEmptyIntersect")) {
             String leftVar = env.bindings().get("pruneEmptyLeft");
             String pattern = "(ConstructEmptyValues (OutputCols $" + leftVar + "))";
@@ -812,7 +821,6 @@ public class CockroachGenerator implements CodeGenerator<CockroachGenerator.Env>
 
     @Override
     public Env transformMinus(Env env, RelRN.Minus minus) {
-        // Transform for MinusMerge using generic base names; numbering will be applied in translate()
         String pattern = "(Except\n"
                 + "    $left\n"
                 + "    (Union\n"
@@ -827,7 +835,6 @@ public class CockroachGenerator implements CodeGenerator<CockroachGenerator.Env>
 
     @Override
     public Env transformAggregate(Env env, RelRN.Aggregate aggregate) {
-        // Transform for nested LeftJoin removal if binding variables are available
         if (env.bindings().containsKey("left") && env.bindings().containsKey("right")
                 && env.bindings().containsKey("topOn") && env.bindings().containsKey("topPrivate")
                 && env.bindings().containsKey("aggregations") && env.bindings().containsKey("groupingCols")
@@ -855,8 +862,6 @@ public class CockroachGenerator implements CodeGenerator<CockroachGenerator.Env>
                     + ")";
             return env.setPattern(pattern).focus(pattern);
         }
-        // Transform for Aggregate over LeftJoin: drop join and adjust grouping
-        // Use presence of match bindings (left, aggregations, groupingCols, ordering) to drive transform
         if (env.bindings().containsKey("left") && env.bindings().containsKey("aggregations")
                 && env.bindings().containsKey("groupingCols") && env.bindings().containsKey("ordering")) {
             String leftVar = env.bindings().get("left");
@@ -874,22 +879,23 @@ public class CockroachGenerator implements CodeGenerator<CockroachGenerator.Env>
                     + ")";
             return env.setPattern(pattern).focus(pattern);
         }
-        // Check if we had a Project source (for AggregateProjectMerge)
-        String innerInput = env.bindings().getOrDefault("innerInput", null);
-        if (innerInput != null) {
-            // Use innerInput instead of transforming the Project
-            Env groupingEnv = transformGroupSet(env, aggregate.groupSet());
-            Env aggsEnv = transformAggCalls(groupingEnv, aggregate.aggCalls());
-            String aggsPattern = aggsEnv.current();
-            String privateVar = aggsEnv.bindings().getOrDefault("aggregate_private", "private");
+        if (env.bindings().containsKey("input") && env.bindings().containsKey("projections")
+                && env.bindings().containsKey("passthrough") && env.bindings().containsKey("aggregations")
+                && env.bindings().containsKey("groupingPrivate")) {
+            String inputVar = env.bindings().get("input");
+            String projectionsVar = env.bindings().get("projections");
+            String passthroughVar = env.bindings().get("passthrough");
+            String aggregationsVar = env.bindings().get("aggregations");
+            String groupingPrivateVar = env.bindings().get("groupingPrivate");
             String aggregateType = determineAggregateType(aggregate);
-            // Use the actual operator name in the after transformation
-            String pattern = "(" + aggregateType + " $" + innerInput + " " + aggsPattern + " $" + privateVar + ")";
-            return aggsEnv.setPattern(pattern).focus(pattern);
+            String pattern = "(" + aggregateType + "\n"
+                    + "    $" + inputVar + "\n"
+                    + "    (RemapAggregationsThroughProject $" + aggregationsVar + " $" + projectionsVar + ")\n"
+                    + "    (RemapGroupingColsThroughProject $" + groupingPrivateVar + " $" + projectionsVar + " $" + passthroughVar + ")\n"
+                    + ")";
+            return env.setPattern(pattern).focus(pattern);
         }
         
-        // Check if this is an AggregateExtractProject pattern
-        // This happens when the aggregate has projection expressions that need to be extracted
         if (env.bindings().containsKey("isAggregateExtractProject")) {
             Env sourceEnv = transform(env, aggregate.source());
             String sourcePattern = sourceEnv.current();
@@ -915,14 +921,12 @@ public class CockroachGenerator implements CodeGenerator<CockroachGenerator.Env>
     }
 
     private boolean hasProjectionExpressionsInAggregate(RelRN.Aggregate aggregate) {
-        // Check if any grouping expressions are projections
         for (RexRN groupExpr : aggregate.groupSet()) {
             if (groupExpr instanceof RexRN.Proj) {
                 return true;
             }
         }
         
-        // Check if any aggregation expressions are projections
         for (RelRN.AggCall aggCall : aggregate.aggCalls()) {
             for (RexRN operand : aggCall.operands()) {
                 if (operand instanceof RexRN.Proj) {
@@ -966,17 +970,13 @@ public class CockroachGenerator implements CodeGenerator<CockroachGenerator.Env>
 
     @Override
     public Env transformEmpty(Env env, RelRN.Empty empty) {
-        // If upstream matched an operator with zero rows input
         if (env.bindings().containsKey("hasZeroRows")) {
             String inputVar = env.bindings().getOrDefault("zeroInput", "input");
-            // Check if pattern contains Union indicators (has both left and right)
             String patternStr = env.pattern();
             if (patternStr != null && patternStr.contains("Union") && (patternStr.contains("$left") || inputVar.startsWith("left"))) {
-                // For Union with zero rows, construct empty with left's schema
                 String pattern = "(ConstructEmptyValues (OutputCols $" + inputVar + "))";
                 return env.setPattern(pattern).focus(pattern);
             }
-            // For other cases (like Project), just return the input
             String pattern = "$" + inputVar;
             return env.setPattern(pattern).focus(pattern);
         }
@@ -1014,11 +1014,9 @@ public class CockroachGenerator implements CodeGenerator<CockroachGenerator.Env>
     }
 
     public Env transformGroupBy(Env env, RexRN.GroupBy groupBy) {
-        // Check if GroupBy wraps a Proj expression (for AggregateProjectMerge)
         if (groupBy.sources().size() == 1) {
             RexRN innerExpr = groupBy.sources().get(0);
             if (innerExpr instanceof RexRN.Proj proj) {
-                // Reference the proj variable
                 String projVar = env.bindings().get(proj.operator().getName());
                 if (projVar != null) {
                     return env.setPattern("$" + projVar).focus("$" + projVar);
@@ -1080,13 +1078,17 @@ public class CockroachGenerator implements CodeGenerator<CockroachGenerator.Env>
         StringBuilder sb = new StringBuilder();
         sb.append("[").append(name).append(", Normalize]\n");
         String match = onMatch.pattern();
-        // Normalize Union with HasZeroRows patterns: remove private field and Values references
+        if (name.equals("PruneEmptyProject")) {
+            match = match.replaceAll("\\$projections_\\d+", java.util.regex.Matcher.quoteReplacement("$projections"));
+            match = match.replaceAll("\\$passthrough_\\d+", java.util.regex.Matcher.quoteReplacement("$passthrough"));
+        }
+        if (name.equals("PruneEmptyFilter")) {
+            match = match.replaceAll("\\$filters_\\d+", java.util.regex.Matcher.quoteReplacement("$filters"));
+        }
         if (match.contains("HasZeroRows") && (match.startsWith("(Union") || match.startsWith("(UnionAll"))) {
-            // Remove private field if present
             match = match.replaceAll("\\s+\\$private_\\d+:\\*\\s*\\)", "\n)");
             match = match.replaceAll("\\s+\\$private_\\d+:\\*\\)", ")");
         }
-        // Also handle Union patterns that haven't been normalized yet
         else if (match.startsWith("(Union\n")) {
             String[] lines = match.split("\n");
             if (lines.length >= 3 && lines[1].contains(":(Values)") && lines[2].contains(":(Values)")) {
@@ -1100,38 +1102,53 @@ public class CockroachGenerator implements CodeGenerator<CockroachGenerator.Env>
         sb.append(match).append("\n");
         sb.append("=>\n");
         String out = transform.pattern();
-        // Map generic $input to the first source var found in match (excluding private)
-        if (out.equals("$input") || out.startsWith("(ConstructEmptyValues (OutputCols $input")) {
+        if (out.startsWith("(ConstructEmptyValues (OutputCols $")) {
+            int startIdx = "(ConstructEmptyValues (OutputCols $".length();
+            int endIdx = startIdx;
+            while (endIdx < out.length() && (Character.isLetterOrDigit(out.charAt(endIdx)) || out.charAt(endIdx) == '_')) {
+                endIdx++;
+            }
+            String varInOutput = out.substring(startIdx, endIdx);
+            if (varInOutput.equals("input")) {
+                String numbered = findFirstVar(match);
+                if (numbered != null) {
+                    out = out.replace("(ConstructEmptyValues (OutputCols $input)", 
+                                     "(ConstructEmptyValues (OutputCols $" + numbered + ")");
+                }
+            }
+        } else if (out.equals("$input")) {
             String numbered = findFirstVar(match);
             if (numbered != null) {
-                out = out.replace("$input_0", "$" + numbered).replace("$input", "$" + numbered);
+                out = "$" + numbered;
             }
         }
-        // If match has HasZeroRows pattern and output is ConstructEmptyValues, extract left variable from match
         if (match.contains("HasZeroRows") && match.contains("$left") && out.contains("ConstructEmptyValues")) {
-            // Extract the left variable name from the match pattern (e.g., $left_0)
             int leftIdx = match.indexOf("$left");
             if (leftIdx >= 0) {
-                int start = leftIdx + 1; // skip $
+                int start = leftIdx + 1;
                 int end = start;
                 while (end < match.length() && (Character.isLetterOrDigit(match.charAt(end)) || match.charAt(end) == '_')) end++;
                 String leftVar = match.substring(start, end);
-                // Replace any variable in OutputCols with the actual left variable from match
                 out = out.replaceAll("(OutputCols \\$)[a-zA-Z_][a-zA-Z0-9_]*", "$1" + leftVar);
             }
         }
-        // Align unnumbered variables in output to numbered variables from match
         java.util.Map<String, String> varMap = extractNumberedVarMap(match);
         if (!varMap.isEmpty()) {
             for (java.util.Map.Entry<String, String> e : varMap.entrySet()) {
                 String base = e.getKey();
-                String numbered = e.getValue(); // includes leading $
-                // Replace standalone $base (not already numbered) in output
+                String numbered = e.getValue();
                 out = out.replaceAll(
                         "\\$" + java.util.regex.Pattern.quote(base) + "(?![_0-9])",
                         java.util.regex.Matcher.quoteReplacement(numbered)
                 );
             }
+        }
+        if (name.equals("PruneEmptyProject")) {
+            out = out.replaceAll("\\$projections_\\d+", java.util.regex.Matcher.quoteReplacement("$projections"));
+            out = out.replaceAll("\\$passthrough_\\d+", java.util.regex.Matcher.quoteReplacement("$passthrough"));
+        }
+        if (name.equals("PruneEmptyFilter")) {
+            out = out.replaceAll("\\$filters_\\d+", java.util.regex.Matcher.quoteReplacement("$filters"));
         }
         sb.append(out).append("\n");
         return sb.toString();
@@ -1169,7 +1186,6 @@ public class CockroachGenerator implements CodeGenerator<CockroachGenerator.Env>
 
     @Override
     public Env preTransform(Env env) {
-        // If the onMatch pattern signaled HasZeroRows, propagate a generic binding
         String p = env.pattern();
         if (p != null) {
             int idx = p.indexOf("(HasZeroRows $");
