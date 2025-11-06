@@ -175,6 +175,27 @@ public class CockroachGenerator implements CodeGenerator<CockroachGenerator.Env>
         String privateVar = condEnv.generateVar("private");
         Env privateEnv = condEnv.addBinding("private_" + System.identityHashCode(join), privateVar)
                 .addBinding("last_private", privateVar);
+        
+        // For JoinExtractFilter pattern, use specific variable names
+        if (env.rulename.equals("JoinExtractFilter") && 
+            join.ty().semantics() == org.apache.calcite.rel.core.JoinRelType.INNER && 
+            !(join.cond() instanceof RexRN.And)) {
+            String leftVar = privateEnv.generateVar("left");
+            String rightVar = privateEnv.generateVar("right");
+            String onVar = privateEnv.generateVar("on");
+            Env boundEnv = privateEnv.addBinding("left", leftVar)
+                    .addBinding("right", rightVar)
+                    .addBinding("on", onVar)
+                    .addBinding("private", privateVar);
+            // Bind predicate operator name to onVar so filter uses it
+            if (join.cond() instanceof RexRN.Pred pred) {
+                boundEnv = boundEnv.addBinding(pred.operator().getName(), onVar);
+            }
+            String joinType = getJoinType(join.ty().semantics());
+            String pattern = "(" + joinType + "\n    $" + leftVar + ":*\n    $" + rightVar + ":*\n    $" + onVar + ":*\n    $" + privateVar + ":*\n)";
+            return boundEnv.setPattern(pattern).focus(pattern);
+        }
+        
         String joinType = getJoinType(join.ty().semantics());
         String pattern = "(" + joinType + "\n    " + leftPattern + "\n    " + rightPattern + "\n    " + condPattern + "\n    $" + privateVar + ":*\n)";
         return privateEnv.setPattern(pattern).focus(pattern);
