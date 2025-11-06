@@ -1,17 +1,17 @@
 [JoinExtractFilter, Normalize]
 (InnerJoin
-    $left:*
-    $right:*
-    $on:*
-    $private:*
+    $input_0:*
+    $input_1:*
+    $cond_2:*
+    $private_3:*
 )
 =>
 (Select
     (InnerJoin
-    $left
-    $right
-    []
-    $private
+    $input_0
+    $input_1
+    $true
+    $private_3
 )
-    $on
+    $cond_2
 )
