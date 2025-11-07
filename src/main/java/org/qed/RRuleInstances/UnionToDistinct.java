@@ -4,53 +4,21 @@ import org.apache.calcite.rel.RelNode;
 import org.qed.RelRN;
 import org.qed.RRule;
 import org.qed.RuleBuilder;
-import org.qed.RelType;
-import kala.collection.Seq;
-import kala.tuple.Tuple;
+
 public record UnionToDistinct() implements RRule {
 
-    static final RelRN leftTable = new LeftSourceTable();
-    static final RelRN rightTable = new RightSourceTable();
+    static final RelRN left = RelRN.scan("Left", "Source_Type");
+    static final RelRN right = RelRN.scan("Right", "Source_Type");
     
     @Override
     public RelRN before() {
-        return new DistinctUnion(leftTable, rightTable);
+        return new DistinctUnion(left, right);
     }
     
     @Override
     public RelRN after() {
-        var unionAll = new UnionAll(leftTable, rightTable);
+        var unionAll = new UnionAll(left, right);
         return new DistinctAggregate(unionAll);
-    }
-
-    public static record LeftSourceTable() implements RelRN {
-        @Override
-        public RelNode semantics() {
-            var builder = RuleBuilder.create();
-            
-            var table = builder.createQedTable(Seq.of(
-                Tuple.of(RelType.fromString("INTEGER", true), false),
-                Tuple.of(RelType.fromString("VARCHAR", true), false)
-            ));
-            
-            builder.addTable(table);
-            return builder.scan(table.getName()).build();
-        }
-    }
-
-    public static record RightSourceTable() implements RelRN {
-        @Override
-        public RelNode semantics() {
-            var builder = RuleBuilder.create();
-            
-            var table = builder.createQedTable(Seq.of(
-                Tuple.of(RelType.fromString("INTEGER", true), false),
-                Tuple.of(RelType.fromString("VARCHAR", true), false)
-            ));
-            
-            builder.addTable(table);
-            return builder.scan(table.getName()).build();
-        }
     }
 
     public static record DistinctUnion(RelRN left, RelRN right) implements RelRN {
@@ -84,7 +52,8 @@ public record UnionToDistinct() implements RRule {
         public RelNode semantics() {
             var builder = RuleBuilder.create();
             builder.push(input.semantics());
-            var groupKey = builder.groupKey(builder.field(0), builder.field(1));
+            // Group by all fields to remove duplicates
+            var groupKey = builder.groupKey(builder.field(0));
             builder.aggregate(groupKey);
             
             return builder.build();

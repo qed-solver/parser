@@ -1,0 +1,26 @@
+[UnionPullUpConstants, Normalize]
+(UnionAll
+    $left_3:(Project * $leftProjections_4:* *)
+    $right_8:(Project * $rightProjections_9:* *)
+    $private_10:(SetPrivate $leftCols_11:* $rightCols_12:* $outCols_13:*) &
+        (Let
+            ($constantPositions_14 $constantValues_15 $ok_16):(ExtractMatchingConstantsFromUnion
+                $leftProjections_4
+                $rightProjections_9
+                $leftCols_11
+                $rightCols_12
+                $outCols_13
+            )
+            $ok_16
+        )
+)
+=>
+(Project
+    (UnionAll
+        (PruneCols $left_3 (ComputeNeededColsForUnionPullUp $constantPositions_14 $outCols_13))
+        (PruneCols $right_8 (ComputeNeededColsForUnionPullUp $constantPositions_14 $outCols_13))
+        (PruneSetPrivate (ComputeNeededColsForUnionPullUp $constantPositions_14 $outCols_13) $private_10)
+    )
+    (AddConstantsToProjections $constantPositions_14 $constantValues_15 $outCols_13)
+    (MakeEmptyColSet)
+)

@@ -1,17 +1,20 @@
 [JoinExtractFilter, Normalize]
 (InnerJoin
-    $input_0:*
-    $input_1:*
-    $cond_2:*
+    $left_4:*
+    $right_5:*
+    $on_6:*
     $private_3:*
 )
 =>
 (Select
     (InnerJoin
-    $input_0
-    $input_1
-    $true
+    (Select $left_4 (ExtractBoundConditions $on_6 (OutputCols $left_4)))
+    (Select $right_5 (ExtractBoundConditions $on_6 (OutputCols $right_5)))
+    (ExtractUnboundConditions
+        (ExtractUnboundConditions $on_6 (OutputCols $left_4))
+        (OutputCols $right_5)
+    )
     $private_3
 )
-    $cond_2
+    $on_6
 )

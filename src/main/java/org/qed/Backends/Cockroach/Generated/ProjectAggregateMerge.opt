@@ -1,0 +1,27 @@
+[ProjectAggregateMerge, Normalize]
+(Project
+    $input_3:(GroupBy
+        $input_0:*
+        $aggregations_1:*
+        $groupingPrivate_2:*
+    )
+    $projections_4:*
+    $passthrough_5:* &
+        (CanPruneAggCols
+            $aggregations_1
+            $needed_6:(UnionCols
+                (ProjectionOuterCols $projections_4)
+                $passthrough_5
+            )
+        )
+)
+=>
+(Project
+    (GroupBy
+        $input_0
+        (PruneAggCols $aggregations_1 $needed_6)
+        $groupingPrivate_2
+    )
+    $projections_4
+    $passthrough_5
+)

@@ -57,9 +57,9 @@ public class CockroachTester {
         if (files != null) {
             for (java.io.File file : files) {
                 String className = file.getName().replace(".java", "");
-                if (className.contains("Distinct") || className.contains("Pull") ||
-                    className.contains("ProjectAggregateMerge") ||
-                    className.contains("AggregativeJoinRemove") || className.contains("AggregateProjectConstantToDummyJoin")) {
+                if ((className.contains("Distinct") && !className.contains("UnionToDistinct")) || 
+                    (className.contains("Pull") && !className.contains("UnionPullUpConstants")) ||
+                    className.contains("AggregativeJoinRemove")) {
                     continue;
                 }
 

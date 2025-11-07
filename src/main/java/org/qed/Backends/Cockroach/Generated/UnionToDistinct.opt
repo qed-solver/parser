@@ -1,0 +1,12 @@
+[UnionToDistinct, Normalize]
+(Union
+    $left_1:*
+    $right_3:*
+    $private_4:(SetPrivate * * $outCols_5:*)
+)
+=>
+(DistinctOn
+    (UnionAll $left_1 $right_3 $private_4)
+    []
+    (MakeGrouping (ColListToSet $outCols_5) (EmptyOrdering))
+)

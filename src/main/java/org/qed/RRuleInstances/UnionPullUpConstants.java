@@ -10,48 +10,33 @@ import kala.tuple.Tuple;
 
 public record UnionPullUpConstants() implements RRule {
 
-    static final RelRN leftTable = new LeftTableWithConstants();
-    static final RelRN rightTable = new RightTableWithConstants();
+    static final RelRN left = new SourceTable();
+    static final RelRN right = new SourceTable();
     
     @Override
     public RelRN before() {
-        var leftProjection = new LeftProjectionWithConstants(leftTable);
-        var rightProjection = new RightProjectionWithConstants(rightTable);
+        var leftProjection = new LeftProjectionWithConstants(left);
+        var rightProjection = new RightProjectionWithConstants(right);
         return new UnionWithConstantColumns(leftProjection, rightProjection);
     }
     
     @Override
     public RelRN after() {
-        var leftProjectionReduced = new LeftProjectionNonConstants(leftTable);
-        var rightProjectionReduced = new RightProjectionNonConstants(rightTable);
+        var leftProjectionReduced = new LeftProjectionNonConstants(left);
+        var rightProjectionReduced = new RightProjectionNonConstants(right);
         var reducedUnion = new UnionReducedColumns(leftProjectionReduced, rightProjectionReduced);
         return new TopProjectionWithConstants(reducedUnion);
     }
 
-    public static record LeftTableWithConstants() implements RelRN {
+    public static record SourceTable() implements RelRN {
         @Override
         public RelNode semantics() {
             var builder = RuleBuilder.create();
             
             var table = builder.createQedTable(Seq.of(
-                Tuple.of(RelType.fromString("INTEGER", true), false),
-                Tuple.of(RelType.fromString("VARCHAR", true), false),
-                Tuple.of(RelType.fromString("INTEGER", true), false)
-            ));
-            
-            builder.addTable(table);
-            return builder.scan(table.getName()).build();
-        }
-    }
-    public static record RightTableWithConstants() implements RelRN {
-        @Override
-        public RelNode semantics() {
-            var builder = RuleBuilder.create();
-            
-            var table = builder.createQedTable(Seq.of(
-                Tuple.of(RelType.fromString("INTEGER", true), false),
-                Tuple.of(RelType.fromString("VARCHAR", true), false),
-                Tuple.of(RelType.fromString("INTEGER", true), false)
+                Tuple.of(RelType.fromString("Source_Type", true), false),
+                Tuple.of(RelType.fromString("Source_Type", true), false),
+                Tuple.of(RelType.fromString("Source_Type", true), false)
             ));
             
             builder.addTable(table);
