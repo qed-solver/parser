@@ -27,7 +27,7 @@ public record JoinConditionPush() implements RRule {
         RexRN rightOnlyCond = new RexRN.Pred(rightOp, Seq.of(
             new RexRN.JoinField(1, left, right)    
         ));
-        return left.join(JoinRelType.INNER, 
+        return left.joinWithSeparateConds(JoinRelType.INNER, 
             RexRN.and(crossTableCond, leftOnlyCond, rightOnlyCond), right);
     }
     
@@ -51,6 +51,6 @@ public record JoinConditionPush() implements RRule {
         ));
         RelRN filteredRight = right.filter(rightFilterCond);
         
-        return filteredLeft.join(JoinRelType.INNER, crossTableCond, filteredRight);
+        return filteredLeft.joinWithPushedConds(JoinRelType.INNER, crossTableCond, filteredRight);
     }
 }

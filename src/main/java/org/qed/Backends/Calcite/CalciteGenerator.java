@@ -33,13 +33,14 @@ public class CalciteGenerator implements CodeGenerator<CalciteGenerator.Env> {
 
     @Override
     public String translate(String name, Env onMatch, Env transform) {
-        var builder = new StringBuilder("package org.qed.Generated;\n\n");
+        var builder = new StringBuilder("package org.qed.Backends.Calcite.Generated;\n\n");
         builder.append("import org.apache.calcite.plan.RelOptRuleCall;\n");
         builder.append("import org.apache.calcite.plan.RelRule;\n");
         builder.append("import org.apache.calcite.plan.RelOptUtil;\n");
         builder.append("import org.apache.calcite.rel.RelNode;\n");
         builder.append("import org.apache.calcite.rel.core.JoinRelType;\n");
         builder.append("import org.apache.calcite.rel.logical.*;\n");
+        builder.append("import org.qed.Backends.Calcite.EmptyConfig;\n");
         builder.append("\n");
         builder.append("public class " + name + " extends RelRule<" + name + ".Config> {\n");
         builder.append("\tprotected " + name + "(Config config) {\n");
@@ -94,6 +95,19 @@ public class CalciteGenerator implements CodeGenerator<CalciteGenerator.Env> {
     @Override
     public Env onMatchProj(Env env, RexRN.Proj proj) {
         return env.symbol(proj.operator().getName(), env.current());
+    }
+
+    @Override
+    public Env onMatchJoinWithSeparateConds(Env env, RelRN.JoinWithSeparateConds join) {
+        var current_join = "((LogicalJoin) " + env.current() + ")";
+        var left_source_env = env.next();
+        var left_match_env = onMatch(left_source_env, join.left());
+        var right_source_env = left_match_env.next();
+        var right_match_env = onMatch(right_source_env, join.right());
+        var operator_match =
+                right_match_env.grow("operand(LogicalJoin.class).inputs(" + left_match_env.skeleton() + ", " + right_match_env.skeleton() + ")");
+        var cond_source_env = operator_match.focus(current_join + ".getCondition()");
+        return onMatch(cond_source_env, join.cond());
     }
 
     @Override
@@ -305,58 +319,58 @@ public class CalciteGenerator implements CodeGenerator<CalciteGenerator.Env> {
     }
 
     @Override
+    public Env transformJoinWithPushedConds(Env env, RelRN.JoinWithPushedConds join) {
+        var builderDecl = env.declare("call.builder()");
+        var envWithBuilder = builderDecl.getValue();
+        
+        var leftCondDecl = envWithBuilder.declare(
+            "org.qed.HelperFunction.ConditionDecomposer.extractLeftOnlyConditions(" +
+            "((LogicalJoin) call.rel(0)).getCondition(), " +
+            "call.rel(1).getRowType().getFieldCount(), call)"
+        );
+        var envWithLeftCond = leftCondDecl.getValue();
+        
+        var rightCondDecl = envWithLeftCond.declare(
+            "org.qed.HelperFunction.ConditionDecomposer.extractRightOnlyConditions(" +
+            "((LogicalJoin) call.rel(0)).getCondition(), " +
+            "call.rel(1).getRowType().getFieldCount(), " +
+            "call.rel(1).getRowType().getFieldCount() + call.rel(2).getRowType().getFieldCount(), call)"
+        );
+        var envWithRightCond = rightCondDecl.getValue();
+        
+        var joinCondDecl = envWithRightCond.declare(
+            "org.qed.HelperFunction.ConditionDecomposer.extractJoinConditions(" +
+            "((LogicalJoin) call.rel(0)).getCondition(), " +
+            "call.rel(1).getRowType().getFieldCount(), " +
+            "call.rel(1).getRowType().getFieldCount() + call.rel(2).getRowType().getFieldCount(), call)"
+        );
+        var envWithJoinCond = joinCondDecl.getValue();
+        
+        return envWithJoinCond.focus(
+            builderDecl.getKey() + 
+            ".push(call.rel(1))" +
+            ".filter(" + leftCondDecl.getKey() + ")" +
+            ".push(call.rel(2))" +
+            ".filter(" + rightCondDecl.getKey() + ")" +
+            ".join(JoinRelType.INNER, " + joinCondDecl.getKey() + ")"
+        );
+    }
+
+    @Override
     public Env transformJoin(Env env, RelRN.Join join) {
-        if (env.rulename.equals("JoinConditionPush")) {
-            var builderDecl = env.declare("call.builder()");
-            var envWithBuilder = builderDecl.getValue();
-            
-            var leftCondDecl = envWithBuilder.declare(
-                "org.qed.HelperFunction.ConditionDecomposer.extractLeftOnlyConditions(" +
-                "((LogicalJoin) call.rel(0)).getCondition(), " +
-                "call.rel(1).getRowType().getFieldCount(), call)"
-            );
-            var envWithLeftCond = leftCondDecl.getValue();
-            
-            var rightCondDecl = envWithLeftCond.declare(
-                "org.qed.HelperFunction.ConditionDecomposer.extractRightOnlyConditions(" +
-                "((LogicalJoin) call.rel(0)).getCondition(), " +
-                "call.rel(1).getRowType().getFieldCount(), " +
-                "call.rel(1).getRowType().getFieldCount() + call.rel(2).getRowType().getFieldCount(), call)"
-            );
-            var envWithRightCond = rightCondDecl.getValue();
-            
-            var joinCondDecl = envWithRightCond.declare(
-                "org.qed.HelperFunction.ConditionDecomposer.extractJoinConditions(" +
-                "((LogicalJoin) call.rel(0)).getCondition(), " +
-                "call.rel(1).getRowType().getFieldCount(), " +
-                "call.rel(1).getRowType().getFieldCount() + call.rel(2).getRowType().getFieldCount(), call)"
-            );
-            var envWithJoinCond = joinCondDecl.getValue();
-            
-            return envWithJoinCond.focus(
-                builderDecl.getKey() + 
-                ".push(call.rel(1))" +
-                ".filter(" + leftCondDecl.getKey() + ")" +
-                ".push(call.rel(2))" +
-                ".filter(" + rightCondDecl.getKey() + ")" +
-                ".join(JoinRelType.INNER, " + joinCondDecl.getKey() + ")"
-            );
-        }
-        else {
-            var left_source_transform = transform(env, join.left());
-            var right_source_transform = transform(left_source_transform, join.right());
-            var source_expression = right_source_transform.current();
-            var cond_transform = transform(right_source_transform, join.cond());
-            var join_type = switch (join.ty().semantics()) {
-                case INNER -> "JoinRelType.INNER";
-                case LEFT -> "JoinRelType.LEFT";
-                case RIGHT -> "JoinRelType.RIGHT";
-                case FULL -> "JoinRelType.FULL";
-                case SEMI -> "JoinRelType.SEMI";
-                case ANTI -> "JoinRelType.ANTI";
-            };
-            return cond_transform.focus(source_expression + ".join(" + join_type + ", " + cond_transform.current() + ")");
-        }
+        var left_source_transform = transform(env, join.left());
+        var right_source_transform = transform(left_source_transform, join.right());
+        var source_expression = right_source_transform.current();
+        var cond_transform = transform(right_source_transform, join.cond());
+        var join_type = switch (join.ty().semantics()) {
+            case INNER -> "JoinRelType.INNER";
+            case LEFT -> "JoinRelType.LEFT";
+            case RIGHT -> "JoinRelType.RIGHT";
+            case FULL -> "JoinRelType.FULL";
+            case SEMI -> "JoinRelType.SEMI";
+            case ANTI -> "JoinRelType.ANTI";
+        };
+        return cond_transform.focus(source_expression + ".join(" + join_type + ", " + cond_transform.current() + ")");
     }
 
     @Override

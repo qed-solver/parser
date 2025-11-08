@@ -24,6 +24,7 @@ public interface CodeGenerator<E> {
             case RelRN.Filter filter -> onMatchFilter(env, filter);
             case RelRN.Project project -> onMatchProject(env, project);
             case RelRN.Join join -> onMatchJoin(env, join);
+            case RelRN.JoinWithSeparateConds join -> onMatchJoinWithSeparateConds(env, join);
             case RelRN.Union union -> onMatchUnion(env, union);
             case RelRN.Intersect intersect -> onMatchIntersect(env, intersect);
             case RelRN.Minus minus -> onMatchMinus(env, minus);
@@ -62,6 +63,7 @@ public interface CodeGenerator<E> {
             case RelRN.Filter filter -> transformFilter(env, filter);
             case RelRN.Project project -> transformProject(env, project);
             case RelRN.Join join -> transformJoin(env, join);
+            case RelRN.JoinWithPushedConds join -> transformJoinWithPushedConds(env, join);
             case RelRN.Union union -> transformUnion(env, union);
             case RelRN.Intersect intersect -> transformIntersect(env, intersect);
             case RelRN.Minus minus -> transformMinus(env, minus);
@@ -114,6 +116,10 @@ public interface CodeGenerator<E> {
     }
 
     default E onMatchJoin(E env, RelRN.Join join) {
+        return unimplementedOnMatch(env, join);
+    }
+
+    default E onMatchJoinWithSeparateConds(E env, RelRN.JoinWithSeparateConds join) {
         return unimplementedOnMatch(env, join);
     }
 
@@ -190,6 +196,10 @@ public interface CodeGenerator<E> {
     }
 
     default E transformJoin(E env, RelRN.Join join) {
+        return unimplementedTransform(env, join);
+    }
+
+    default E transformJoinWithPushedConds(E env, RelRN.JoinWithPushedConds join) {
         return unimplementedTransform(env, join);
     }
 

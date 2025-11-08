@@ -11,6 +11,7 @@ import org.apache.calcite.sql.SqlOperator;
 import org.apache.calcite.tools.RelBuilder;
 import org.apache.calcite.tools.RelBuilder.AggCall;
 import org.apache.calcite.util.ImmutableBitSet;
+import org.qed.RelRN.JoinWithSeparateConds;
 import org.qed.RelRN.Scan;
 
 import java.util.Arrays;
@@ -100,6 +101,14 @@ public interface RelRN {
         return join(new Join.JoinType.ConcreteJoinType(ty), cond, right);
     }
 
+    default JoinWithSeparateConds joinWithSeparateConds(JoinRelType ty, RexRN cond, RelRN right) {
+        return new JoinWithSeparateConds(new Join.JoinType.ConcreteJoinType(ty), cond, this, right);
+    }
+
+    default JoinWithPushedConds joinWithPushedConds(JoinRelType ty, RexRN cond, RelRN right) {
+        return new JoinWithPushedConds(new Join.JoinType.ConcreteJoinType(ty), cond, this, right);
+    }
+
     default Join join(JoinRelType ty, String name, RelRN right) {return join(ty, joinPred(name, right), right);}
 
     default Union union(boolean all, RelRN... sources) {
@@ -172,7 +181,68 @@ public interface RelRN {
                 }
             }
         }
+    }
 
+    record JoinWithSeparateConds(Join.JoinType ty, RexRN cond, RelRN left, RelRN right) implements RelRN {
+        @Override
+        public RelNode semantics() {
+            return RuleBuilder.create().push(left.semantics()).push(right.semantics()).join(ty.semantics(),
+                    cond.semantics()).build();
+        }
+
+        @Override
+        public RexRN field(int ordinal) {
+            return new RexRN.JoinField(ordinal, left, right);
+        }
+
+        public interface JoinType {
+            JoinRelType semantics();
+
+            record ConcreteJoinType(JoinRelType type) implements JoinType {
+                @Override
+                public JoinRelType semantics() {
+                    return type;
+                }
+            }
+
+            record MetaJoinType(String name) implements JoinType {
+                @Override
+                public JoinRelType semantics() {
+                    return JoinRelType.INNER;
+                }
+            }
+        }
+    }
+
+    record JoinWithPushedConds(Join.JoinType ty, RexRN cond, RelRN left, RelRN right) implements RelRN {
+        @Override
+        public RelNode semantics() {
+            return RuleBuilder.create().push(left.semantics()).push(right.semantics()).join(ty.semantics(),
+                    cond.semantics()).build();
+        }
+
+        @Override
+        public RexRN field(int ordinal) {
+            return new RexRN.JoinField(ordinal, left, right);
+        }
+
+        public interface JoinType {
+            JoinRelType semantics();
+
+            record ConcreteJoinType(JoinRelType type) implements JoinType {
+                @Override
+                public JoinRelType semantics() {
+                    return type;
+                }
+            }
+
+            record MetaJoinType(String name) implements JoinType {
+                @Override
+                public JoinRelType semantics() {
+                    return JoinRelType.INNER;
+                }
+            }
+        }
     }
 
     record Union(boolean all, Seq<RelRN> sources) implements RelRN {
