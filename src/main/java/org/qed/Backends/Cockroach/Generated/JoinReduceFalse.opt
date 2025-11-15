@@ -4,9 +4,12 @@
     $input_1:*
     $on_2:[
         ...
-        $item_3:(FiltersItem (False))
+        $item_3:(FiltersItem
+            (And * (False))
+        )
         ...
-    ]
+    ] &
+        ^(IsFilterFalse $on_2)
     $private_4:*
 )
 =>

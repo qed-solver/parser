@@ -3,10 +3,18 @@ package norm
 import (
 	"github.com/cockroachdb/cockroach/pkg/sql/opt"
 	"github.com/cockroachdb/cockroach/pkg/sql/opt/memo"
+	"github.com/cockroachdb/cockroach/pkg/sql/types"
 	"github.com/cockroachdb/errors"
 )
 
-func (c *CustomFuncs) ExtractConstantGroupingColsAndBuildDummy(
+func (c *CustomFuncs) HasConstantGroupingCols(
+	input memo.RelExpr, groupingPrivate *memo.GroupingPrivate,
+) bool {
+	_, _, _, ok := c.extractConstantGroupingColsAndBuildDummy(input, groupingPrivate)
+	return ok
+}
+
+func (c *CustomFuncs) extractConstantGroupingColsAndBuildDummy(
 	input memo.RelExpr, groupingPrivate *memo.GroupingPrivate,
 ) (constantCols opt.ColSet, constantValues memo.ScalarListExpr, dummyCols opt.ColList, ok bool) {
 	project, ok := input.(*memo.ProjectExpr)
@@ -39,43 +47,11 @@ func (c *CustomFuncs) ExtractConstantGroupingColsAndBuildDummy(
 	return constantCols, constantValues, dummyCols, true
 }
 
-func (c *CustomFuncs) ConstructDummyValuesTable(
-	constantValues memo.ScalarListExpr, dummyCols opt.ColList,
-) memo.RelExpr {
-	tuple := c.f.ConstructTuple(constantValues, nil)
-	rows := memo.ScalarListExpr{tuple}
-	return c.f.ConstructValues(rows, &memo.ValuesPrivate{
-		Cols: dummyCols,
-		ID:   c.mem.Metadata().NextUniqueID(),
-	})
-}
-
-func (c *CustomFuncs) RemapProjectionsForDummyJoin(
-	projections memo.ProjectionsExpr,
-	constantCols opt.ColSet,
-	dummyCols opt.ColList,
-) memo.ProjectionsExpr {
-	constantColList := constantCols.ToList()
-	constantToDummy := make(map[opt.ColumnID]opt.ColumnID)
-	for i := range constantColList {
-		if i < len(dummyCols) {
-			constantToDummy[constantColList[i]] = dummyCols[i]
-		}
-	}
-
-	newProjections := make(memo.ProjectionsExpr, 0, len(projections))
-	for i := range projections {
-		item := &projections[i]
-		if dummyCol, ok := constantToDummy[item.Col]; ok {
-			newProjections = append(newProjections, c.f.ConstructProjectionsItem(
-				c.f.ConstructVariable(dummyCol),
-				item.Col,
-			))
-		} else {
-			newProjections = append(newProjections, *item)
-		}
-	}
-	return newProjections
+func (c *CustomFuncs) GetConstantGroupingCols(
+	input memo.RelExpr, groupingPrivate *memo.GroupingPrivate,
+) opt.ColSet {
+	constantCols, _, _, _ := c.extractConstantGroupingColsAndBuildDummy(input, groupingPrivate)
+	return constantCols
 }
 
 func (c *CustomFuncs) ExtractMatchingConstantsFromUnion(
@@ -172,6 +148,263 @@ func (c *CustomFuncs) AddConstantsToProjections(
 	return projections
 }
 
+func (c *CustomFuncs) HasMatchingConstantsFromUnion(
+	leftProjections memo.ProjectionsExpr,
+	rightProjections memo.ProjectionsExpr,
+	leftCols opt.ColList,
+	rightCols opt.ColList,
+	outCols opt.ColList,
+) bool {
+	_, _, ok := c.ExtractMatchingConstantsFromUnion(leftProjections, rightProjections, leftCols, rightCols, outCols)
+	return ok
+}
+
+func (c *CustomFuncs) UnionPullUpConstantsReplace(
+	left memo.RelExpr,
+	right memo.RelExpr,
+	leftProjections memo.ProjectionsExpr,
+	rightProjections memo.ProjectionsExpr,
+	private *memo.SetPrivate,
+	leftInput memo.RelExpr,
+	rightInput memo.RelExpr,
+	leftPassthrough opt.ColSet,
+	rightPassthrough opt.ColSet,
+) memo.RelExpr {
+	constantPositions, constantValues, ok := c.ExtractMatchingConstantsFromUnion(
+		leftProjections, rightProjections,
+		private.LeftCols, private.RightCols, private.OutCols,
+	)
+	if !ok {
+		panic(errors.AssertionFailedf("HasMatchingConstantsFromUnion should have returned true"))
+	}
+	neededCols := c.ComputeNeededColsForUnionPullUp(constantPositions, private.OutCols)
+	leftProject := left.(*memo.ProjectExpr)
+	rightProject := right.(*memo.ProjectExpr)
+
+	neededLeftCols := c.NeededColMapLeft(neededCols, private)
+	neededRightCols := c.NeededColMapRight(neededCols, private)
+	prunedLeft := c.PruneCols(leftProject.Input, neededLeftCols)
+	prunedRight := c.PruneCols(rightProject.Input, neededRightCols)
+
+	adjustedPrivate := c.PruneSetPrivate(neededCols, private)
+
+	union := c.f.ConstructUnionAll(prunedLeft, prunedRight, adjustedPrivate)
+
+	unionOutputCols := adjustedPrivate.OutCols
+	mergedProjections := make(memo.ProjectionsExpr, 0, len(private.OutCols))
+	
+	constantProjMap := make(map[opt.ColumnID]memo.ProjectionsItem)
+	for i, pos := range constantPositions {
+		if pos < len(private.OutCols) {
+			outCol := private.OutCols[pos]
+			constantProjMap[outCol] = c.f.ConstructProjectionsItem(constantValues[i], outCol)
+		}
+	}
+	
+	unionColIdx := 0
+	for _, outCol := range private.OutCols {
+		if constantProj, isConst := constantProjMap[outCol]; isConst {
+			mergedProjections = append(mergedProjections, constantProj)
+		} else if unionColIdx < len(unionOutputCols) {
+			unionCol := unionOutputCols[unionColIdx]
+			mergedProjections = append(mergedProjections, c.f.ConstructProjectionsItem(
+				c.f.ConstructVariable(unionCol),
+				outCol,
+			))
+			unionColIdx++
+		}
+	}
+
+	return c.f.ConstructProject(union, mergedProjections, opt.ColSet{})
+}
+
 func (c *CustomFuncs) ColListToSet(colList opt.ColList) opt.ColSet {
 	return colList.ToSet()
+}
+
+func (c *CustomFuncs) CanCommuteJoin(left, right memo.RelExpr) bool {
+	return c.OutputCols(left).Len() <= c.OutputCols(right).Len()
+}
+
+func (c *CustomFuncs) SwapJoinOutputColumns(
+	leftCols opt.ColSet,
+	rightCols opt.ColSet,
+) memo.ProjectionsExpr {
+	projections := make(memo.ProjectionsExpr, 0, leftCols.Len()+rightCols.Len())
+	md := c.mem.Metadata()
+
+	for col, ok := rightCols.Next(0); ok; col, ok = rightCols.Next(col + 1) {
+		colMeta := md.ColumnMeta(col)
+		newCol := md.AddColumn(colMeta.Alias, colMeta.Type)
+		projections = append(projections, c.f.ConstructProjectionsItem(
+			c.f.ConstructVariable(col),
+			newCol,
+		))
+	}
+
+	for col, ok := leftCols.Next(0); ok; col, ok = leftCols.Next(col + 1) {
+		colMeta := md.ColumnMeta(col)
+		newCol := md.AddColumn(colMeta.Alias, colMeta.Type)
+		projections = append(projections, c.f.ConstructProjectionsItem(
+			c.f.ConstructVariable(col),
+			newCol,
+		))
+	}
+	
+	return projections
+}
+
+func (c *CustomFuncs) HasBoundConditions(
+	filters memo.FiltersExpr,
+	leftCols opt.ColSet,
+	rightCols opt.ColSet,
+) bool {
+	for i := range filters {
+		if c.IsBoundBy(&filters[i], leftCols) || c.IsBoundBy(&filters[i], rightCols) {
+			return true
+		}
+	}
+	return false
+}
+
+func (c *CustomFuncs) IsFilterTrue(filters memo.FiltersExpr) bool {
+	if len(filters) == 0 {
+		return true
+	}
+	for i := range filters {
+		condition := filters[i].Condition
+		if condition.Op() != opt.TrueOp {
+			return false
+		}
+	}
+	return true
+}
+
+func (c *CustomFuncs) CanExtractJoinFilter(
+	left memo.RelExpr,
+	right memo.RelExpr,
+	on memo.FiltersExpr,
+) bool {
+	if c.IsFilterTrue(on) || c.IsFilterEmpty(on) {
+		return false
+	}
+	hasNonTrueCondition := false
+	for i := range on {
+		if on[i].Condition.Op() != opt.TrueOp {
+			hasNonTrueCondition = true
+			break
+		}
+	}
+	if !hasNonTrueCondition {
+		return false
+	}
+	return true
+}
+
+func (c *CustomFuncs) CanExtractProjectFromAggregate(
+	aggregations memo.AggregationsExpr,
+) bool {
+	for i := range aggregations {
+		agg := aggregations[i].Agg
+		if agg.ChildCount() > 0 {
+			arg := agg.Child(0)
+			if scalarArg, ok := arg.(opt.ScalarExpr); ok {
+				if _, ok := scalarArg.(*memo.VariableExpr); !ok {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+func (c *CustomFuncs) ExtractProjectFromAggregate(
+	input memo.RelExpr,
+	aggregations memo.AggregationsExpr,
+) memo.RelExpr {
+	inputCols := c.OutputCols(input)
+
+	var pb projectBuilder
+	pb.init(c, inputCols)
+
+	for i := range aggregations {
+		agg := aggregations[i].Agg
+		if agg.ChildCount() > 0 {
+			arg := agg.Child(0)
+			if scalarArg, ok := arg.(opt.ScalarExpr); ok {
+				pb.add(scalarArg)
+			}
+		}
+	}
+	
+	return pb.buildProject(input)
+}
+
+func (c *CustomFuncs) RemapAggregationsAfterExtractProject(
+	aggregations memo.AggregationsExpr,
+	input memo.RelExpr,
+) memo.AggregationsExpr {
+	inputCols := c.OutputCols(input)
+	var pb projectBuilder
+	pb.init(c, inputCols)
+
+	exprToVar := make(map[opt.ScalarExpr]opt.ScalarExpr)
+	for i := range aggregations {
+		agg := aggregations[i].Agg
+		if agg.ChildCount() > 0 {
+			arg := agg.Child(0)
+			if scalarArg, ok := arg.(opt.ScalarExpr); ok {
+				if _, exists := exprToVar[scalarArg]; !exists {
+					varExpr := pb.add(scalarArg)
+					exprToVar[scalarArg] = varExpr
+				}
+			}
+		}
+	}
+
+	newAggs := make(memo.AggregationsExpr, len(aggregations))
+	for i := range aggregations {
+		agg := aggregations[i].Agg
+		var newArg opt.ScalarExpr
+		
+		if agg.ChildCount() > 0 {
+			arg := agg.Child(0)
+			if scalarArg, ok := arg.(opt.ScalarExpr); ok {
+				if varExpr, exists := exprToVar[scalarArg]; exists {
+					newArg = varExpr
+				} else {
+					newArg = scalarArg
+				}
+			} else {
+				newArg = nil
+			}
+		}
+
+		var newAgg opt.ScalarExpr
+		if newArg != nil && agg.ChildCount() > 0 {
+			var replace ReplaceFunc
+			replace = func(e opt.Expr) opt.Expr {
+				if e == agg.Child(0) {
+					return newArg
+				}
+				return c.f.Replace(e, replace)
+			}
+			newAgg = replace(agg).(opt.ScalarExpr)
+		} else {
+			newAgg = agg
+		}
+		
+		newAggs[i] = c.f.ConstructAggregationsItem(newAgg, aggregations[i].Col)
+	}
+	
+	return newAggs
+}
+
+func (c *CustomFuncs) IsSemiJoin(input memo.RelExpr) bool {
+	switch input.Op() {
+	case opt.SemiJoinOp, opt.SemiJoinApplyOp:
+		return true
+	default:
+		return false
+	}
 }

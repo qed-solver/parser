@@ -1,20 +1,20 @@
 [IntersectMerge, Normalize]
 (Intersect
-    (Intersect
-    $input_0:*
-    $input_1:*
-    $private_2:*
-)
-    $input_3:*
-    $private_4:*
+    $left_5:(Intersect
+        $leftLeft_0:*
+        $leftRight_1:*
+        $innerPrivate_2:(SetPrivate $innerLeftCols_3:* $innerRightCols_4:* *)
+    )
+    $right_6:*
+    $outerPrivate_7:(SetPrivate * $outerRightCols_8:* $outerOutCols_9:*)
 )
 =>
 (Intersect
-    $input_0
+    $leftLeft_0
     (Intersect
-    $input_1
-    $input_3
-    $private_2
-)
-    $private_4
+        $leftRight_1
+        $right_6
+        (MakeSetPrivate $innerRightCols_4 $outerRightCols_8 $innerRightCols_4)
+    )
+    (MakeSetPrivate $innerLeftCols_3 $innerRightCols_4 $outerOutCols_9)
 )

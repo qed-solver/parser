@@ -1,14 +1,22 @@
 [JoinCommute, Normalize]
 (InnerJoin
-    $input_0:*
-    $input_1:*
-    $cond_2:*
-    $private_3:*
+    $left_4:*
+    $right_5:*
+    $on_6:*
+    $private_3:* &
+        (CanCommuteJoin $left_4 $right_5)
 )
 =>
-(InnerJoin
-    $input_1
-    $input_0
-    $cond_2
-    $private_3
+(Project
+    (InnerJoin
+        $right_5
+        $left_4
+        $on_6
+        (CommuteJoinFlags $private_3)
+    )
+    (SwapJoinOutputColumns
+        (OutputCols $left_4)
+        (OutputCols $right_5)
+    )
+    (MakeEmptyColSet)
 )

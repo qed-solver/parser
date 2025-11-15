@@ -2,7 +2,12 @@
 (InnerJoin
     $left_0:* & ^(HasOuterCols $left_0)
     $right_1:* & ^(HasOuterCols $right_1)
-    $on_2:*
+    $on_2:* &
+        (HasBoundConditions
+            $on_2
+            (OutputCols $left_0)
+            (OutputCols $right_1)
+        )
     $private_3:*
 )
 =>

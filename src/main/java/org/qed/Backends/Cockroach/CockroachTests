@@ -1,324 +1,4 @@
 exec-ddl
-CREATE TABLE a (k INT PRIMARY KEY, i INT, f FLOAT, s STRING, j JSON)
-----
-
-exec-ddl
-CREATE TABLE t.b (x INT PRIMARY KEY, y INT)
-----
-
-exec-ddl
-CREATE TABLE f (k INT PRIMARY KEY, i INT, f FLOAT, s STRING NOT NULL, j JSON)
-----
-
-exec-ddl
-CREATE TABLE xy (x INT PRIMARY KEY, y INT)
-----
-
-exec-ddl
-CREATE TABLE uv (u INT PRIMARY KEY, v INT)
-----
-
-exec-ddl
-CREATE TABLE c (a BOOL, b BOOL, c BOOL, d BOOL, e BOOL)
-----
-
-exec-ddl
-CREATE TABLE d (k INT PRIMARY KEY, a INT NOT NULL, b INT, c INT, d FLOAT)
-----
-
-exec-ddl
-CREATE TABLE t (a INT PRIMARY KEY, b INT, c INT)
-----
-
-exec-ddl
-CREATE TABLE e
-(
-    k INT PRIMARY KEY,
-    i INT,
-    t TIMESTAMP,
-    tz TIMESTAMPTZ,
-    d DATE
-)
-----
-
-exec-ddl
-CREATE TABLE rls (x INT PRIMARY KEY, y INT, alice_has_access BOOL);
-----
-
-exec-ddl
-CREATE INDEX ON rls(y);
-----
-
-exec-ddl
-ALTER TABLE rls ENABLE ROW LEVEL SECURITY;
-----
-
-exec-ddl
-CREATE POLICY select_policy_alice
-ON rls
-FOR SELECT
-TO alice
-USING (alice_has_access);
-----
-
-exec-ddl
-CREATE ROLE alice;
-----
-
-# --------------------------------------------------
-# FilterMerge
-# --------------------------------------------------
-norm expect=FilterMerge disable=(AggregateFilterTranspose,FilterAggregateTranspose,FilterIntoJoin,FilterProjectTranspose,FilterReduceTrue,FilterSetOpTranspose,IntersectMerge,JoinAddRedundantSemiJoin,JoinCommute,JoinPushTransitivePredicates,ProjectFilterTranspose,ProjectMerge,SemiJoinFilterTranspose,UnionMerge)
-SELECT * FROM (SELECT * FROM a WHERE k=3) WHERE s='foo'
-----
-select
- ├── columns: k:1!null i:2 f:3 s:4!null j:5
- ├── cardinality: [0 - 1]
- ├── key: ()
- ├── fd: ()-->(1-5)
- ├── scan a
- │    ├── columns: k:1!null i:2 f:3 s:4 j:5
- │    ├── key: (1)
- │    └── fd: (1)-->(2-5)
- └── filters
-      ├── k:1 = 3 [outer=(1), constraints=(/1: [/3 - /3]; tight), fd=()-->(1)]
-      └── s:4 = 'foo' [outer=(4), constraints=(/4: [/'foo' - /'foo']; tight), fd=()-->(4)]
-
-norm expect=FilterMerge disable=(AggregateFilterTranspose,FilterAggregateTranspose,FilterIntoJoin,FilterProjectTranspose,FilterReduceTrue,FilterSetOpTranspose,IntersectMerge,JoinAddRedundantSemiJoin,JoinCommute,JoinPushTransitivePredicates,ProjectFilterTranspose,ProjectMerge,SemiJoinFilterTranspose,UnionMerge)
-SELECT * FROM (SELECT * FROM a WHERE k=3) WHERE s='foo'
-----
-select
- ├── columns: k:1!null i:2 f:3 s:4!null j:5
- ├── cardinality: [0 - 1]
- ├── key: ()
- ├── fd: ()-->(1-5)
- ├── scan a
- │    ├── columns: k:1!null i:2 f:3 s:4 j:5
- │    ├── key: (1)
- │    └── fd: (1)-->(2-5)
- └── filters
-      ├── k:1 = 3 [outer=(1), constraints=(/1: [/3 - /3]; tight), fd=()-->(1)]
-      └── s:4 = 'foo' [outer=(4), constraints=(/4: [/'foo' - /'foo']; tight), fd=()-->(4)]
-
-norm expect=FilterMerge disable=(AggregateFilterTranspose,FilterAggregateTranspose,FilterIntoJoin,FilterProjectTranspose,FilterReduceTrue,FilterSetOpTranspose,IntersectMerge,JoinAddRedundantSemiJoin,JoinCommute,JoinPushTransitivePredicates,ProjectFilterTranspose,ProjectMerge,SemiJoinFilterTranspose,UnionMerge)
-SELECT * FROM (SELECT * FROM a WHERE i=1) WHERE False
-----
-values
- ├── columns: k:1!null i:2!null f:3!null s:4!null j:5!null
- ├── cardinality: [0 - 0]
- ├── key: ()
- └── fd: ()-->(1-5)
-
-norm expect=FilterMerge disable=(AggregateFilterTranspose,FilterAggregateTranspose,FilterIntoJoin,FilterProjectTranspose,FilterReduceTrue,FilterSetOpTranspose,IntersectMerge,JoinAddRedundantSemiJoin,JoinCommute,JoinPushTransitivePredicates,ProjectFilterTranspose,ProjectMerge,SemiJoinFilterTranspose,UnionMerge)
-SELECT * FROM (SELECT * FROM a WHERE i<5) WHERE s='foo'
-----
-select
- ├── columns: k:1!null i:2!null f:3 s:4!null j:5
- ├── key: (1)
- ├── fd: ()-->(4), (1)-->(2,3,5)
- ├── scan a
- │    ├── columns: k:1!null i:2 f:3 s:4 j:5
- │    ├── key: (1)
- │    └── fd: (1)-->(2-5)
- └── filters
-      ├── i:2 < 5 [outer=(2), constraints=(/2: (/NULL - /4]; tight)]
-      └── s:4 = 'foo' [outer=(4), constraints=(/4: [/'foo' - /'foo']; tight), fd=()-->(4)]
-
-norm expect=FilterMerge disable=(AggregateFilterTranspose,FilterAggregateTranspose,FilterIntoJoin,FilterProjectTranspose,FilterReduceTrue,FilterSetOpTranspose,IntersectMerge,JoinAddRedundantSemiJoin,JoinCommute,JoinPushTransitivePredicates,ProjectFilterTranspose,ProjectMerge,SemiJoinFilterTranspose,UnionMerge)
-SELECT * FROM (SELECT * FROM a WHERE i>1 AND i<10) WHERE s='foo' OR k=5
-----
-select
- ├── columns: k:1!null i:2!null f:3 s:4 j:5
- ├── key: (1)
- ├── fd: (1)-->(2-5)
- ├── scan a
- │    ├── columns: k:1!null i:2 f:3 s:4 j:5
- │    ├── key: (1)
- │    └── fd: (1)-->(2-5)
- └── filters
-      ├── (i:2 > 1) AND (i:2 < 10) [outer=(2), constraints=(/2: [/2 - /9]; tight)]
-      └── (s:4 = 'foo') OR (k:1 = 5) [outer=(1,4)]
-
-norm expect=FilterIntoJoin disable=(AggregateFilterTranspose,FilterAggregateTranspose,FilterMerge,FilterProjectTranspose,FilterReduceTrue,FilterSetOpTranspose,IntersectMerge,JoinAddRedundantSemiJoin,JoinCommute,JoinPushTransitivePredicates,ProjectFilterTranspose,ProjectMerge,SemiJoinFilterTranspose,UnionMerge)
-SELECT * FROM a INNER JOIN b ON a.k=b.x WHERE a.s='foo'
-----
-inner-join (hash)
- ├── columns: k:1!null i:2 f:3 s:4!null j:5 x:8!null y:9
- ├── multiplicity: left-rows(zero-or-one), right-rows(zero-or-one)
- ├── key: (8)
- ├── fd: ()-->(4), (1)-->(2,3,5), (8)-->(9), (1)==(8), (8)==(1)
- ├── select
- │    ├── columns: k:1!null i:2 f:3 s:4!null j:5
- │    ├── key: (1)
- │    ├── fd: ()-->(4), (1)-->(2,3,5)
- │    ├── scan a
- │    │    ├── columns: k:1!null i:2 f:3 s:4 j:5
- │    │    ├── key: (1)
- │    │    └── fd: (1)-->(2-5)
- │    └── filters
- │         └── s:4 = 'foo' [outer=(4), constraints=(/4: [/'foo' - /'foo']; tight), fd=()-->(4)]
- ├── scan b
- │    ├── columns: x:8!null y:9
- │    ├── key: (8)
- │    └── fd: (8)-->(9)
- └── filters
-      └── k:1 = x:8 [outer=(1,8), constraints=(/1: (/NULL - ]; /8: (/NULL - ]), fd=(1)==(8), (8)==(1)]
-
-norm expect=FilterProjectTranspose disable=(AggregateFilterTranspose,FilterAggregateTranspose,FilterIntoJoin,FilterMerge,FilterReduceTrue,FilterSetOpTranspose,IntersectMerge,JoinAddRedundantSemiJoin,JoinCommute,JoinPushTransitivePredicates,ProjectFilterTranspose,ProjectMerge,SemiJoinFilterTranspose,UnionMerge)
-SELECT * FROM (SELECT i, i+1 AS r, f FROM a) a WHERE f=10.0
-----
-project
- ├── columns: i:2 r:8 f:3!null
- ├── immutable
- ├── fd: ()-->(3), (2)-->(8)
- ├── select
- │    ├── columns: i:2 f:3!null
- │    ├── fd: ()-->(3)
- │    ├── scan a
- │    │    └── columns: i:2 f:3
- │    └── filters
- │         └── f:3 = 10.0 [outer=(3), constraints=(/3: [/10.0 - /10.0]; tight), fd=()-->(3)]
- └── projections
-      └── i:2 + 1 [as=r:8, outer=(2), immutable]
-
-norm expect=SemiJoinFilterTranspose disable=(AggregateFilterTranspose,FilterAggregateTranspose,FilterIntoJoin,FilterMerge,FilterProjectTranspose,FilterReduceTrue,FilterSetOpTranspose,IntersectMerge,JoinAddRedundantSemiJoin,JoinCommute,JoinPushTransitivePredicates,ProjectFilterTranspose,ProjectMerge,UnionMerge)
-SELECT * FROM xy WHERE EXISTS (SELECT 1 FROM uv WHERE uv.u = xy.x) AND xy.y > 10
-----
-semi-join (hash)
- ├── columns: x:1!null y:2!null
- ├── key: (1)
- ├── fd: (1)-->(2)
- ├── select
- │    ├── columns: x:1!null y:2!null
- │    ├── key: (1)
- │    ├── fd: (1)-->(2)
- │    ├── scan xy
- │    │    ├── columns: x:1!null y:2
- │    │    ├── key: (1)
- │    │    └── fd: (1)-->(2)
- │    └── filters
- │         └── y:2 > 10 [outer=(2), constraints=(/2: [/11 - ]; tight)]
- ├── scan uv
- │    ├── columns: u:5!null
- │    └── key: (5)
- └── filters
-      └── u:5 = x:1 [outer=(1,5), constraints=(/1: (/NULL - ]; /5: (/NULL - ]), fd=(1)==(5), (5)==(1)]
-
-norm expect=ProjectFilterTranspose disable=(AggregateFilterTranspose,FilterAggregateTranspose,FilterIntoJoin,FilterMerge,FilterProjectTranspose,FilterReduceTrue,FilterSetOpTranspose,IntersectMerge,JoinAddRedundantSemiJoin,JoinCommute,JoinPushTransitivePredicates,ProjectMerge,SemiJoinFilterTranspose,UnionMerge)
-SELECT * FROM (SELECT i FROM a WHERE i=100) a
-----
-select
- ├── columns: i:2!null
- ├── fd: ()-->(2)
- ├── scan a
- │    └── columns: i:2
- └── filters
-      └── i:2 = 100 [outer=(2), constraints=(/2: [/100 - /100]; tight), fd=()-->(2)]
-
-norm expect=FilterReduceTrue disable=(AggregateFilterTranspose,FilterAggregateTranspose,FilterIntoJoin,FilterMerge,FilterProjectTranspose,FilterSetOpTranspose,IntersectMerge,JoinAddRedundantSemiJoin,JoinCommute,JoinPushTransitivePredicates,ProjectFilterTranspose,ProjectMerge,SemiJoinFilterTranspose,UnionMerge)
-SELECT * FROM a WHERE True
-----
-scan a
- ├── columns: k:1!null i:2 f:3 s:4 j:5
- ├── key: (1)
- └── fd: (1)-->(2-5)
-
-exec-ddl
-CREATE INDEX partial_idx ON a (s) WHERE true
-----
-
-norm expect=FilterReduceTrue disable=(AggregateFilterTranspose,FilterAggregateTranspose,FilterIntoJoin,FilterMerge,FilterProjectTranspose,FilterSetOpTranspose,IntersectMerge,JoinAddRedundantSemiJoin,JoinCommute,JoinPushTransitivePredicates,ProjectFilterTranspose,ProjectMerge,SemiJoinFilterTranspose,UnionMerge)
-SELECT * FROM a
-----
-scan a
- ├── columns: k:1!null i:2 f:3 s:4 j:5
- ├── partial index predicates
- │    └── partial_idx: filters (true)
- ├── key: (1)
- └── fd: (1)-->(2-5)
-
-exec-ddl
-DROP INDEX partial_idx
-----
-
-norm expect=UnionMerge disable=(AggregateFilterTranspose,FilterAggregateTranspose,FilterIntoJoin,FilterMerge,FilterProjectTranspose,FilterReduceTrue,FilterSetOpTranspose,IntersectMerge,JoinAddRedundantSemiJoin,JoinCommute,JoinPushTransitivePredicates,ProjectFilterTranspose,ProjectMerge,SemiJoinFilterTranspose,ConvertUnionToDistinctUnionAll)
-SELECT a, b, c FROM
-  (SELECT a, b, c FROM t WHERE a < 0)
-UNION
-  (SELECT a, b, c FROM t WHERE b > 10 AND b < 100)
-UNION
-  (SELECT a, b, c FROM t WHERE b > 1000)
-----
-union
- ├── columns: a:19 b:20 c:21
- ├── left columns: a:11 b:12 c:13
- ├── right columns: t.a:14 t.b:15 t.c:16
- ├── key: (19-21)
- ├── select
- │    ├── columns: t.a:1!null t.b:2 t.c:3
- │    ├── key: (1)
- │    ├── fd: (1)-->(2,3)
- │    ├── scan t
- │    │    ├── columns: t.a:1!null t.b:2 t.c:3
- │    │    ├── key: (1)
- │    │    └── fd: (1)-->(2,3)
- │    └── filters
- │         └── t.a:1 < 0 [outer=(1), constraints=(/1: (/NULL - /-1]; tight)]
- └── union
-      ├── columns: a:11 b:12 c:13
-      ├── left columns: t.a:1 t.b:2 t.c:3
-      ├── right columns: t.a:6 t.b:7 t.c:8
-      ├── key: (11-13)
-      ├── select
-      │    ├── columns: t.a:6!null t.b:7!null t.c:8
-      │    ├── key: (6)
-      │    ├── fd: (6)-->(7,8)
-      │    ├── scan t
-      │    │    ├── columns: t.a:6!null t.b:7 t.c:8
-      │    │    ├── key: (6)
-      │    │    └── fd: (6)-->(7,8)
-      │    └── filters
-      │         └── (t.b:7 > 10) AND (t.b:7 < 100) [outer=(7), constraints=(/7: [/11 - /99]; tight)]
-      └── select
-           ├── columns: t.a:14!null t.b:15!null t.c:16
-           ├── key: (14)
-           ├── fd: (14)-->(15,16)
-           ├── scan t
-           │    ├── columns: t.a:14!null t.b:15 t.c:16
-           │    ├── key: (14)
-           │    └── fd: (14)-->(15,16)
-           └── filters
-                └── t.b:15 > 1000 [outer=(15), constraints=(/15: [/1001 - ]; tight)]
-
-
-norm expect=JoinPushTransitivePredicates disable=(AggregateFilterTranspose,FilterAggregateTranspose,FilterIntoJoin,FilterMerge,FilterProjectTranspose,FilterReduceTrue,FilterSetOpTranspose,IntersectMerge,JoinAddRedundantSemiJoin,JoinCommute,ProjectFilterTranspose,ProjectMerge,SemiJoinFilterTranspose,UnionMerge)
-SELECT * FROM a INNER JOIN b ON a.k = b.x WHERE a.s='foo'
-----
-inner-join (hash)
- ├── columns: k:1!null i:2 f:3 s:4!null j:5 x:8!null y:9
- ├── multiplicity: left-rows(zero-or-one), right-rows(zero-or-one)
- ├── key: (8)
- ├── fd: ()-->(4), (1)-->(2,3,5), (8)-->(9), (1)==(8), (8)==(1)
- ├── select
- │    ├── columns: k:1!null i:2 f:3 s:4!null j:5
- │    ├── key: (1)
- │    ├── fd: ()-->(4), (1)-->(2,3,5)
- │    ├── scan a
- │    │    ├── columns: k:1!null i:2 f:3 s:4 j:5
- │    │    ├── key: (1)
- │    │    └── fd: (1)-->(2-5)
- │    └── filters
- │         └── s:4 = 'foo' [outer=(4), constraints=(/4: [/'foo' - /'foo']; tight), fd=()-->(4)]
- ├── scan b
- │    ├── columns: x:8!null y:9
- │    ├── key: (8)
- │    └── fd: (8)-->(9)
- └── filters
-      └── k:1 = x:8 [outer=(1,8), constraints=(/1: (/NULL - ]; /8: (/NULL - ]), fd=(1)==(8), (8)==(1)]
-
-
-
-exec-ddl
 CREATE TABLE sales (id INT PRIMARY KEY, category1 STRING, category2 STRING, amount DECIMAL)
 ----
 
@@ -330,95 +10,305 @@ exec-ddl
 CREATE TABLE dept (deptno INT PRIMARY KEY, dname STRING, loc STRING)
 ----
 
-norm expect=AggregateFilterTranspose disable=(FilterAggregateTranspose,FilterIntoJoin,FilterMerge,FilterProjectTranspose,FilterSetOpTranspose,IntersectMerge,JoinAddRedundantSemiJoin,JoinCommute,JoinPushTransitivePredicates,ProjectFilterTranspose,ProjectMerge,SemiJoinFilterTranspose,UnionMerge,PushSelectIntoGroupBy)
-SELECT category1, category2, SUM(amount) FROM (SELECT * FROM sales WHERE category1 = category2) GROUP BY category1, category2
+
+# --------------------------------------------------
+# FilterMerge
+# --------------------------------------------------
+norm expect=FilterMerge disable=(JoinConditionPush,FilterProjectTranspose)
+SELECT *
+FROM (
+    SELECT *
+    FROM sales
+    WHERE category1 = 'hardware'
+) AS sales_filtered
+WHERE category2 = 'home'
 ----
 select
- ├── columns: category1:2!null category2:3!null sum:7
- ├── key: (3)
- ├── fd: (2,3)-->(7), (2)==(3), (3)==(2)
- ├── group-by (hash)
- │    ├── columns: category1:2 category2:3 sum:7
- │    ├── grouping columns: category1:2 category2:3
- │    ├── key: (2,3)
- │    ├── fd: (2,3)-->(7)
- │    ├── scan sales
- │    │    └── columns: category1:2 category2:3 amount:4
- │    └── aggregations
- │         └── sum [as=sum:7, outer=(4)]
- │              └── amount:4
- └── filters
-      └── category1:2 = category2:3 [outer=(2,3), constraints=(/2: (/NULL - ]; /3: (/NULL - ]), fd=(2)==(3), (3)==(2)]
-
-norm expect=FilterAggregateTranspose disable=(AggregateFilterTranspose,FilterIntoJoin,FilterMerge,FilterProjectTranspose,FilterReduceTrue,FilterSetOpTranspose,IntersectMerge,JoinAddRedundantSemiJoin,JoinCommute,JoinPushTransitivePredicates,ProjectFilterTranspose,ProjectMerge,SemiJoinFilterTranspose,UnionMerge)
-SELECT * FROM (SELECT category1, category2, SUM(amount) FROM sales GROUP BY category1, category2) WHERE category1 = category2
-----
-group-by (hash)
- ├── columns: category1:2!null category2:3!null sum:7
- ├── grouping columns: category2:3!null
- ├── key: (3)
- ├── fd: (3)-->(2,7), (2)==(3), (3)==(2)
- ├── select
- │    ├── columns: category1:2!null category2:3!null amount:4
- │    ├── fd: (2)==(3), (3)==(2)
- │    ├── scan sales
- │    │    └── columns: category1:2 category2:3 amount:4
- │    └── filters
- │         └── category1:2 = category2:3 [outer=(2,3), constraints=(/2: (/NULL - ]; /3: (/NULL - ]), fd=(2)==(3), (3)==(2)]
- └── aggregations
-      ├── sum [as=sum:7, outer=(4)]
-      │    └── amount:4
-      └── const-agg [as=category1:2, outer=(2)]
-           └── category1:2
-
-norm expect=ProjectMerge disable=(AggregateFilterTranspose,FilterAggregateTranspose,FilterIntoJoin,FilterMerge,FilterProjectTranspose,FilterReduceTrue,FilterSetOpTranspose,IntersectMerge,JoinAddRedundantSemiJoin,JoinCommute,JoinPushTransitivePredicates,SemiJoinFilterTranspose,UnionMerge,EliminateProject)
-SELECT deptno, ename, sal * 2 AS doubled_sal FROM (SELECT deptno, ename, sal, comm FROM emp)
-----
-project
- ├── columns: deptno:8 ename:2 doubled_sal:11
- ├── immutable
- ├── scan emp
- │    └── columns: ename:2 sal:6 deptno:8
- └── projections
-      └── sal:6 * 2 [as=doubled_sal:11, outer=(6), immutable]
-
-# Additional test cases using emp/dept/sales tables
-norm expect=FilterMerge disable=(AggregateFilterTranspose,FilterAggregateTranspose,FilterIntoJoin,FilterProjectTranspose,FilterReduceTrue,FilterSetOpTranspose,IntersectMerge,JoinAddRedundantSemiJoin,JoinCommute,JoinPushTransitivePredicates,ProjectFilterTranspose,ProjectMerge,SemiJoinFilterTranspose,UnionMerge)
-SELECT * FROM (SELECT * FROM emp WHERE sal > 1000) WHERE deptno = 10
-----
-select
- ├── columns: empno:1!null ename:2 job:3 mgr:4 hiredate:5 sal:6!null comm:7 deptno:8!null
- ├── immutable
+ ├── columns: id:1!null category1:2!null category2:3!null amount:4
  ├── key: (1)
- ├── fd: ()-->(8), (1)-->(2-7)
- ├── scan emp
- │    ├── columns: empno:1!null ename:2 job:3 mgr:4 hiredate:5 sal:6 comm:7 deptno:8
+ ├── fd: ()-->(2,3), (1)-->(4)
+ ├── scan sales
+ │    ├── columns: id:1!null category1:2 category2:3 amount:4
  │    ├── key: (1)
- │    └── fd: (1)-->(2-8)
+ │    └── fd: (1)-->(2-4)
  └── filters
-      ├── sal:6 > 1000 [outer=(6), immutable, constraints=(/6: (/1000 - ]; tight)]
-      └── deptno:8 = 10 [outer=(8), constraints=(/8: [/10 - /10]; tight), fd=()-->(8)]
+      ├── category1:2 = 'hardware' [outer=(2), constraints=(/2: [/'hardware' - /'hardware']; tight), fd=()-->(2)]
+      └── category2:3 = 'home' [outer=(3), constraints=(/3: [/'home' - /'home']; tight), fd=()-->(3)]
 
-norm expect=FilterIntoJoin disable=(AggregateFilterTranspose,FilterAggregateTranspose,FilterMerge,FilterProjectTranspose,FilterReduceTrue,FilterSetOpTranspose,IntersectMerge,JoinAddRedundantSemiJoin,JoinCommute,JoinPushTransitivePredicates,ProjectFilterTranspose,ProjectMerge,SemiJoinFilterTranspose,UnionMerge)
-SELECT * FROM emp INNER JOIN dept ON emp.deptno = dept.deptno WHERE emp.sal > 2000
+# --------------------------------------------------
+# FilterReduceTrue
+# --------------------------------------------------
+norm expect=FilterReduceTrue disable=(JoinConditionPush,EliminateSelect,FilterProjectTranspose)
+SELECT *
+FROM sales
+WHERE TRUE
+----
+scan sales
+ ├── columns: id:1!null category1:2 category2:3 amount:4
+ ├── key: (1)
+ └── fd: (1)-->(2-4)
+
+# --------------------------------------------------
+# FilterReduceFalse
+# --------------------------------------------------
+norm expect=FilterReduceFalse disable=(JoinConditionPush,SimplifySelectFilters,FilterProjectTranspose)
+SELECT *
+FROM sales
+WHERE FALSE
+----
+values
+ ├── columns: id:1!null category1:2!null category2:3!null amount:4!null
+ ├── cardinality: [0 - 0]
+ ├── key: ()
+ └── fd: ()-->(1-4)
+
+# --------------------------------------------------
+# FilterIntoJoin
+# --------------------------------------------------
+norm expect=FilterIntoJoin disable=(PushSelectCondLeftIntoJoinLeftAndRight,PushSelectIntoJoinLeft,JoinConditionPush,FilterProjectTranspose,MergeSelectInnerJoin,JoinExtractFilter,JoinAddRedundantSemiJoin)
+SELECT *
+FROM emp
+INNER JOIN dept ON emp.deptno = dept.deptno
+WHERE emp.ename = dept.loc
 ----
 inner-join (hash)
- ├── columns: empno:1!null ename:2 job:3 mgr:4 hiredate:5 sal:6!null comm:7 deptno:8!null deptno:11!null dname:12 loc:13
+ ├── columns: empno:1!null ename:2!null job:3 mgr:4 hiredate:5 sal:6 comm:7 deptno:8!null deptno:11!null dname:12 loc:13!null
  ├── multiplicity: left-rows(zero-or-one), right-rows(zero-or-more)
- ├── immutable
+ ├── key: (1)
+ ├── fd: (1)-->(2-8), (11)-->(12,13), (8)==(11), (11)==(8), (2)==(13), (13)==(2)
+ ├── scan emp
+ │    ├── columns: empno:1!null ename:2 job:3 mgr:4 hiredate:5 sal:6 comm:7 emp.deptno:8
+ │    ├── key: (1)
+ │    └── fd: (1)-->(2-8)
+ ├── scan dept
+ │    ├── columns: dept.deptno:11!null dname:12 loc:13
+ │    ├── key: (11)
+ │    └── fd: (11)-->(12,13)
+ └── filters
+      ├── emp.deptno:8 = dept.deptno:11 [outer=(8,11), constraints=(/8: (/NULL - ]; /11: (/NULL - ]), fd=(8)==(11), (11)==(8)]
+      └── ename:2 = loc:13 [outer=(2,13), constraints=(/2: (/NULL - ]; /13: (/NULL - ]), fd=(2)==(13), (13)==(2)]
+
+# --------------------------------------------------
+# PruneEmptyFilter
+# --------------------------------------------------
+norm expect=PruneEmptyFilter disable=(SimplifySelectFilters,FilterReduceTrue,SimplifyZeroCardinalityGroup,FilterIntoJoin,SimplifyJoinFilters,EliminateProject,PruneScanCols,PruneJoinRightCols,JoinPushTransitivePredicates,JoinConditionPush,FilterProjectTranspose,JoinAddRedundantSemiJoin)
+SELECT *
+FROM (SELECT * FROM emp LIMIT 0) AS e
+CROSS JOIN dept
+WHERE TRUE
+----
+inner-join (cross)
+ ├── columns: empno:1!null ename:2 job:3 mgr:4 hiredate:5 sal:6 comm:7 deptno:8 deptno:11!null dname:12 loc:13  [hidden: emp.crdb_internal_mvcc_timestamp:9 emp.tableoid:10 dept.crdb_internal_mvcc_timestamp:14 dept.tableoid:15]
+ ├── cardinality: [0 - 0]
+ ├── multiplicity: left-rows(zero-or-more), right-rows(zero-or-one)
+ ├── key: (11)
+ ├── fd: ()-->(1-10), (11)-->(12-15)
+ ├── limit
+ │    ├── columns: empno:1!null ename:2 job:3 mgr:4 hiredate:5 sal:6 comm:7 emp.deptno:8 emp.crdb_internal_mvcc_timestamp:9 emp.tableoid:10
+ │    ├── cardinality: [0 - 0]
+ │    ├── key: ()
+ │    ├── fd: ()-->(1-10)
+ │    ├── scan emp
+ │    │    ├── columns: empno:1!null ename:2 job:3 mgr:4 hiredate:5 sal:6 comm:7 emp.deptno:8 emp.crdb_internal_mvcc_timestamp:9 emp.tableoid:10
+ │    │    ├── key: (1)
+ │    │    ├── fd: (1)-->(2-10)
+ │    │    └── limit hint: 1.00
+ │    └── 0
+ ├── scan dept
+ │    ├── columns: dept.deptno:11!null dname:12 loc:13 dept.crdb_internal_mvcc_timestamp:14 dept.tableoid:15
+ │    ├── key: (11)
+ │    └── fd: (11)-->(12-15)
+ └── filters (true)
+
+# --------------------------------------------------
+# PruneEmptyProject
+# --------------------------------------------------
+norm expect=PruneEmptyProject disable=(JoinConditionPush,EliminateProject,FilterProjectTranspose)
+SELECT e.empno
+FROM (SELECT empno FROM emp LIMIT 0) AS e
+----
+values
+ ├── columns: empno:1!null
+ ├── cardinality: [0 - 0]
+ ├── key: ()
+ └── fd: ()-->(1)
+
+# --------------------------------------------------
+# ProjectMerge
+# --------------------------------------------------
+norm expect=ProjectMerge disable=(EliminateProject,PruneScanCols,JoinConditionPush,FilterProjectTranspose)
+SELECT id, name
+FROM (
+    SELECT empno AS id, ename AS name, empno + 1 AS next_id
+    FROM emp
+) AS t
+----
+project
+ ├── columns: id:1!null name:2
+ ├── key: (1)
+ ├── fd: (1)-->(2)
+ └── scan emp
+      ├── columns: empno:1!null ename:2 job:3 mgr:4 hiredate:5 sal:6 comm:7 deptno:8 crdb_internal_mvcc_timestamp:9 tableoid:10
+      ├── key: (1)
+      └── fd: (1)-->(2-10)
+
+# --------------------------------------------------
+# PruneEmptyMinus
+# --------------------------------------------------
+norm expect=PruneEmptyMinus disable=(JoinConditionPush,FilterProjectTranspose)
+SELECT empno
+FROM (SELECT empno FROM emp WHERE FALSE) AS empties
+EXCEPT
+SELECT deptno FROM dept
+----
+values
+ ├── columns: empno:1!null
+ ├── cardinality: [0 - 0]
+ ├── key: ()
+ └── fd: ()-->(1)
+
+# --------------------------------------------------
+# JoinReduceTrue
+# --------------------------------------------------
+norm expect=JoinReduceTrue disable=(SimplifyJoinFilters,SimplifyAndTrue,SimplifyTrueAnd,SimplifySelectFilters,JoinConditionPush,FilterProjectTranspose,MergeSelectInnerJoin,FilterIntoJoin,JoinExtractFilter,PushSelectIntoJoinLeft,PushSelectCondLeftIntoJoinLeftAndRight,JoinAddRedundantSemiJoin)
+SELECT *
+FROM emp
+INNER JOIN (
+    SELECT deptno FROM dept WHERE TRUE
+) AS d ON TRUE
+WHERE emp.deptno = d.deptno
+----
+inner-join (hash)
+ ├── columns: empno:1!null ename:2 job:3 mgr:4 hiredate:5 sal:6 comm:7 deptno:8!null deptno:11!null
+ ├── multiplicity: left-rows(zero-or-one), right-rows(zero-or-more)
+ ├── key: (1)
+ ├── fd: (1)-->(2-8), (8)==(11), (11)==(8)
+ ├── scan emp
+ │    ├── columns: empno:1!null ename:2 job:3 mgr:4 hiredate:5 sal:6 comm:7 emp.deptno:8
+ │    ├── key: (1)
+ │    └── fd: (1)-->(2-8)
+ ├── select
+ │    ├── columns: dept.deptno:11!null
+ │    ├── key: (11)
+ │    ├── scan dept
+ │    │    ├── columns: dept.deptno:11!null
+ │    │    └── key: (11)
+ │    └── filters
+ │         └── true
+ └── filters
+      └── emp.deptno:8 = dept.deptno:11 [outer=(8,11), constraints=(/8: (/NULL - ]; /11: (/NULL - ]), fd=(8)==(11), (11)==(8)]
+
+# --------------------------------------------------
+# FilterAggregateTranspose
+# --------------------------------------------------
+norm expect=FilterAggregateTranspose disable=(PushSelectIntoGroupBy,AggregateFilterTranspose,EliminateProject,JoinConditionPush,FilterProjectTranspose)
+SELECT job, cnt
+FROM (
+    SELECT job, COUNT(*) as cnt
+    FROM emp
+    GROUP BY job
+) AS grouped
+WHERE job = 'Manager'
+----
+group-by (streaming)
+ ├── columns: job:3!null cnt:11!null
+ ├── cardinality: [0 - 1]
+ ├── key: ()
+ ├── fd: ()-->(3,11)
+ ├── select
+ │    ├── columns: job:3!null
+ │    ├── fd: ()-->(3)
+ │    ├── scan emp
+ │    │    └── columns: job:3
+ │    └── filters
+ │         └── job:3 = 'Manager' [outer=(3), constraints=(/3: [/'Manager' - /'Manager']; tight), fd=()-->(3)]
+ └── aggregations
+      ├── count-rows [as=count_rows:11]
+      └── const-agg [as=job:3, outer=(3)]
+           └── job:3
+
+# --------------------------------------------------
+# ProjectAggregateMerge
+# --------------------------------------------------
+norm expect=ProjectAggregateMerge disable=(PruneAggCols,JoinConditionPush,FilterProjectTranspose,EliminateProject)
+SELECT job, sumsal
+FROM (
+    SELECT job, SUM(sal) AS sumsal, MIN(ename||'foo') AS minfoo
+    FROM emp
+    GROUP BY job
+) AS grouped
+----
+project
+ ├── columns: job:3 sumsal:11
+ ├── key: (3)
+ ├── fd: (3)-->(11)
+ └── group-by (hash)
+      ├── columns: job:3 sum:11
+      ├── grouping columns: job:3
+      ├── key: (3)
+      ├── fd: (3)-->(11)
+      ├── scan emp
+      │    └── columns: job:3 sal:6
+      └── aggregations
+           └── sum [as=sum:11, outer=(6)]
+                └── sal:6
+
+# --------------------------------------------------
+# AggregateFilterTranspose
+# --------------------------------------------------
+norm expect=AggregateFilterTranspose disable=(PushSelectIntoGroupBy,EliminateProject,FilterAggregateTranspose,JoinConditionPush,FilterProjectTranspose)
+SELECT job, COUNT(*) as cnt
+FROM (
+    SELECT job, deptno
+    FROM emp
+    WHERE deptno > 10
+) AS filtered
+GROUP BY job, deptno
+----
+project
+ ├── columns: job:3 cnt:11!null
+ └── select
+      ├── columns: job:3 deptno:8!null count_rows:11!null
+      ├── key: (3,8)
+      ├── fd: (3,8)-->(11)
+      ├── group-by (hash)
+      │    ├── columns: job:3 deptno:8 count_rows:11!null
+      │    ├── grouping columns: job:3 deptno:8
+      │    ├── key: (3,8)
+      │    ├── fd: (3,8)-->(11)
+      │    ├── scan emp
+      │    │    └── columns: job:3 deptno:8
+      │    └── aggregations
+      │         └── count-rows [as=count_rows:11]
+      └── filters
+           └── deptno:8 > 10 [outer=(8), constraints=(/8: [/11 - ]; tight)]
+
+# --------------------------------------------------
+# JoinAddRedundantSemiJoin
+# --------------------------------------------------
+norm expect=JoinAddRedundantSemiJoin disable=(EliminateSemiJoin,SimplifyLeftJoin,JoinConditionPush,FilterProjectTranspose)
+SELECT emp.*, dept.*
+FROM emp
+INNER JOIN dept ON emp.deptno = dept.deptno
+----
+inner-join (hash)
+ ├── columns: empno:1!null ename:2 job:3 mgr:4 hiredate:5 sal:6 comm:7 deptno:8!null deptno:11!null dname:12 loc:13
+ ├── multiplicity: left-rows(zero-or-one), right-rows(zero-or-more)
  ├── key: (1)
  ├── fd: (1)-->(2-8), (11)-->(12,13), (8)==(11), (11)==(8)
- ├── select
- │    ├── columns: empno:1!null ename:2 job:3 mgr:4 hiredate:5 sal:6!null comm:7 emp.deptno:8
- │    ├── immutable
+ ├── semi-join (hash)
+ │    ├── columns: empno:1!null ename:2 job:3 mgr:4 hiredate:5 sal:6 comm:7 emp.deptno:8
  │    ├── key: (1)
  │    ├── fd: (1)-->(2-8)
  │    ├── scan emp
  │    │    ├── columns: empno:1!null ename:2 job:3 mgr:4 hiredate:5 sal:6 comm:7 emp.deptno:8
  │    │    ├── key: (1)
  │    │    └── fd: (1)-->(2-8)
+ │    ├── scan dept
+ │    │    ├── columns: dept.deptno:11!null
+ │    │    └── key: (11)
  │    └── filters
- │         └── sal:6 > 2000 [outer=(6), immutable, constraints=(/6: (/2000 - ]; tight)]
+ │         └── emp.deptno:8 = dept.deptno:11 [outer=(8,11), constraints=(/8: (/NULL - ]; /11: (/NULL - ]), fd=(8)==(11), (11)==(8)]
  ├── scan dept
  │    ├── columns: dept.deptno:11!null dname:12 loc:13
  │    ├── key: (11)
@@ -426,29 +316,14 @@ inner-join (hash)
  └── filters
       └── emp.deptno:8 = dept.deptno:11 [outer=(8,11), constraints=(/8: (/NULL - ]; /11: (/NULL - ]), fd=(8)==(11), (11)==(8)]
 
-norm expect=FilterProjectTranspose disable=(AggregateFilterTranspose,FilterAggregateTranspose,FilterIntoJoin,FilterMerge,FilterReduceTrue,FilterSetOpTranspose,IntersectMerge,JoinAddRedundantSemiJoin,JoinCommute,JoinPushTransitivePredicates,ProjectFilterTranspose,ProjectMerge,SemiJoinFilterTranspose,UnionMerge)
-SELECT * FROM (SELECT empno, sal * 1.1 AS new_sal, job FROM emp) WHERE empno > 100
-----
-project
- ├── columns: empno:1!null new_sal:11 job:3
- ├── immutable
- ├── key: (1)
- ├── fd: (1)-->(3,11)
- ├── select
- │    ├── columns: empno:1!null job:3 sal:6
- │    ├── key: (1)
- │    ├── fd: (1)-->(3,6)
- │    ├── scan emp
- │    │    ├── columns: empno:1!null job:3 sal:6
- │    │    ├── key: (1)
- │    │    └── fd: (1)-->(3,6)
- │    └── filters
- │         └── empno:1 > 100 [outer=(1), constraints=(/1: [/101 - ]; tight)]
- └── projections
-      └── sal:6 * 1.1 [as=new_sal:11, outer=(6), immutable]
-
-norm expect=SemiJoinFilterTranspose disable=(AggregateFilterTranspose,FilterAggregateTranspose,FilterIntoJoin,FilterMerge,FilterProjectTranspose,FilterReduceTrue,FilterSetOpTranspose,IntersectMerge,JoinAddRedundantSemiJoin,JoinCommute,JoinPushTransitivePredicates,ProjectFilterTranspose,ProjectMerge,UnionMerge)
-SELECT * FROM emp WHERE EXISTS (SELECT 1 FROM dept WHERE dept.deptno = emp.deptno) AND emp.sal > 1500
+# --------------------------------------------------
+# SemiJoinFilterTranspose
+# --------------------------------------------------
+norm expect=SemiJoinFilterTranspose disable=(PushSelectIntoJoinLeft,EliminateSelect,JoinConditionPush,FilterProjectTranspose,JoinAddRedundantSemiJoin)
+SELECT *
+FROM emp
+WHERE EXISTS (SELECT * FROM dept WHERE emp.deptno = dept.deptno)
+  AND emp.sal > 1000
 ----
 semi-join (hash)
  ├── columns: empno:1!null ename:2 job:3 mgr:4 hiredate:5 sal:6!null comm:7 deptno:8
@@ -465,119 +340,267 @@ semi-join (hash)
  │    │    ├── key: (1)
  │    │    └── fd: (1)-->(2-8)
  │    └── filters
- │         └── sal:6 > 1500 [outer=(6), immutable, constraints=(/6: (/1500 - ]; tight)]
+ │         └── sal:6 > 1000 [outer=(6), immutable, constraints=(/6: (/1000 - ]; tight)]
  ├── scan dept
  │    ├── columns: dept.deptno:11!null
  │    └── key: (11)
  └── filters
-      └── dept.deptno:11 = emp.deptno:8 [outer=(8,11), constraints=(/8: (/NULL - ]; /11: (/NULL - ]), fd=(8)==(11), (11)==(8)]
+      └── emp.deptno:8 = dept.deptno:11 [outer=(8,11), constraints=(/8: (/NULL - ]; /11: (/NULL - ]), fd=(8)==(11), (11)==(8)]
 
-norm expect=ProjectFilterTranspose disable=(AggregateFilterTranspose,FilterAggregateTranspose,FilterIntoJoin,FilterMerge,FilterProjectTranspose,FilterReduceTrue,FilterSetOpTranspose,IntersectMerge,JoinAddRedundantSemiJoin,JoinCommute,JoinPushTransitivePredicates,ProjectMerge,SemiJoinFilterTranspose,UnionMerge)
-SELECT * FROM (SELECT empno, job FROM emp WHERE job = 'MANAGER') WHERE empno > 100
-----
-select
- ├── columns: empno:1!null job:3!null
- ├── key: (1)
- ├── fd: ()-->(3)
- ├── scan emp
- │    ├── columns: empno:1!null job:3
- │    ├── key: (1)
- │    └── fd: (1)-->(3)
- └── filters
-      ├── job:3 = 'MANAGER' [outer=(3), constraints=(/3: [/'MANAGER' - /'MANAGER']; tight), fd=()-->(3)]
-      └── empno:1 > 100 [outer=(1), constraints=(/1: [/101 - ]; tight)]
-
-norm expect=FilterReduceTrue disable=(AggregateFilterTranspose,FilterAggregateTranspose,FilterIntoJoin,FilterMerge,FilterProjectTranspose,FilterSetOpTranspose,IntersectMerge,JoinAddRedundantSemiJoin,JoinCommute,JoinPushTransitivePredicates,ProjectFilterTranspose,ProjectMerge,SemiJoinFilterTranspose,UnionMerge)
-SELECT * FROM sales WHERE True
-----
-scan sales
- ├── columns: id:1!null category1:2 category2:3 amount:4
- ├── key: (1)
- └── fd: (1)-->(2-4)
-
-norm expect=UnionMerge disable=(AggregateFilterTranspose,FilterAggregateTranspose,FilterIntoJoin,FilterMerge,FilterProjectTranspose,FilterReduceTrue,FilterSetOpTranspose,IntersectMerge,JoinAddRedundantSemiJoin,JoinCommute,JoinPushTransitivePredicates,ProjectFilterTranspose,ProjectMerge,SemiJoinFilterTranspose,ConvertUnionToDistinctUnionAll)
-SELECT deptno, dname FROM
-  (SELECT deptno, dname FROM dept WHERE loc = 'NEW YORK')
-UNION
-  (SELECT deptno, dname FROM dept WHERE loc = 'CHICAGO')
-UNION
-  (SELECT deptno, dname FROM dept WHERE loc = 'BOSTON')
-----
-union
- ├── columns: deptno:18 dname:19
- ├── left columns: deptno:11 dname:12
- ├── right columns: dept.deptno:13 dept.dname:14
- ├── key: (18,19)
- ├── project
- │    ├── columns: dept.deptno:1!null dept.dname:2
- │    ├── key: (1)
- │    ├── fd: (1)-->(2)
- │    └── select
- │         ├── columns: dept.deptno:1!null dept.dname:2 loc:3!null
- │         ├── key: (1)
- │         ├── fd: ()-->(3), (1)-->(2)
- │         ├── scan dept
- │         │    ├── columns: dept.deptno:1!null dept.dname:2 loc:3
- │         │    ├── key: (1)
- │         │    └── fd: (1)-->(2,3)
- │         └── filters
- │              └── loc:3 = 'NEW YORK' [outer=(3), constraints=(/3: [/'NEW YORK' - /'NEW YORK']; tight), fd=()-->(3)]
- └── union
-      ├── columns: deptno:11 dname:12
-      ├── left columns: dept.deptno:1 dept.dname:2
-      ├── right columns: dept.deptno:6 dept.dname:7
-      ├── key: (11,12)
-      ├── project
-      │    ├── columns: dept.deptno:6!null dept.dname:7
-      │    ├── key: (6)
-      │    ├── fd: (6)-->(7)
-      │    └── select
-      │         ├── columns: dept.deptno:6!null dept.dname:7 loc:8!null
-      │         ├── key: (6)
-      │         ├── fd: ()-->(8), (6)-->(7)
-      │         ├── scan dept
-      │         │    ├── columns: dept.deptno:6!null dept.dname:7 loc:8
-      │         │    ├── key: (6)
-      │         │    └── fd: (6)-->(7,8)
-      │         └── filters
-      │              └── loc:8 = 'CHICAGO' [outer=(8), constraints=(/8: [/'CHICAGO' - /'CHICAGO']; tight), fd=()-->(8)]
-      └── project
-           ├── columns: dept.deptno:13!null dept.dname:14
-           ├── key: (13)
-           ├── fd: (13)-->(14)
-           └── select
-                ├── columns: dept.deptno:13!null dept.dname:14 loc:15!null
-                ├── key: (13)
-                ├── fd: ()-->(15), (13)-->(14)
-                ├── scan dept
-                │    ├── columns: dept.deptno:13!null dept.dname:14 loc:15
-                │    ├── key: (13)
-                │    └── fd: (13)-->(14,15)
-                └── filters
-                     └── loc:15 = 'BOSTON' [outer=(15), constraints=(/15: [/'BOSTON' - /'BOSTON']; tight), fd=()-->(15)]
-
-norm expect=JoinPushTransitivePredicates disable=(AggregateFilterTranspose,FilterAggregateTranspose,FilterIntoJoin,FilterMerge,FilterProjectTranspose,FilterReduceTrue,FilterSetOpTranspose,IntersectMerge,JoinAddRedundantSemiJoin,JoinCommute,ProjectFilterTranspose,ProjectMerge,SemiJoinFilterTranspose,UnionMerge)
-SELECT * FROM emp INNER JOIN dept ON emp.deptno = dept.deptno WHERE emp.job = 'MANAGER'
+# --------------------------------------------------
+# JoinPushTransitivePredicates
+# --------------------------------------------------
+norm expect=JoinPushTransitivePredicates disable=(FilterIntoJoin,PushFilterIntoJoinLeftAndRight,PushFilterIntoJoinLeft,PushFilterIntoJoinRight,MapFilterIntoJoinLeft,MapFilterIntoJoinRight,JoinConditionPush,FilterProjectTranspose,MergeSelectInnerJoin,JoinExtractFilter,PushSelectIntoJoinLeft,PushSelectCondLeftIntoJoinLeftAndRight,JoinAddRedundantSemiJoin)
+SELECT *
+FROM emp
+INNER JOIN dept ON emp.deptno = dept.deptno
+WHERE emp.sal > 1000
 ----
 inner-join (hash)
- ├── columns: empno:1!null ename:2 job:3!null mgr:4 hiredate:5 sal:6 comm:7 deptno:8!null deptno:11!null dname:12 loc:13
+ ├── columns: empno:1!null ename:2 job:3 mgr:4 hiredate:5 sal:6!null comm:7 deptno:8!null deptno:11!null dname:12 loc:13
  ├── multiplicity: left-rows(zero-or-one), right-rows(zero-or-more)
+ ├── immutable
  ├── key: (1)
- ├── fd: ()-->(3), (1)-->(2,4-8), (11)-->(12,13), (8)==(11), (11)==(8)
- ├── select
- │    ├── columns: empno:1!null ename:2 job:3!null mgr:4 hiredate:5 sal:6 comm:7 emp.deptno:8
+ ├── fd: (1)-->(2-8), (11)-->(12,13), (8)==(11), (11)==(8)
+ ├── scan emp
+ │    ├── columns: empno:1!null ename:2 job:3 mgr:4 hiredate:5 sal:6 comm:7 emp.deptno:8
  │    ├── key: (1)
- │    ├── fd: ()-->(3), (1)-->(2,4-8)
- │    ├── scan emp
- │    │    ├── columns: empno:1!null ename:2 job:3 mgr:4 hiredate:5 sal:6 comm:7 emp.deptno:8
- │    │    ├── key: (1)
- │    │    └── fd: (1)-->(2-8)
- │    └── filters
- │         └── job:3 = 'MANAGER' [outer=(3), constraints=(/3: [/'MANAGER' - /'MANAGER']; tight), fd=()-->(3)]
+ │    └── fd: (1)-->(2-8)
  ├── scan dept
  │    ├── columns: dept.deptno:11!null dname:12 loc:13
  │    ├── key: (11)
  │    └── fd: (11)-->(12,13)
  └── filters
+      ├── emp.deptno:8 = dept.deptno:11 [outer=(8,11), constraints=(/8: (/NULL - ]; /11: (/NULL - ]), fd=(8)==(11), (11)==(8)]
+      └── sal:6 > 1000 [outer=(6), immutable, constraints=(/6: (/1000 - ]; tight)]
+
+# --------------------------------------------------
+# FilterProjectTranspose
+# --------------------------------------------------
+norm expect=FilterProjectTranspose disable=(PushSelectIntoProject,EliminateProject,JoinConditionPush)
+SELECT id, name
+FROM (
+    SELECT empno AS id, ename AS name
+    FROM emp
+) AS projected
+WHERE id > 100
+----
+project
+ ├── columns: id:1!null name:2
+ ├── key: (1)
+ ├── fd: (1)-->(2)
+ └── select
+      ├── columns: empno:1!null ename:2
+      ├── key: (1)
+      ├── fd: (1)-->(2)
+      ├── scan emp
+      │    ├── columns: empno:1!null ename:2
+      │    ├── key: (1)
+      │    └── fd: (1)-->(2)
+      └── filters
+           └── empno:1 > 100 [outer=(1), constraints=(/1: [/101 - ]; tight)]
+
+# --------------------------------------------------
+# PruneEmptyIntersect
+# --------------------------------------------------
+norm expect=PruneEmptyIntersect disable=(SimplifyZeroCardinalityGroup,PruneEmptyFilter,JoinConditionPush,FilterProjectTranspose)
+SELECT empno
+FROM emp
+INTERSECT
+SELECT empno FROM emp WHERE FALSE
+----
+values
+ ├── columns: empno:1!null
+ ├── cardinality: [0 - 0]
+ ├── key: ()
+ └── fd: ()-->(1)
+
+# --------------------------------------------------
+# JoinCommute
+# --------------------------------------------------
+norm expect=JoinCommute disable=(EliminateProject,PruneScanCols,ProjectMerge,JoinConditionPush,FilterProjectTranspose,MergeSelectInnerJoin,FilterIntoJoin,JoinExtractFilter,PushSelectIntoJoinLeft,PushSelectCondLeftIntoJoinLeftAndRight,JoinAddRedundantSemiJoin)
+SELECT *
+FROM dept
+INNER JOIN emp ON dept.deptno = emp.deptno
+----
+project
+ ├── columns: deptno:1!null dname:2 loc:3 empno:6!null ename:7 job:8 mgr:9 hiredate:10 sal:11 comm:12 deptno:13!null
+ ├── key: (6)
+ ├── fd: (6)-->(1-3,7-13), (1)-->(2,3), (1)==(13), (13)==(1)
+ └── inner-join (hash)
+      ├── columns: dept.deptno:1!null dept.dname:2 dept.loc:3 dept.crdb_internal_mvcc_timestamp:4 dept.tableoid:5 emp.empno:6!null emp.ename:7 emp.job:8 emp.mgr:9 emp.hiredate:10 emp.sal:11 emp.comm:12 emp.deptno:13!null emp.crdb_internal_mvcc_timestamp:14 emp.tableoid:15
+      ├── multiplicity: left-rows(zero-or-one), right-rows(zero-or-more)
+      ├── key: (6)
+      ├── fd: (6)-->(7-15), (1)-->(2-5), (1)==(13), (13)==(1)
+      ├── scan emp
+      │    ├── columns: emp.empno:6!null emp.ename:7 emp.job:8 emp.mgr:9 emp.hiredate:10 emp.sal:11 emp.comm:12 emp.deptno:13 emp.crdb_internal_mvcc_timestamp:14 emp.tableoid:15
+      │    ├── key: (6)
+      │    └── fd: (6)-->(7-15)
+      ├── scan dept
+      │    ├── columns: dept.deptno:1!null dept.dname:2 dept.loc:3 dept.crdb_internal_mvcc_timestamp:4 dept.tableoid:5
+      │    ├── key: (1)
+      │    └── fd: (1)-->(2-5)
+      └── filters
+           └── dept.deptno:1 = emp.deptno:13 [outer=(1,13), constraints=(/1: (/NULL - ]; /13: (/NULL - ]), fd=(1)==(13), (13)==(1)]
+
+# --------------------------------------------------
+# JoinReduceFalse
+# --------------------------------------------------
+norm expect=JoinReduceFalse disable=(SimplifyJoinFilters,SimplifyAndFalse,JoinConditionPush,FilterProjectTranspose,JoinAddRedundantSemiJoin)
+SELECT * FROM emp INNER JOIN dept ON emp.deptno = dept.deptno AND FALSE
+----
+values
+ ├── columns: empno:1!null ename:2!null job:3!null mgr:4!null hiredate:5!null sal:6!null comm:7!null deptno:8!null deptno:11!null dname:12!null loc:13!null
+ ├── cardinality: [0 - 0]
+ ├── key: ()
+ └── fd: ()-->(1-8,11-13)
+
+# --------------------------------------------------
+# UnionPullUpConstants
+# --------------------------------------------------
+exec-ddl
+CREATE TABLE t1 (k INT PRIMARY KEY, i INT, s STRING)
+----
+
+exec-ddl
+CREATE TABLE t2 (k INT PRIMARY KEY, i INT, s STRING)
+----
+
+norm expect=UnionPullUpConstants disable=(JoinConditionPush,UnionToDistinct,FilterProjectTranspose,EliminateProject)
+SELECT k, 'ACTIVE' AS status, s
+FROM (
+    SELECT k, 'ACTIVE' AS status, s FROM t1
+    UNION ALL
+    SELECT k, 'ACTIVE' AS status, s FROM t2
+) AS unioned
+----
+project
+ ├── columns: k:13!null status:16!null s:15
+ ├── fd: ()-->(16)
+ ├── union-all
+ │    ├── columns: k:13!null s:15
+ │    ├── left columns: t1.k:1 t1.s:3
+ │    ├── right columns: t2.k:7 t2.s:9
+ │    ├── scan t1
+ │    │    ├── columns: t1.k:1!null t1.s:3
+ │    │    ├── key: (1)
+ │    │    └── fd: (1)-->(3)
+ │    └── scan t2
+ │         ├── columns: t2.k:7!null t2.s:9
+ │         ├── key: (7)
+ │         └── fd: (7)-->(9)
+ └── projections
+      ├── 'ACTIVE' [as=status:16]
+      ├── k:13 [as=k:13, outer=(13)]
+      └── s:15 [as=s:15, outer=(15)]
+
+# --------------------------------------------------
+# PruneEmptyUnion
+# --------------------------------------------------
+norm expect=PruneEmptyUnion disable=(JoinConditionPush,UnionToDistinct,FilterProjectTranspose)
+SELECT * FROM (VALUES (1)) AS t1(x) WHERE FALSE
+UNION
+SELECT * FROM (VALUES (1)) AS t2(x) WHERE FALSE
+----
+values
+ ├── columns: x:3!null
+ ├── cardinality: [0 - 0]
+ ├── key: ()
+ └── fd: ()-->(3)
+
+# --------------------------------------------------
+# JoinConditionPush
+# --------------------------------------------------
+norm expect=JoinConditionPush disable=(PushFilterIntoJoinLeft,PushFilterIntoJoinRight,FilterProjectTranspose,MergeSelectInnerJoin,FilterIntoJoin,JoinExtractFilter,PushSelectIntoJoinLeft,PushSelectCondLeftIntoJoinLeftAndRight,JoinAddRedundantSemiJoin)
+SELECT * FROM emp INNER JOIN dept ON emp.deptno = dept.deptno AND emp.sal > 1000 AND dept.loc = 'NEW YORK'
+----
+inner-join (hash)
+ ├── columns: empno:1!null ename:2 job:3 mgr:4 hiredate:5 sal:6!null comm:7 deptno:8!null deptno:11!null dname:12 loc:13!null
+ ├── multiplicity: left-rows(zero-or-one), right-rows(zero-or-more)
+ ├── immutable
+ ├── key: (1)
+ ├── fd: ()-->(13), (1)-->(2-8), (11)-->(12), (8)==(11), (11)==(8)
+ ├── select
+ │    ├── columns: empno:1!null ename:2 job:3 mgr:4 hiredate:5 sal:6!null comm:7 emp.deptno:8
+ │    ├── immutable
+ │    ├── key: (1)
+ │    ├── fd: (1)-->(2-8)
+ │    ├── scan emp
+ │    │    ├── columns: empno:1!null ename:2 job:3 mgr:4 hiredate:5 sal:6 comm:7 emp.deptno:8
+ │    │    ├── key: (1)
+ │    │    └── fd: (1)-->(2-8)
+ │    └── filters
+ │         └── sal:6 > 1000 [outer=(6), immutable, constraints=(/6: (/1000 - ]; tight)]
+ ├── select
+ │    ├── columns: dept.deptno:11!null dname:12 loc:13!null
+ │    ├── key: (11)
+ │    ├── fd: ()-->(13), (11)-->(12)
+ │    ├── scan dept
+ │    │    ├── columns: dept.deptno:11!null dname:12 loc:13
+ │    │    ├── key: (11)
+ │    │    └── fd: (11)-->(12,13)
+ │    └── filters
+ │         └── loc:13 = 'NEW YORK' [outer=(13), constraints=(/13: [/'NEW YORK' - /'NEW YORK']; tight), fd=()-->(13)]
+ └── filters
       └── emp.deptno:8 = dept.deptno:11 [outer=(8,11), constraints=(/8: (/NULL - ]; /11: (/NULL - ]), fd=(8)==(11), (11)==(8)]
+
+# --------------------------------------------------
+# IntersectMerge
+# --------------------------------------------------
+norm expect=IntersectMerge disable=(SimplifyIntersectLeft,SimplifyIntersectRight,JoinConditionPush,FilterProjectTranspose)
+SELECT empno FROM emp
+INTERSECT
+SELECT empno FROM emp
+INTERSECT
+SELECT deptno FROM dept
+----
+intersect
+ ├── columns: empno:1!null
+ ├── left columns: empno:1!null
+ ├── right columns: empno:11
+ ├── key: (1)
+ ├── scan emp
+ │    ├── columns: empno:1!null
+ │    └── key: (1)
+ └── intersect
+      ├── columns: empno:11!null
+      ├── left columns: empno:11!null
+      ├── right columns: dept.deptno:21
+      ├── key: (11)
+      ├── scan emp
+      │    ├── columns: empno:11!null
+      │    └── key: (11)
+      └── scan dept
+           ├── columns: dept.deptno:21!null
+           └── key: (21)
+
+# --------------------------------------------------
+# UnionMerge
+# --------------------------------------------------
+norm expect=UnionMerge disable=(JoinConditionPush,UnionToDistinct,FilterProjectTranspose)
+SELECT empno FROM emp
+UNION
+SELECT empno FROM emp
+UNION
+SELECT deptno FROM dept
+----
+union
+ ├── columns: empno:27!null
+ ├── left columns: emp.empno:1
+ ├── right columns: empno:21
+ ├── key: (27)
+ ├── scan emp
+ │    ├── columns: emp.empno:1!null
+ │    └── key: (1)
+ └── union
+      ├── columns: empno:21!null
+      ├── left columns: emp.empno:11
+      ├── right columns: dept.deptno:22
+      ├── key: (21)
+      ├── scan emp
+      │    ├── columns: emp.empno:11!null
+      │    └── key: (11)
+      └── scan dept
+           ├── columns: dept.deptno:22!null
+           └── key: (22)
 
