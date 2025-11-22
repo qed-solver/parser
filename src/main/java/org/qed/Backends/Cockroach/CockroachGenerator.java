@@ -23,6 +23,59 @@ public class CockroachGenerator implements CodeGenerator<CockroachGenerator.Env>
 
     @Override
     public Env onMatchFilter(Env env, RelRN.Filter filter) {
+        if (env.rulename.equals("FilterProjectTranspose") && filter.source() instanceof RelRN.Project project) {
+            String inputVar = env.generateVar("input");
+            Env inputEnv = env.addBinding("input", inputVar);
+            String projVar = inputEnv.generateVar("proj");
+            Env projEnv = inputEnv.addBinding("proj", projVar);
+            String passthroughVar = projEnv.generateVar("passthrough");
+            Env passthroughEnv = projEnv.addBinding("passthrough", passthroughVar);
+            String condVar = passthroughEnv.generateVar("cond");
+            Env condBoundEnv = passthroughEnv.addBinding("cond", condVar);
+            String inputColsVar = condBoundEnv.generateVar("inputCols");
+            Env inputColsEnv = condBoundEnv.addBinding("inputCols", inputColsVar);
+            
+            String pattern = "(Select\n"
+                    + "    (Project\n"
+                    + "    $" + inputVar + ":*\n"
+                    + "    $" + projVar + ":*\n"
+                    + "    $" + passthroughVar + ":*\n"
+                    + ")\n"
+                    + "    $" + condVar + ":* &\n"
+                    + "    (FiltersBoundBy $" + condVar + " $" + inputColsVar + ":(OutputCols $" + inputVar + "))\n"
+                    + ")";
+            return inputColsEnv.setPattern(pattern).focus(pattern);
+        }
+        
+        if (filter.source() instanceof RelRN.Union union) {
+            String inputVar = env.generateVar("input");
+            Env inputEnv = env.addBinding("input", inputVar);
+            String leftVar = inputEnv.generateVar("left");
+            Env leftEnv = inputEnv.addBinding("left", leftVar);
+            String rightVar = leftEnv.generateVar("right");
+            Env rightEnv = leftEnv.addBinding("right", rightVar);
+            String colmapVar = rightEnv.generateVar("colmap");
+            Env colmapEnv = rightEnv.addBinding("colmap", colmapVar);
+            String filterVar = colmapEnv.generateVar("filter");
+            Env filterBindEnv = colmapEnv.addBinding("filter", filterVar);
+            String itemVar = filterBindEnv.generateVar("item");
+            Env itemBindEnv = filterBindEnv.addBinding("item", itemVar);
+            String inputColsVar = itemBindEnv.generateVar("inputCols");
+            Env inputColsBindEnv = itemBindEnv.addBinding("inputCols", inputColsVar);
+            
+            String pattern = "(Select\n"
+                    + "    $" + inputVar + ":(Union $" + leftVar + ":* $" + rightVar + ":* $" + colmapVar + ":*)\n"
+                    + "    $" + filterVar + ":[\n"
+                    + "        ...\n"
+                    + "        $" + itemVar + ":* &\n"
+                    + "            (CanMapOnSetOp $" + itemVar + ") &\n"
+                    + "            (IsBoundBy $" + itemVar + " $" + inputColsVar + ":(OutputCols $" + inputVar + "))\n"
+                    + "        ...\n"
+                    + "    ]\n"
+                    + ")";
+            return inputColsBindEnv.addBinding("isFilterSetOpTranspose", "true").setPattern(pattern).focus(pattern);
+        }
+        
         Env sourceEnv = onMatch(env, filter.source());
         String sourcePattern = sourceEnv.current();
         Env condEnv = onMatch(sourceEnv, filter.cond());
@@ -252,14 +305,15 @@ public class CockroachGenerator implements CodeGenerator<CockroachGenerator.Env>
                     .addBinding("private", privateVar);
             if (env.rulename.equals("JoinAddRedundantSemiJoin")) {
                 boundEnv = boundEnv.addBinding("isJoinAddRedundantSemiJoin", "true");
+                String filtersVar = boundEnv.generateVar("filters");
+                Env filtersEnv = boundEnv.addBinding("filters", filtersVar);
                 String pattern = "(InnerJoin\n"
-                        + "    $" + leftVar + ":* &\n"
-                        + "        ^(IsSemiJoin $" + leftVar + ")\n"
+                        + "    $" + leftVar + ":^(Values)\n"
                         + "    $" + rightVar + ":*\n"
-                        + "    $" + onVar + ":*\n"
-                        + "    $" + privateVar + ":*\n"
+                        + "    $" + filtersVar + ":*\n"
+                        + "    $" + privateVar + ":* & ^(IsRedundantSemiJoin $" + leftVar + " $" + rightVar + " $" + filtersVar + ")\n"
                         + ")";
-                return boundEnv.setPattern(pattern).focus(pattern);
+                return filtersEnv.setPattern(pattern).focus(pattern);
             }
             if (env.rulename.equals("JoinCommute")) {
                 boundEnv = boundEnv.addBinding("isJoinCommute", "true");
@@ -288,7 +342,13 @@ public class CockroachGenerator implements CodeGenerator<CockroachGenerator.Env>
                 boundEnv = boundEnv.addBinding(pred.operator().getName(), onVar);
             }
             String joinType = getJoinType(join.ty().semantics());
-            String pattern = "(" + joinType + "\n    $" + leftVar + ":*\n    $" + rightVar + ":*\n    $" + onVar + ":*\n    $" + privateVar + ":*\n)";
+            String pattern = "(" + joinType + "\n"
+                    + "    $" + leftVar + ":*\n"
+                    + "    $" + rightVar + ":*\n"
+                    + "    $" + onVar + ":* &\n"
+                    + "        (CanExtractJoinFilter $" + leftVar + " $" + rightVar + " $" + onVar + ")\n"
+                    + "    $" + privateVar + ":*\n"
+                    + ")";
             return boundEnv.setPattern(pattern).focus(pattern);
         }
         
@@ -367,21 +427,21 @@ public class CockroachGenerator implements CodeGenerator<CockroachGenerator.Env>
         if (env.bindings().containsKey("isJoinAddRedundantSemiJoin") &&
             env.bindings().containsKey("left") &&
             env.bindings().containsKey("right") &&
-            env.bindings().containsKey("on") &&
+            env.bindings().containsKey("filters") &&
             env.bindings().containsKey("private")) {
             String leftVar = env.bindings().get("left");
             String rightVar = env.bindings().get("right");
-            String onVar = env.bindings().get("on");
+            String filtersVar = env.bindings().get("filters");
             String privateVar = env.bindings().get("private");
             String pattern = "(InnerJoin\n"
                     + "    (SemiJoin\n"
                     + "        $" + leftVar + "\n"
                     + "        $" + rightVar + "\n"
-                    + "        $" + onVar + "\n"
-                    + "        $" + privateVar + "\n"
+                    + "        $" + filtersVar + "\n"
+                    + "        (EmptyJoinPrivate)\n"
                     + "    )\n"
                     + "    $" + rightVar + "\n"
-                    + "    $" + onVar + "\n"
+                    + "    $" + filtersVar + "\n"
                     + "    $" + privateVar + "\n"
                     + ")";
             return env.setPattern(pattern).focus(pattern);
@@ -495,16 +555,31 @@ public class CockroachGenerator implements CodeGenerator<CockroachGenerator.Env>
             
             String privateVar = rightBoundEnv.generateVar("private");
             Env privateBindEnv = rightBoundEnv.addBinding("private", privateVar);
-            String outColsVar = privateBindEnv.generateVar("outCols");
-            Env outColsEnv = privateBindEnv.addBinding("outCols", outColsVar);
+            String leftColsVar = privateBindEnv.generateVar("leftCols");
+            Env leftColsEnv = privateBindEnv.addBinding("leftCols", leftColsVar);
+            String rightColsVar = leftColsEnv.generateVar("rightCols");
+            Env rightColsEnv = leftColsEnv.addBinding("rightCols", rightColsVar);
+            String outColsVar = rightColsEnv.generateVar("outCols");
+            Env outColsEnv = rightColsEnv.addBinding("outCols", outColsVar);
+            String keyColsVar = outColsEnv.generateVar("keyCols");
+            Env keyColsEnv = outColsEnv.addBinding("keyCols", keyColsVar);
+            String okVar = keyColsEnv.generateVar("ok");
+            Env okEnv = keyColsEnv.addBinding("ok", okVar);
             
             String unionType = "Union";
             String pattern = "(" + unionType + "\n"
                     + "    $" + leftVar + ":*\n"
                     + "    $" + rightVar + ":*\n"
-                    + "    $" + privateVar + ":(SetPrivate * * $" + outColsVar + ":*)\n"
+                    + "    $" + privateVar + ":(SetPrivate $" + leftColsVar + ":* $" + rightColsVar + ":* $" + outColsVar + ":*) &\n"
+                    + "        (Let\n"
+                    + "            ($" + keyColsVar + " $" + okVar + "):(CanConvertUnionToDistinctUnionAll\n"
+                    + "                $" + leftColsVar + "\n"
+                    + "                $" + rightColsVar + "\n"
+                    + "            )\n"
+                    + "            $" + okVar + "\n"
+                    + "        )\n"
                     + ")";
-            return outColsEnv.setPattern(pattern).focus(pattern);
+            return okEnv.setPattern(pattern).focus(pattern);
         }
         if (env.rulename.equals("UnionPullUpConstants") && union.sources().size() == 2) {
             RelRN leftSource = union.sources().get(0);
@@ -758,27 +833,45 @@ public class CockroachGenerator implements CodeGenerator<CockroachGenerator.Env>
 
     @Override
     public Env onMatchMinus(Env env, RelRN.Minus minus) {
-        if (minus.sources().size() == 2 && minus.sources().get(0) instanceof RelRN.Minus inner) {
+        if (env.rulename.equals("MinusMerge") && minus.sources().size() == 2 && minus.sources().get(0) instanceof RelRN.Minus inner) {
             String leftVar = env.generateVar("left");
             Env leftEnv = env.addBinding("left", leftVar);
-            String rightBVar = leftEnv.generateVar("rightB");
-            Env rightBEnv = leftEnv.addBinding("rightB", rightBVar);
-            String pInnerVar = rightBEnv.generateVar("pInner");
-            Env pInnerEnv = rightBEnv.addBinding("pInner", pInnerVar);
-            String rightCVar = pInnerEnv.generateVar("rightC");
-            Env rightCEnv = pInnerEnv.addBinding("rightC", rightCVar);
-            String pOuterVar = rightCEnv.generateVar("pOuter");
-            Env pOuterEnv = rightCEnv.addBinding("pOuter", pOuterVar);
+            String leftLeftVar = leftEnv.generateVar("leftLeft");
+            Env leftLeftEnv = leftEnv.addBinding("leftLeft", leftLeftVar);
+            String leftRightVar = leftLeftEnv.generateVar("leftRight");
+            Env leftRightEnv = leftLeftEnv.addBinding("leftRight", leftRightVar);
+            String innerPrivateVar = leftRightEnv.generateVar("innerPrivate");
+            Env innerPrivateEnv = leftRightEnv.addBinding("innerPrivate", innerPrivateVar);
+            String rightVar = innerPrivateEnv.generateVar("right");
+            Env rightEnv = innerPrivateEnv.addBinding("right", rightVar);
+            String outerPrivateVar = rightEnv.generateVar("outerPrivate");
+            Env outerPrivateEnv = rightEnv.addBinding("outerPrivate", outerPrivateVar);
             String pattern = "(Except\n"
-                    + "    (Except\n"
-                    + "        $" + leftVar + ":*\n"
-                    + "        $" + rightBVar + ":*\n"
-                    + "        $" + pInnerVar + ":*\n"
+                    + "    $" + leftVar + ":(Except\n"
+                    + "        $" + leftLeftVar + ":*\n"
+                    + "        $" + leftRightVar + ":*\n"
+                    + "        $" + innerPrivateVar + ":*\n"
                     + "    )\n"
-                    + "    $" + rightCVar + ":*\n"
-                    + "    $" + pOuterVar + ":*\n"
+                    + "    $" + rightVar + ":*\n"
+                    + "    $" + outerPrivateVar + ":*\n"
                     + ")";
-            return pOuterEnv.setPattern(pattern).focus(pattern);
+            return outerPrivateEnv.addBinding("isMinusMerge", "true").setPattern(pattern).focus(pattern);
+        }
+        if (minus.sources().size() == 2) {
+            RelRN leftSource = minus.sources().get(0);
+            RelRN rightSource = minus.sources().get(1);
+            if (leftSource instanceof RelRN.Empty) {
+                String leftVar = env.generateVar("left");
+                String rightVar = "right";
+                String pattern = "(Except\n"
+                        + "    $" + leftVar + ":* & (HasZeroRows $" + leftVar + ")\n"
+                        + "    $" + rightVar + ":*\n"
+                        + ")";
+                return env.addBinding("isPruneEmptyMinus", "true")
+                        .addBinding("pruneEmptyLeft", leftVar)
+                        .addBinding("right", rightVar)
+                        .setPattern(pattern).focus(pattern);
+            }
         }
         Env leftEnv = onMatch(env, minus.sources().get(0));
         String leftPattern = leftEnv.current();
@@ -796,75 +889,46 @@ public class CockroachGenerator implements CodeGenerator<CockroachGenerator.Env>
                 && topJoin.ty().semantics() == org.apache.calcite.rel.core.JoinRelType.LEFT
                 && topJoin.left() instanceof RelRN.Join bottomJoin
                 && bottomJoin.ty().semantics() == org.apache.calcite.rel.core.JoinRelType.LEFT) {
-            String topJoinVar = env.generateVar("topJoin");
-            Env topEnv = env.addBinding("topJoin", topJoinVar);
-            String bottomJoinVar = topEnv.generateVar("bottomJoin");
-            Env bottomEnv = topEnv.addBinding("bottomJoin", bottomJoinVar);
-            String leftVar = bottomEnv.generateVar("left");
-            Env leftEnv = bottomEnv.addBinding("left", leftVar);
+            String leftVar = env.generateVar("left");
+            Env leftEnv = env.addBinding("left", leftVar);
             String middleVar = leftEnv.generateVar("middle");
             Env middleEnv = leftEnv.addBinding("middle", middleVar);
             String rightVar = middleEnv.generateVar("right");
             Env rightEnv = middleEnv.addBinding("right", rightVar);
-            String topOnVar = rightEnv.generateVar("topOn");
-            Env topOnEnv = rightEnv.addBinding("topOn", topOnVar);
-            String topPrivateVar = topOnEnv.generateVar("topPrivate");
-            Env topPrivateEnv = topOnEnv.addBinding("topPrivate", topPrivateVar);
-            String aggregationsVar = topPrivateEnv.generateVar("aggregations");
-            Env aggsEnv = topPrivateEnv.addBinding("aggregations", aggregationsVar);
+            String rightFiltersVar = rightEnv.generateVar("rightFilters");
+            Env rightFiltersEnv = rightEnv.addBinding("rightFilters", rightFiltersVar);
+            String aggregationsVar = rightFiltersEnv.generateVar("aggregations");
+            Env aggsEnv = rightFiltersEnv.addBinding("aggregations", aggregationsVar);
             String groupingPrivateVar = aggsEnv.generateVar("groupingPrivate");
             Env groupingPrivateEnv = aggsEnv.addBinding("groupingPrivate", groupingPrivateVar);
-            String groupingColsVar = groupingPrivateEnv.generateVar("groupingCols");
-            Env groupingColsEnv = groupingPrivateEnv.addBinding("groupingCols", groupingColsVar);
-            String orderingVar = groupingColsEnv.generateVar("ordering");
-            Env orderingEnv = groupingColsEnv.addBinding("ordering", orderingVar);
 
-            String head = "DistinctOn";
-            String pattern = "(" + head + "\n"
-                    + "    $" + topJoinVar + ":(LeftJoin\n"
-                    + "        $" + bottomJoinVar + ":(LeftJoin $" + leftVar + ":* $" + middleVar + ":* * *) &\n"
-                    + "            (JoinPreservesLeftRows $" + bottomJoinVar + ") &\n"
-                    + "            (JoinDoesNotDuplicateLeftRows $" + bottomJoinVar + ")\n"
+            String pattern = "(DistinctOn\n"
+                    + "    (LeftJoin\n"
+                    + "        (LeftJoin\n"
+                    + "            $" + leftVar + ":*\n"
+                    + "            $" + middleVar + ":*\n"
+                    + "            *\n"
+                    + "        )\n"
                     + "        $" + rightVar + ":*\n"
-                    + "        $" + topOnVar + ":*\n"
-                    + "        $" + topPrivateVar + ":*\n"
-                    + "    ) &\n"
-                    + "        (JoinPreservesLeftRows $" + topJoinVar + ") &\n"
-                    + "        (JoinDoesNotDuplicateLeftRows $" + topJoinVar + ")\n"
+                    + "        $" + rightFiltersVar + ":*\n"
+                    + "    )\n"
                     + "    $" + aggregationsVar + ":[]\n"
-                    + "    $" + groupingPrivateVar + ":(GroupingPrivate $" + groupingColsVar + ":* $" + orderingVar + ":*) &\n"
-                    + "        (ColsAreSubset\n"
-                    + "            (UnionCols\n"
-                    + "                $" + groupingColsVar + "\n"
-                    + "                (AggregationOuterCols $" + aggregationsVar + ")\n"
-                    + "            )\n"
-                    + "            (UnionCols\n"
-                    + "                (OutputCols $" + leftVar + ")\n"
-                    + "                (OutputCols $" + rightVar + ")\n"
-                    + "            )\n"
-                    + "        ) &\n"
-                    + "        ^(ColsIntersect\n"
-                    + "            (UnionCols\n"
-                    + "                $" + groupingColsVar + "\n"
-                    + "                (AggregationOuterCols $" + aggregationsVar + ")\n"
-                    + "            )\n"
-                    + "            (OutputCols $" + middleVar + ")\n"
-                    + "        ) &\n"
-                    + "        (OrderingCanProjectCols\n"
-                    + "            $" + orderingVar + "\n"
-                    + "            (UnionCols\n"
-                    + "                (OutputCols $" + leftVar + ")\n"
-                    + "                (OutputCols $" + rightVar + ")\n"
+                    + "    $" + groupingPrivateVar + ":* &\n"
+                    + "        (ColsAreEmpty\n"
+                    + "            (IntersectionCols\n"
+                    + "                (OutputCols $" + middleVar + ")\n"
+                    + "                (UnionCols\n"
+                    + "                    (FilterOuterCols $" + rightFiltersVar + ")\n"
+                    + "                    (GroupingCols $" + groupingPrivateVar + ")\n"
+                    + "                )\n"
                     + "            )\n"
                     + "        )\n"
                     + ")";
-            return orderingEnv.setPattern(pattern).focus(pattern);
+            return groupingPrivateEnv.setPattern(pattern).focus(pattern);
         }
         if (aggregate.source() instanceof RelRN.Join join && join.ty().semantics() == org.apache.calcite.rel.core.JoinRelType.LEFT) {
-            String inputVar = env.generateVar("input");
-            Env inputEnv = env.addBinding("input", inputVar);
-            String leftVar = inputEnv.generateVar("left");
-            Env leftEnv = inputEnv.addBinding("left", leftVar);
+            String leftVar = env.generateVar("left");
+            Env leftEnv = env.addBinding("left", leftVar);
             String aggsVar = leftEnv.generateVar("aggregations");
             Env aggsEnv = leftEnv.addBinding("aggregations", aggsVar);
             String groupingPrivateVar = aggsEnv.generateVar("groupingPrivate");
@@ -873,75 +937,66 @@ public class CockroachGenerator implements CodeGenerator<CockroachGenerator.Env>
             Env groupingColsEnv = groupingPrivateEnv.addBinding("groupingCols", groupingColsVar);
             String orderingVar = groupingColsEnv.generateVar("ordering");
             Env orderingEnv = groupingColsEnv.addBinding("ordering", orderingVar);
+            String leftColsVar = orderingEnv.generateVar("leftCols");
+            Env leftColsEnv = orderingEnv.addBinding("leftCols", leftColsVar);
 
-            String head = "DistinctOn";
-            String matchPattern = "(" + head + "\n"
-                    + "    $" + inputVar + ":(LeftJoin $" + leftVar + ":* * * *) &\n"
-                    + "        (JoinPreservesLeftRows $" + inputVar + ") &\n"
-                    + "        (JoinDoesNotDuplicateLeftRows $" + inputVar + ")\n"
+            String pattern = "(DistinctOn\n"
+                    + "    (LeftJoin\n"
+                    + "        $" + leftVar + ":*\n"
+                    + "        *\n"
+                    + "        *\n"
+                    + "    )\n"
                     + "    $" + aggsVar + ":[]\n"
                     + "    $" + groupingPrivateVar + ":(GroupingPrivate $" + groupingColsVar + ":* $" + orderingVar + ":*) &\n"
                     + "        (ColsAreSubset\n"
-                    + "            (UnionCols\n"
-                    + "                $" + groupingColsVar + "\n"
-                    + "                (AggregationOuterCols $" + aggsVar + ")\n"
-                    + "            )\n"
-                    + "            (OutputCols $" + leftVar + ")\n"
+                    + "            $" + groupingColsVar + "\n"
+                    + "            $" + leftColsVar + ":(OutputCols $" + leftVar + ")\n"
                     + "        ) &\n"
                     + "        (OrderingCanProjectCols\n"
                     + "            $" + orderingVar + "\n"
-                    + "            (OutputCols $" + leftVar + ")\n"
+                    + "            $" + leftColsVar + "\n"
                     + "        )\n"
                     + ")";
-            return orderingEnv.setPattern(matchPattern).focus(matchPattern);
+            return leftColsEnv.setPattern(pattern).focus(pattern);
         }
         if (aggregate.source() instanceof RelRN.Project project) {
             if (env.rulename.equals("AggregateProjectConstantToDummyJoin")) {
                 String inputVar = env.generateVar("input");
                 Env inputEnv = env.addBinding("input", inputVar);
-                
-                Env projectInputEnv = onMatch(inputEnv, project.source());
-                String currentPattern = projectInputEnv.current();
-                String projectInputVar = currentPattern.replace("$", "").replace(":*", "").trim();
-                if (project.source() instanceof RelRN.Scan scan) {
-                    String scanVar = projectInputEnv.bindings().get(scan.name());
-                    if (scanVar != null) {
-                        projectInputVar = scanVar;
-                    }
-                }
-                Env projectInputBoundEnv = projectInputEnv.addBinding("projectInput", projectInputVar);
-                
-                String projectionsVar = projectInputBoundEnv.generateVar("projections");
-                Env projectionsEnv = projectInputBoundEnv.addBinding("projections", projectionsVar);
-                String passthroughVar = projectionsEnv.generateVar("passthrough");
-                Env passthroughEnv = projectionsEnv.addBinding("passthrough", passthroughVar);
-                
-                String aggregationsVar = passthroughEnv.generateVar("aggregations");
-                Env aggregationsBindEnv = passthroughEnv.addBinding("aggregations", aggregationsVar);
-                String groupingPrivateVar = aggregationsBindEnv.generateVar("groupingPrivate");
-                Env groupingPrivateBindEnv = aggregationsBindEnv.addBinding("groupingPrivate", groupingPrivateVar);
-                
-                String constantGroupingColsVar = groupingPrivateBindEnv.generateVar("constantGroupingCols");
-                Env constantGroupingColsEnv = groupingPrivateBindEnv.addBinding("constantGroupingCols", constantGroupingColsVar);
-                String constantValuesVar = constantGroupingColsEnv.generateVar("constantValues");
-                Env constantValuesEnv = constantGroupingColsEnv.addBinding("constantValues", constantValuesVar);
-                String okVar = constantValuesEnv.generateVar("ok");
-                Env okEnv = constantValuesEnv.addBinding("ok", okVar);
+                String aggregationsVar = inputEnv.generateVar("aggregations");
+                Env aggsEnv = inputEnv.addBinding("aggregations", aggregationsVar);
+                String groupingPrivateVar = aggsEnv.generateVar("groupingPrivate");
+                Env groupingPrivateEnv = aggsEnv.addBinding("groupingPrivate", groupingPrivateVar);
                 
                 String aggregateType = determineAggregateType(aggregate);
                 String pattern = "(" + aggregateType + "\n"
-                        + "    $" + inputVar + ":(Project $" + projectInputVar + ":* $" + projectionsVar + ":* $" + passthroughVar + ":*)\n"
+                        + "    $" + inputVar + ":(Project * * *)\n"
                         + "    $" + aggregationsVar + ":*\n"
-                        + "    $" + groupingPrivateVar + ":* &\n"
-                        + "        (Let\n"
-                        + "            ($" + constantGroupingColsVar + " $" + constantValuesVar + " $" + okVar + "):(ExtractConstantGroupingCols\n"
-                        + "                $" + inputVar + "\n"
-                        + "                $" + groupingPrivateVar + "\n"
-                        + "            )\n"
-                        + "            $" + okVar + "\n"
-                        + "        )\n"
+                        + "    $" + groupingPrivateVar + ":* & (HasConstantGroupingCols $" + inputVar + " $" + groupingPrivateVar + ")\n"
                         + ")";
-                return okEnv.setPattern(pattern).focus(pattern);
+                return groupingPrivateEnv.setPattern(pattern).focus(pattern);
+            }
+            if (env.rulename.equals("AggregateProjectMerge")) {
+                String inputVar = env.generateVar("input");
+                Env inputEnv = env.addBinding("input", inputVar);
+                String sourceVar = inputEnv.generateVar("input");
+                Env sourceBoundEnv = inputEnv.addBinding("source", sourceVar);
+                String aggregationsVar = sourceBoundEnv.generateVar("aggregations");
+                Env aggsEnv = sourceBoundEnv.addBinding("aggregations", aggregationsVar);
+                String groupingPrivateVar = aggsEnv.generateVar("groupingPrivate");
+                Env groupingPrivateEnv = aggsEnv.addBinding("groupingPrivate", groupingPrivateVar);
+                
+                String aggregateType = determineAggregateType(aggregate);
+                String pattern = "(" + aggregateType + "\n"
+                        + "    $" + inputVar + ":(Project\n"
+                        + "        $" + sourceVar + ":*\n"
+                        + "        *\n"
+                        + "        *\n"
+                        + "    )\n"
+                        + "    $" + aggregationsVar + ":*\n"
+                        + "    $" + groupingPrivateVar + ":* & (CanMergeProjectIntoAggregate $" + inputVar + " $" + groupingPrivateVar + ")\n"
+                        + ")";
+                return groupingPrivateEnv.setPattern(pattern).focus(pattern);
             }
             
             String inputVar = env.generateVar("input");
@@ -987,7 +1042,7 @@ public class CockroachGenerator implements CodeGenerator<CockroachGenerator.Env>
             Env aggsBindEnv = inputEnv.addBinding("aggregations", aggregationsVar);
             String groupingPrivateVar = aggsBindEnv.generateVar("groupingPrivate");
             Env gpEnv = aggsBindEnv.addBinding("groupingPrivate", groupingPrivateVar);
-            String pattern = "(" + aggregateType + "\n    $" + inputVar + ":*\n    $" + aggregationsVar + ":*\n    $" + groupingPrivateVar + ":*\n)";
+            String pattern = "(" + aggregateType + "\n    $" + inputVar + ":*\n    $" + aggregationsVar + ":* & (CanExtractProjectFromAggregate $" + aggregationsVar + ")\n    $" + groupingPrivateVar + ":*\n)";
             return gpEnv.addBinding("isAggregateExtractProject", "true").setPattern(pattern).focus(pattern);
         }
         
@@ -1133,42 +1188,20 @@ public class CockroachGenerator implements CodeGenerator<CockroachGenerator.Env>
     public Env onMatchCustom(Env env, RelRN custom) {
         if (custom instanceof org.qed.RRuleInstances.AggregateProjectConstantToDummyJoin.AggregateGroupingByConstants aggGrouping) {
             if (aggGrouping.input() instanceof org.qed.RRuleInstances.AggregateProjectConstantToDummyJoin.ProjectWithConstantLiterals projectWithConstants) {
-                RelRN sourceRN = projectWithConstants.input();
-                Env sourceEnv = onMatch(env, sourceRN);
-                String projectInputVar = sourceEnv.current().replace("$", "").replace(":*", "");
-                String projectionsVar = sourceEnv.generateVar("projections");
-                Env projectionsEnv = sourceEnv.addBinding("projections", projectionsVar);
-                String passthroughVar = projectionsEnv.generateVar("passthrough");
-                Env passthroughEnv = projectionsEnv.addBinding("passthrough", passthroughVar);
-                String inputVar = passthroughEnv.generateVar("input");
-                Env inputEnv = passthroughEnv.addBinding("input", inputVar);
+                String inputVar = env.generateVar("input");
+                Env inputEnv = env.addBinding("input", inputVar);
                 String aggregationsVar = inputEnv.generateVar("aggregations");
-                Env aggregationsBindEnv = inputEnv.addBinding("aggregations", aggregationsVar);
-                String groupingPrivateVar = aggregationsBindEnv.generateVar("groupingPrivate");
-                Env groupingPrivateBindEnv = aggregationsBindEnv.addBinding("groupingPrivate", groupingPrivateVar);
-                String constantGroupingColsVar = groupingPrivateBindEnv.generateVar("constantGroupingCols");
-                Env constantGroupingColsEnv = groupingPrivateBindEnv.addBinding("constantGroupingCols", constantGroupingColsVar);
-                String constantValuesVar = constantGroupingColsEnv.generateVar("constantValues");
-                Env constantValuesEnv = constantGroupingColsEnv.addBinding("constantValues", constantValuesVar);
-                String dummyColsVar = constantValuesEnv.generateVar("dummyCols");
-                Env dummyColsEnv = constantValuesEnv.addBinding("dummyCols", dummyColsVar);
-                String okVar = dummyColsEnv.generateVar("ok");
-                Env okEnv = dummyColsEnv.addBinding("ok", okVar).addBinding("projectInput", projectInputVar);
+                Env aggsEnv = inputEnv.addBinding("aggregations", aggregationsVar);
+                String groupingPrivateVar = aggsEnv.generateVar("groupingPrivate");
+                Env groupingPrivateEnv = aggsEnv.addBinding("groupingPrivate", groupingPrivateVar);
                 
                 String aggregateType = "GroupBy";
                 String pattern = "(" + aggregateType + "\n"
-                        + "    $" + inputVar + ":(Project $" + projectInputVar + ":* $" + projectionsVar + ":* $" + passthroughVar + ":*)\n"
+                        + "    $" + inputVar + ":(Project * * *)\n"
                         + "    $" + aggregationsVar + ":*\n"
-                        + "    $" + groupingPrivateVar + ":* &\n"
-                        + "        (Let\n"
-                        + "            ($" + constantGroupingColsVar + " $" + constantValuesVar + " $" + dummyColsVar + " $" + okVar + "):(ExtractConstantGroupingColsAndBuildDummy\n"
-                        + "                $" + inputVar + "\n"
-                        + "                $" + groupingPrivateVar + "\n"
-                        + "            )\n"
-                        + "            $" + okVar + "\n"
-                        + "        )\n"
+                        + "    $" + groupingPrivateVar + ":* & (HasConstantGroupingCols $" + inputVar + " $" + groupingPrivateVar + ")\n"
                         + ")";
-                return okEnv.setPattern(pattern).focus(pattern);
+                return groupingPrivateEnv.setPattern(pattern).focus(pattern);
             }
             return onMatch(env, aggGrouping.input());
         }
@@ -1273,6 +1306,36 @@ public class CockroachGenerator implements CodeGenerator<CockroachGenerator.Env>
 
     @Override
     public Env transformFilter(Env env, RelRN.Filter filter) {
+        if (env.bindings().containsKey("isFilterSetOpTranspose")
+                && filter.source() instanceof RelRN.Union
+                && env.bindings().containsKey("input")
+                && env.bindings().containsKey("left")
+                && env.bindings().containsKey("right")
+                && env.bindings().containsKey("colmap")
+                && env.bindings().containsKey("filter")
+                && env.bindings().containsKey("item")) {
+            String leftVar = env.bindings().get("left");
+            String rightVar = env.bindings().get("right");
+            String colmapVar = env.bindings().get("colmap");
+            String filterVar = env.bindings().get("filter");
+            String itemVar = env.bindings().get("item");
+            
+            String pattern = "(Select\n"
+                    + "    (Union\n"
+                    + "        (Select\n"
+                    + "            $" + leftVar + "\n"
+                    + "            [ (FiltersItem (MapSetOpFilterLeft $" + itemVar + " $" + colmapVar + ")) ]\n"
+                    + "        )\n"
+                    + "        (Select\n"
+                    + "            $" + rightVar + "\n"
+                    + "            [ (FiltersItem (MapSetOpFilterRight $" + itemVar + " $" + colmapVar + ")) ]\n"
+                    + "        )\n"
+                    + "        $" + colmapVar + "\n"
+                    + "    )\n"
+                    + "    (RemoveFiltersItem $" + filterVar + " $" + itemVar + ")\n"
+                    + ")";
+            return env.setPattern(pattern).focus(pattern);
+        }
         if (env.rulename.equals("JoinExtractFilter") &&
             filter.source() instanceof RelRN.Join &&
             env.bindings().containsKey("left") && 
@@ -1283,17 +1346,11 @@ public class CockroachGenerator implements CodeGenerator<CockroachGenerator.Env>
             String rightVar = env.bindings().get("right");
             String onVar = env.bindings().get("on");
             String privateVar = env.bindings().get("private");
-            String pattern = "(Select\n"
-                    + "    (InnerJoin\n"
-                    + "    (Select $" + leftVar + " (ExtractBoundConditions $" + onVar + " (OutputCols $" + leftVar + ")))\n"
-                    + "    (Select $" + rightVar + " (ExtractBoundConditions $" + onVar + " (OutputCols $" + rightVar + ")))\n"
-                    + "    (ExtractUnboundConditions\n"
-                    + "        (ExtractUnboundConditions $" + onVar + " (OutputCols $" + leftVar + "))\n"
-                    + "        (OutputCols $" + rightVar + ")\n"
-                    + "    )\n"
-                    + "    $" + privateVar + "\n"
-                    + ")\n"
+            String pattern = "(ConstructJoinExtractFilterResult\n"
+                    + "    $" + leftVar + "\n"
+                    + "    $" + rightVar + "\n"
                     + "    $" + onVar + "\n"
+                    + "    $" + privateVar + "\n"
                     + ")";
             return env.setPattern(pattern).focus(pattern);
         }
@@ -1333,6 +1390,26 @@ public class CockroachGenerator implements CodeGenerator<CockroachGenerator.Env>
 
     @Override
     public Env transformProject(Env env, RelRN.Project project) {
+        if (env.rulename.equals("FilterProjectTranspose")
+                && env.bindings().containsKey("input")
+                && env.bindings().containsKey("cond")
+                && env.bindings().containsKey("proj")
+                && env.bindings().containsKey("passthrough")) {
+            String inputVar = env.bindings().get("input");
+            String condVar = env.bindings().get("cond");
+            String projVar = env.bindings().get("proj");
+            String passthroughVar = env.bindings().get("passthrough");
+            
+            String pattern = "(Project\n"
+                    + "    (Select\n"
+                    + "    $" + inputVar + "\n"
+                    + "    $" + condVar + "\n"
+                    + ")\n"
+                    + "    $" + projVar + "\n"
+                    + "    $" + passthroughVar + "\n"
+                    + ")";
+            return env.setPattern(pattern).focus(pattern);
+        }
         if (env.bindings().containsKey("hasZeroRows")) {
             String inputVar = env.bindings().getOrDefault("zeroInput", "input");
             String pattern = "$" + inputVar;
@@ -1381,21 +1458,65 @@ public class CockroachGenerator implements CodeGenerator<CockroachGenerator.Env>
 
     @Override
     public Env transformUnion(Env env, RelRN.Union union) {
+        if (env.bindings().containsKey("isFilterSetOpTranspose")
+                && env.bindings().containsKey("left")
+                && env.bindings().containsKey("right")
+                && env.bindings().containsKey("colmap")
+                && env.bindings().containsKey("filter")
+                && env.bindings().containsKey("item")) {
+            String leftVar = env.bindings().get("left");
+            String rightVar = env.bindings().get("right");
+            String colmapVar = env.bindings().get("colmap");
+            String filterVar = env.bindings().get("filter");
+            String itemVar = env.bindings().get("item");
+            
+            String pattern = "(Select\n"
+                    + "    (Union\n"
+                    + "        (Select\n"
+                    + "            $" + leftVar + "\n"
+                    + "            [ (FiltersItem (MapSetOpFilterLeft $" + itemVar + " $" + colmapVar + ")) ]\n"
+                    + "        )\n"
+                    + "        (Select\n"
+                    + "            $" + rightVar + "\n"
+                    + "            [ (FiltersItem (MapSetOpFilterRight $" + itemVar + " $" + colmapVar + ")) ]\n"
+                    + "        )\n"
+                    + "        $" + colmapVar + "\n"
+                    + "    )\n"
+                    + "    (RemoveFiltersItem $" + filterVar + " $" + itemVar + ")\n"
+                    + ")";
+            return env.setPattern(pattern).focus(pattern);
+        }
         if (env.rulename.equals("UnionToDistinct") 
                 && env.bindings().containsKey("left")
                 && env.bindings().containsKey("right")
                 && env.bindings().containsKey("private")
-                && env.bindings().containsKey("outCols")) {
+                && env.bindings().containsKey("leftCols")
+                && env.bindings().containsKey("rightCols")
+                && env.bindings().containsKey("outCols")
+                && env.bindings().containsKey("keyCols")) {
             
             String leftVar = env.bindings().get("left");
             String rightVar = env.bindings().get("right");
             String privateVar = env.bindings().get("private");
+            String leftColsVar = env.bindings().get("leftCols");
+            String rightColsVar = env.bindings().get("rightCols");
             String outColsVar = env.bindings().get("outCols");
+            String keyColsVar = env.bindings().get("keyCols");
             
             String pattern = "(DistinctOn\n"
                     + "    (UnionAll $" + leftVar + " $" + rightVar + " $" + privateVar + ")\n"
-                    + "    []\n"
-                    + "    (MakeGrouping (ColListToSet $" + outColsVar + ") (EmptyOrdering))\n"
+                    + "    (MakeAggCols\n"
+                    + "        ConstAgg\n"
+                    + "        (TranslateColSet\n"
+                    + "            (DifferenceCols (OutputCols $" + leftVar + ") $" + keyColsVar + ")\n"
+                    + "            $" + leftColsVar + "\n"
+                    + "            $" + outColsVar + "\n"
+                    + "        )\n"
+                    + "    )\n"
+                    + "    (MakeGrouping\n"
+                    + "        (TranslateColSet $" + keyColsVar + " $" + leftColsVar + " $" + outColsVar + ")\n"
+                    + "        (EmptyOrdering)\n"
+                    + "    )\n"
                     + ")";
             return env.setPattern(pattern).focus(pattern);
         }
@@ -1581,6 +1702,31 @@ public class CockroachGenerator implements CodeGenerator<CockroachGenerator.Env>
 
     @Override
     public Env transformMinus(Env env, RelRN.Minus minus) {
+        if (env.bindings().containsKey("isPruneEmptyMinus")) {
+            String leftVar = env.bindings().get("pruneEmptyLeft");
+            String pattern = "(ConstructEmptyValues (OutputCols $" + leftVar + "))";
+            return env.setPattern(pattern).focus(pattern);
+        }
+        if (env.bindings().containsKey("isMinusMerge")
+                && env.bindings().containsKey("leftLeft")
+                && env.bindings().containsKey("leftRight")
+                && env.bindings().containsKey("right")
+                && env.bindings().containsKey("innerPrivate")
+                && env.bindings().containsKey("outerPrivate")) {
+            String leftLeftVar = env.bindings().get("leftLeft");
+            String leftRightVar = env.bindings().get("leftRight");
+            String rightVar = env.bindings().get("right");
+            String innerPrivateVar = env.bindings().get("innerPrivate");
+            String outerPrivateVar = env.bindings().get("outerPrivate");
+            String pattern = "(ConstructMinusMergeResult\n"
+                    + "    $" + leftLeftVar + "\n"
+                    + "    $" + leftRightVar + "\n"
+                    + "    $" + rightVar + "\n"
+                    + "    $" + innerPrivateVar + "\n"
+                    + "    $" + outerPrivateVar + "\n"
+                    + ")";
+            return env.setPattern(pattern).focus(pattern);
+        }
         String pattern = "(Except\n"
                 + "    $left\n"
                 + "    (Union\n"
@@ -1596,84 +1742,74 @@ public class CockroachGenerator implements CodeGenerator<CockroachGenerator.Env>
     @Override
     public Env transformAggregate(Env env, RelRN.Aggregate aggregate) {
         if (env.bindings().containsKey("left") && env.bindings().containsKey("right")
-                && env.bindings().containsKey("topOn") && env.bindings().containsKey("topPrivate")
-                && env.bindings().containsKey("aggregations") && env.bindings().containsKey("groupingCols")
-                && env.bindings().containsKey("ordering")) {
+                && env.bindings().containsKey("rightFilters")
+                && env.bindings().containsKey("aggregations") && env.bindings().containsKey("groupingPrivate")
+                && !env.bindings().containsKey("topOn") && !env.bindings().containsKey("topPrivate")) {
             String leftVar = env.bindings().get("left");
             String rightVar = env.bindings().get("right");
-            String topOnVar = env.bindings().get("topOn");
-            String topPrivateVar = env.bindings().get("topPrivate");
+            String rightFiltersVar = env.bindings().get("rightFilters");
             String aggsVar = env.bindings().get("aggregations");
-            String groupingColsVar = env.bindings().get("groupingCols");
-            String orderingVar = env.bindings().get("ordering");
+            String groupingPrivateVar = env.bindings().get("groupingPrivate");
             String pattern = "(DistinctOn\n"
-                    + "    (LeftJoin $" + leftVar + " $" + rightVar + " $" + topOnVar + " $" + topPrivateVar + ")\n"
-                    + "    $" + aggsVar + "\n"
-                    + "    (MakeGrouping\n"
-                    + "        $" + groupingColsVar + "\n"
-                    + "        (PruneOrdering\n"
-                    + "            $" + orderingVar + "\n"
-                    + "            (UnionCols\n"
-                    + "                (OutputCols $" + leftVar + ")\n"
-                    + "                (OutputCols $" + rightVar + ")\n"
-                    + "            )\n"
-                    + "        )\n"
+                    + "    (LeftJoin\n"
+                    + "        $" + leftVar + "\n"
+                    + "        $" + rightVar + "\n"
+                    + "        $" + rightFiltersVar + "\n"
+                    + "        (EmptyJoinPrivate)\n"
                     + "    )\n"
+                    + "    $" + aggsVar + "\n"
+                    + "    $" + groupingPrivateVar + "\n"
                     + ")";
             return env.setPattern(pattern).focus(pattern);
         }
         if (env.bindings().containsKey("left") && env.bindings().containsKey("aggregations")
-                && env.bindings().containsKey("groupingCols") && env.bindings().containsKey("ordering")) {
+                && env.bindings().containsKey("groupingPrivate")
+                && !env.bindings().containsKey("rightFilters") && !env.bindings().containsKey("topOn")) {
             String leftVar = env.bindings().get("left");
             String aggsVar = env.bindings().get("aggregations");
-            String groupingColsVar = env.bindings().get("groupingCols");
-            String orderingVar = env.bindings().get("ordering");
-            String head = "DistinctOn";
-            String pattern = "(" + head + "\n"
+            String groupingPrivateVar = env.bindings().get("groupingPrivate");
+            String pattern = "(DistinctOn\n"
                     + "    $" + leftVar + "\n"
                     + "    $" + aggsVar + "\n"
-                    + "    (MakeGrouping\n"
-                    + "        $" + groupingColsVar + "\n"
-                    + "        (PruneOrdering $" + orderingVar + " (OutputCols $" + leftVar + "))\n"
-                    + "    )\n"
+                    + "    $" + groupingPrivateVar + "\n"
                     + ")";
             return env.setPattern(pattern).focus(pattern);
         }
         if (env.rulename.equals("AggregateProjectConstantToDummyJoin") 
-                && env.bindings().containsKey("projectInput")
-                && env.bindings().containsKey("projections")
-                && env.bindings().containsKey("passthrough")
+                && env.bindings().containsKey("input")
                 && env.bindings().containsKey("aggregations")
                 && env.bindings().containsKey("groupingPrivate")
-                && env.bindings().containsKey("constantGroupingCols")
-                && env.bindings().containsKey("constantValues")) {
-            if (aggregate.source() instanceof RelRN.Project project) {
-                Env projectInputEnv = transform(env, project.source());
-                String projectInputPattern = projectInputEnv.current();
-                
-                String projectInputVar = env.bindings().get("projectInput");
-                String projectionsVar = env.bindings().get("projections");
-                String passthroughVar = env.bindings().get("passthrough");
-                String aggregationsVar = env.bindings().get("aggregations");
-                String groupingPrivateVar = env.bindings().get("groupingPrivate");
-                String constantGroupingColsVar = env.bindings().get("constantGroupingCols");
-                String constantValuesVar = env.bindings().get("constantValues");
-                String aggregateType = determineAggregateType(aggregate);
-                
-                String pattern = "(ConstructGroupByWithDummyJoin\n"
-                        + "    " + projectInputPattern + "\n"
-                        + "    $" + projectionsVar + "\n"
-                        + "    $" + passthroughVar + "\n"
-                        + "    $" + aggregationsVar + "\n"
-                        + "    $" + groupingPrivateVar + "\n"
-                        + "    $" + constantGroupingColsVar + "\n"
-                        + "    $" + constantValuesVar + "\n"
-                        + "    " + aggregateType + "\n"
-                        + ")";
-                return projectInputEnv.setPattern(pattern).focus(pattern);
-            }
+                && !env.bindings().containsKey("projectInput")) {
+            String inputVar = env.bindings().get("input");
+            String aggregationsVar = env.bindings().get("aggregations");
+            String groupingPrivateVar = env.bindings().get("groupingPrivate");
+            
+            String pattern = "(ConstructAggregateProjectConstantToDummyJoin\n"
+                    + "    $" + inputVar + "\n"
+                    + "    $" + aggregationsVar + "\n"
+                    + "    $" + groupingPrivateVar + "\n"
+                    + ")";
+            return env.setPattern(pattern).focus(pattern);
         }
         
+        if (env.rulename.equals("AggregateProjectMerge")
+                && env.bindings().containsKey("input")
+                && env.bindings().containsKey("source")
+                && env.bindings().containsKey("aggregations")
+                && env.bindings().containsKey("groupingPrivate")
+                && !env.bindings().containsKey("projections")) {
+            String inputVar = env.bindings().get("input");
+            String sourceVar = env.bindings().get("source");
+            String aggregationsVar = env.bindings().get("aggregations");
+            String groupingPrivateVar = env.bindings().get("groupingPrivate");
+            String aggregateType = determineAggregateType(aggregate);
+            String pattern = "(" + aggregateType + "\n"
+                    + "    $" + sourceVar + "\n"
+                    + "    (MergeProjectIntoAggregate $" + inputVar + " $" + aggregationsVar + ")\n"
+                    + "    $" + groupingPrivateVar + "\n"
+                    + ")";
+            return env.setPattern(pattern).focus(pattern);
+        }
         if (env.bindings().containsKey("input") && env.bindings().containsKey("projections")
                 && env.bindings().containsKey("passthrough") && env.bindings().containsKey("aggregations")
                 && env.bindings().containsKey("groupingPrivate")) {
@@ -1692,16 +1828,8 @@ public class CockroachGenerator implements CodeGenerator<CockroachGenerator.Env>
         }
         
         if (env.bindings().containsKey("isAggregateExtractProject")) {
-            Env sourceEnv = transform(env, aggregate.source());
-            String sourcePattern = sourceEnv.current();
-            Env aggsEnv = transformAggCalls(sourceEnv, aggregate.aggCalls());
-            String aggsPattern = aggsEnv.current();
-            Env groupingEnv = transformGroupSet(aggsEnv, aggregate.groupSet());
-            String groupingPattern = groupingEnv.current();
-            String privateVar = groupingEnv.bindings().getOrDefault("aggregate_private", "private");
-            String aggregateType = determineAggregateType(aggregate);
-            String pattern = "(" + aggregateType + "\n    (Project\n        $input\n        []\n        (UnionCols\n            (GroupingCols $groupingPrivate)\n            (AggregationOuterCols $aggregations)\n        )\n    )\n    $aggregations\n    $groupingPrivate\n)";
-            return groupingEnv.setPattern(pattern).focus(pattern);
+            String pattern = "(ConstructAggregateExtractProject\n    $input\n    $aggregations\n    $groupingPrivate\n)";
+            return env.setPattern(pattern).focus(pattern);
         }
         
         Env sourceEnv = transform(env, aggregate.source());
@@ -1765,6 +1893,11 @@ public class CockroachGenerator implements CodeGenerator<CockroachGenerator.Env>
 
     @Override
     public Env transformEmpty(Env env, RelRN.Empty empty) {
+        if (env.bindings().containsKey("isPruneEmptyMinus")) {
+            String leftVar = env.bindings().get("pruneEmptyLeft");
+            String pattern = "(ConstructEmptyValues (OutputCols $" + leftVar + "))";
+            return env.setPattern(pattern).focus(pattern);
+        }
         if (env.bindings().containsKey("hasZeroRows")) {
             String inputVar = env.bindings().getOrDefault("zeroInput", "input");
             String patternStr = env.pattern();
@@ -1859,50 +1992,20 @@ public class CockroachGenerator implements CodeGenerator<CockroachGenerator.Env>
         }
         if (custom instanceof org.qed.RRuleInstances.AggregateProjectConstantToDummyJoin.AggregateGroupingByDummyFields aggGrouping) {
             if (env.rulename.equals("AggregateProjectConstantToDummyJoin") 
-                    && env.bindings().containsKey("projectInput")
-                    && env.bindings().containsKey("projections")
-                    && env.bindings().containsKey("passthrough")
+                    && env.bindings().containsKey("input")
                     && env.bindings().containsKey("aggregations")
                     && env.bindings().containsKey("groupingPrivate")
-                    && env.bindings().containsKey("constantGroupingCols")
-                    && env.bindings().containsKey("constantValues")
-                    && env.bindings().containsKey("dummyCols")) {
+                    && !env.bindings().containsKey("projectInput")) {
+                String inputVar = env.bindings().get("input");
+                String aggregationsVar = env.bindings().get("aggregations");
+                String groupingPrivateVar = env.bindings().get("groupingPrivate");
                 
-                if (aggGrouping.input() instanceof org.qed.RRuleInstances.AggregateProjectConstantToDummyJoin.ProjectWithDummyFields projectWithDummy) {
-                    if (projectWithDummy.input() instanceof org.qed.RRuleInstances.AggregateProjectConstantToDummyJoin.JoinWithDummyTable joinWithDummy) {
-                        Env projectInputEnv = transform(env, joinWithDummy.baseTable());
-                        String projectInputPattern = projectInputEnv.current();
-                        
-                        String projectInputVar = env.bindings().get("projectInput");
-                        String projectionsVar = env.bindings().get("projections");
-                        String passthroughVar = env.bindings().get("passthrough");
-                        String aggregationsVar = env.bindings().get("aggregations");
-                        String groupingPrivateVar = env.bindings().get("groupingPrivate");
-                        String constantGroupingColsVar = env.bindings().get("constantGroupingCols");
-                        String constantValuesVar = env.bindings().get("constantValues");
-                        String dummyColsVar = env.bindings().get("dummyCols");
-                        String aggregateType = "GroupBy";
-                        
-                        String pattern = "(" + aggregateType + "\n"
-                                + "    (Project\n"
-                                + "        (InnerJoin\n"
-                                + "            " + projectInputPattern + "\n"
-                                + "            (ConstructDummyValuesTable $" + constantValuesVar + " $" + dummyColsVar + ")\n"
-                                + "            [ (FiltersItem (True)) ]\n"
-                                + "            (EmptyJoinPrivate)\n"
-                                + "        )\n"
-                                + "        (RemapProjectionsForDummyJoin $" + projectionsVar + " $" + constantGroupingColsVar + " $" + dummyColsVar + ")\n"
-                                + "        (IntersectionCols $" + passthroughVar + " (OutputCols " + projectInputPattern + "))\n"
-                                + "    )\n"
-                                + "    $" + aggregationsVar + "\n"
-                                + "    (AddColsToGrouping\n"
-                                + "        (RemoveGroupingCols $" + groupingPrivateVar + " $" + constantGroupingColsVar + ")\n"
-                                + "        (ColListToSet $" + dummyColsVar + ")\n"
-                                + "    )\n"
-                                + ")";
-                        return projectInputEnv.setPattern(pattern).focus(pattern);
-                    }
-                }
+                String pattern = "(ConstructAggregateProjectConstantToDummyJoin\n"
+                        + "    $" + inputVar + "\n"
+                        + "    $" + aggregationsVar + "\n"
+                        + "    $" + groupingPrivateVar + "\n"
+                        + ")";
+                return env.setPattern(pattern).focus(pattern);
             }
             return transform(env, aggGrouping.input());
         }
@@ -2029,17 +2132,33 @@ public class CockroachGenerator implements CodeGenerator<CockroachGenerator.Env>
                     && env.bindings().containsKey("left")
                     && env.bindings().containsKey("right")
                     && env.bindings().containsKey("private")
-                    && env.bindings().containsKey("outCols")) {
+                    && env.bindings().containsKey("leftCols")
+                    && env.bindings().containsKey("rightCols")
+                    && env.bindings().containsKey("outCols")
+                    && env.bindings().containsKey("keyCols")) {
                 
                 String leftVar = env.bindings().get("left");
                 String rightVar = env.bindings().get("right");
                 String privateVar = env.bindings().get("private");
+                String leftColsVar = env.bindings().get("leftCols");
+                String rightColsVar = env.bindings().get("rightCols");
                 String outColsVar = env.bindings().get("outCols");
+                String keyColsVar = env.bindings().get("keyCols");
                 
                 String pattern = "(DistinctOn\n"
                         + "    (UnionAll $" + leftVar + " $" + rightVar + " $" + privateVar + ")\n"
-                        + "    []\n"
-                        + "    (MakeGrouping (ColListToSet $" + outColsVar + ") (EmptyOrdering))\n"
+                        + "    (MakeAggCols\n"
+                        + "        ConstAgg\n"
+                        + "        (TranslateColSet\n"
+                        + "            (DifferenceCols (OutputCols $" + leftVar + ") $" + keyColsVar + ")\n"
+                        + "            $" + leftColsVar + "\n"
+                        + "            $" + outColsVar + "\n"
+                        + "        )\n"
+                        + "    )\n"
+                        + "    (MakeGrouping\n"
+                        + "        (TranslateColSet $" + keyColsVar + " $" + leftColsVar + " $" + outColsVar + ")\n"
+                        + "        (EmptyOrdering)\n"
+                        + "    )\n"
                         + ")";
                 return env.setPattern(pattern).focus(pattern);
             }

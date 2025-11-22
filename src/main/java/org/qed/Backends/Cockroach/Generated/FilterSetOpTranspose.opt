@@ -1,21 +1,26 @@
 [FilterSetOpTranspose, Normalize]
 (Select
-    (Union
-    $input_0:*
-    $input_1:*
-    $private_2:*
-)
-    $cond_3:*
+    $input_0:(Union $left_1:* $right_2:* $colmap_3:*)
+    $filter_4:[
+        ...
+        $item_5:* &
+            (CanMapOnSetOp $item_5) &
+            (IsBoundBy $item_5 $inputCols_6:(OutputCols $input_0))
+        ...
+    ]
 )
 =>
-(Union
-    (Select
-    $input_0
-    $cond_3
-)
-    (Select
-    $input_1
-    $cond_3
-)
-    $private_2
+(Select
+    (Union
+        (Select
+            $left_1
+            [ (FiltersItem (MapSetOpFilterLeft $item_5 $colmap_3)) ]
+        )
+        (Select
+            $right_2
+            [ (FiltersItem (MapSetOpFilterRight $item_5 $colmap_3)) ]
+        )
+        $colmap_3
+    )
+    (RemoveFiltersItem $filter_4 $item_5)
 )

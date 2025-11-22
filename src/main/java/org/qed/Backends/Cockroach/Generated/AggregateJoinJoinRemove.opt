@@ -1,54 +1,34 @@
 [AggregateJoinJoinRemove, Normalize]
 (DistinctOn
-    $topJoin_0:(LeftJoin
-        $bottomJoin_1:(LeftJoin $left_2:* $middle_3:* * *) &
-            (JoinPreservesLeftRows $bottomJoin_1) &
-            (JoinDoesNotDuplicateLeftRows $bottomJoin_1)
-        $right_4:*
-        $topOn_5:*
-        $topPrivate_6:*
-    ) &
-        (JoinPreservesLeftRows $topJoin_0) &
-        (JoinDoesNotDuplicateLeftRows $topJoin_0)
-    $aggregations_7:[]
-    $groupingPrivate_8:(GroupingPrivate $groupingCols_9:* $ordering_10:*) &
-        (ColsAreSubset
-            (UnionCols
-                $groupingCols_9
-                (AggregationOuterCols $aggregations_7)
-            )
-            (UnionCols
-                (OutputCols $left_2)
-                (OutputCols $right_4)
-            )
-        ) &
-        ^(ColsIntersect
-            (UnionCols
-                $groupingCols_9
-                (AggregationOuterCols $aggregations_7)
-            )
-            (OutputCols $middle_3)
-        ) &
-        (OrderingCanProjectCols
-            $ordering_10
-            (UnionCols
-                (OutputCols $left_2)
-                (OutputCols $right_4)
+    (LeftJoin
+        (LeftJoin
+            $left_0:*
+            $middle_1:*
+            *
+        )
+        $right_2:*
+        $rightFilters_3:*
+    )
+    $aggregations_4:[]
+    $groupingPrivate_5:* &
+        (ColsAreEmpty
+            (IntersectionCols
+                (OutputCols $middle_1)
+                (UnionCols
+                    (FilterOuterCols $rightFilters_3)
+                    (GroupingCols $groupingPrivate_5)
+                )
             )
         )
 )
 =>
 (DistinctOn
-    (LeftJoin $left_2 $right_4 $topOn_5 $topPrivate_6)
-    $aggregations_7
-    (MakeGrouping
-        $groupingCols_9
-        (PruneOrdering
-            $ordering_10
-            (UnionCols
-                (OutputCols $left_2)
-                (OutputCols $right_4)
-            )
-        )
+    (LeftJoin
+        $left_0
+        $right_2
+        $rightFilters_3
+        (EmptyJoinPrivate)
     )
+    $aggregations_4
+    $groupingPrivate_5
 )

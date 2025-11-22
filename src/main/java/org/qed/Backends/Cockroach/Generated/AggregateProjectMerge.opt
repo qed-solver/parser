@@ -1,16 +1,16 @@
 [AggregateProjectMerge, Normalize]
 (GroupBy
-    (Project
-        $input_0:*
-        $projections_1:*
-        $passthrough_2:*
+    $input_0:(Project
+        $input_1:*
+        *
+        *
     )
-    $aggregations_3:*
-    $groupingPrivate_4:* & (CanRemapGroupingColsThroughProject $groupingPrivate_4 $projections_1 $passthrough_2)
+    $aggregations_2:*
+    $groupingPrivate_3:* & (CanMergeProjectIntoAggregate $input_0 $groupingPrivate_3)
 )
 =>
 (GroupBy
-    $input_0
-    (RemapAggregationsThroughProject $aggregations_3 $projections_1)
-    (RemapGroupingColsThroughProject $groupingPrivate_4 $projections_1 $passthrough_2)
+    $input_1
+    (MergeProjectIntoAggregate $input_0 $aggregations_2)
+    $groupingPrivate_3
 )

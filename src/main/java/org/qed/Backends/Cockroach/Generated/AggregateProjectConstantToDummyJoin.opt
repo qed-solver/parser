@@ -1,31 +1,12 @@
 [AggregateProjectConstantToDummyJoin, Normalize]
 (GroupBy
-    $input_3:(Project $input_0:* $projections_1:* $passthrough_2:*)
-    $aggregations_4:*
-    $groupingPrivate_5:* &
-        (Let
-            ($constantGroupingCols_6 $constantValues_7 $dummyCols_8 $ok_9):(ExtractConstantGroupingColsAndBuildDummy
-                $input_3
-                $groupingPrivate_5
-            )
-            $ok_9
-        )
+    $input_0:(Project * * *)
+    $aggregations_1:*
+    $groupingPrivate_2:* & (HasConstantGroupingCols $input_0 $groupingPrivate_2)
 )
 =>
-(GroupBy
-    (Project
-        (InnerJoin
-            $input_0
-            (ConstructDummyValuesTable $constantValues_7 $dummyCols_8)
-            [ (FiltersItem (True)) ]
-            (EmptyJoinPrivate)
-        )
-        (RemapProjectionsForDummyJoin $projections_1 $constantGroupingCols_6 $dummyCols_8)
-        (IntersectionCols $passthrough_2 (OutputCols $input_0))
-    )
-    $aggregations_4
-    (AddColsToGrouping
-        (RemoveGroupingCols $groupingPrivate_5 $constantGroupingCols_6)
-        (ColListToSet $dummyCols_8)
-    )
+(ConstructAggregateProjectConstantToDummyJoin
+    $input_0
+    $aggregations_1
+    $groupingPrivate_2
 )

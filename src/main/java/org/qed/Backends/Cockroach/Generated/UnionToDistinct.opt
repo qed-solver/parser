@@ -2,11 +2,28 @@
 (Union
     $left_1:*
     $right_3:*
-    $private_4:(SetPrivate * * $outCols_5:*)
+    $private_4:(SetPrivate $leftCols_5:* $rightCols_6:* $outCols_7:*) &
+        (Let
+            ($keyCols_8 $ok_9):(CanConvertUnionToDistinctUnionAll
+                $leftCols_5
+                $rightCols_6
+            )
+            $ok_9
+        )
 )
 =>
 (DistinctOn
     (UnionAll $left_1 $right_3 $private_4)
-    []
-    (MakeGrouping (ColListToSet $outCols_5) (EmptyOrdering))
+    (MakeAggCols
+        ConstAgg
+        (TranslateColSet
+            (DifferenceCols (OutputCols $left_1) $keyCols_8)
+            $leftCols_5
+            $outCols_7
+        )
+    )
+    (MakeGrouping
+        (TranslateColSet $keyCols_8 $leftCols_5 $outCols_7)
+        (EmptyOrdering)
+    )
 )

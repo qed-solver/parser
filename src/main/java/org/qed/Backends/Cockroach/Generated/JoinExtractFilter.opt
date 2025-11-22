@@ -2,19 +2,14 @@
 (InnerJoin
     $left_7:*
     $right_8:*
-    $on_9:*
+    $on_9:* &
+        (CanExtractJoinFilter $left_7 $right_8 $on_9)
     $private_3:*
 )
 =>
-(Select
-    (InnerJoin
-    (Select $left_7 (ExtractBoundConditions $on_9 (OutputCols $left_7)))
-    (Select $right_8 (ExtractBoundConditions $on_9 (OutputCols $right_8)))
-    (ExtractUnboundConditions
-        (ExtractUnboundConditions $on_9 (OutputCols $left_7))
-        (OutputCols $right_8)
-    )
-    $private_3
-)
+(ConstructJoinExtractFilterResult
+    $left_7
+    $right_8
     $on_9
+    $private_3
 )

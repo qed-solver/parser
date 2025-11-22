@@ -1,20 +1,19 @@
 [JoinAddRedundantSemiJoin, Normalize]
 (InnerJoin
-    $left_4:* &
-        ^(IsSemiJoin $left_4)
+    $left_4:^(Values)
     $right_5:*
-    $on_6:*
-    $private_3:*
+    $filters_7:*
+    $private_3:* & ^(IsRedundantSemiJoin $left_4 $right_5 $filters_7)
 )
 =>
 (InnerJoin
     (SemiJoin
         $left_4
         $right_5
-        $on_6
-        $private_3
+        $filters_7
+        (EmptyJoinPrivate)
     )
     $right_5
-    $on_6
+    $filters_7
     $private_3
 )

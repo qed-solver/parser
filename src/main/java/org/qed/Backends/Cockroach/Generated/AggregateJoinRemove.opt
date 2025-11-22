@@ -1,28 +1,24 @@
 [AggregateJoinRemove, Normalize]
 (DistinctOn
-    $input_0:(LeftJoin $left_1:* * * *) &
-        (JoinPreservesLeftRows $input_0) &
-        (JoinDoesNotDuplicateLeftRows $input_0)
-    $aggregations_2:[]
-    $groupingPrivate_3:(GroupingPrivate $groupingCols_4:* $ordering_5:*) &
+    (LeftJoin
+        $left_0:*
+        *
+        *
+    )
+    $aggregations_1:[]
+    $groupingPrivate_2:(GroupingPrivate $groupingCols_3:* $ordering_4:*) &
         (ColsAreSubset
-            (UnionCols
-                $groupingCols_4
-                (AggregationOuterCols $aggregations_2)
-            )
-            (OutputCols $left_1)
+            $groupingCols_3
+            $leftCols_5:(OutputCols $left_0)
         ) &
         (OrderingCanProjectCols
-            $ordering_5
-            (OutputCols $left_1)
+            $ordering_4
+            $leftCols_5
         )
 )
 =>
 (DistinctOn
-    $left_1
-    $aggregations_2
-    (MakeGrouping
-        $groupingCols_4
-        (PruneOrdering $ordering_5 (OutputCols $left_1))
-    )
+    $left_0
+    $aggregations_1
+    $groupingPrivate_2
 )

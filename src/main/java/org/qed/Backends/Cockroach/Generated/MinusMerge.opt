@@ -1,20 +1,18 @@
 [MinusMerge, Normalize]
 (Except
-    (Except
-        $left_0:*
-        $rightB_1:*
-        $pInner_2:*
+    $left_0:(Except
+        $leftLeft_1:*
+        $leftRight_2:*
+        $innerPrivate_3:*
     )
-    $rightC_3:*
-    $pOuter_4:*
+    $right_4:*
+    $outerPrivate_5:*
 )
 =>
-(Except
-    $left_0
-    (Union
-        $rightB_1
-        $rightC_3
-        (MakeUnionPrivateForExcept $pInner_2 $pOuter_4)
-    )
-    $pOuter_4
+(ConstructMinusMergeResult
+    $leftLeft_1
+    $leftRight_2
+    $right_4
+    $innerPrivate_3
+    $outerPrivate_5
 )
