@@ -3,19 +3,19 @@ package norm
 import (
 	"github.com/cockroachdb/cockroach/pkg/sql/opt"
 	"github.com/cockroachdb/cockroach/pkg/sql/opt/memo"
-	"github.com/cockroachdb/cockroach/pkg/sql/types"
 	"github.com/cockroachdb/cockroach/pkg/util/intsets"
+	"github.com/cockroachdb/cockroach/pkg/sql/types"
 	"github.com/cockroachdb/errors"
 )
 
 func (c *CustomFuncs) HasConstantGroupingCols(
 	input memo.RelExpr, groupingPrivate *memo.GroupingPrivate,
 ) bool {
-	_, _, _, ok := c.extractConstantGroupingColsAndBuildDummy(input, groupingPrivate)
+	_, _, _, ok := c.ExtractConstantGroupingColsAndBuildDummy(input, groupingPrivate)
 	return ok
 }
 
-func (c *CustomFuncs) extractConstantGroupingColsAndBuildDummy(
+func (c *CustomFuncs) ExtractConstantGroupingColsAndBuildDummy(
 	input memo.RelExpr, groupingPrivate *memo.GroupingPrivate,
 ) (constantCols opt.ColSet, constantValues memo.ScalarListExpr, dummyCols opt.ColList, ok bool) {
 	project, ok := input.(*memo.ProjectExpr)
@@ -51,21 +51,21 @@ func (c *CustomFuncs) extractConstantGroupingColsAndBuildDummy(
 func (c *CustomFuncs) GetConstantGroupingCols(
 	input memo.RelExpr, groupingPrivate *memo.GroupingPrivate,
 ) opt.ColSet {
-	constantCols, _, _, _ := c.extractConstantGroupingColsAndBuildDummy(input, groupingPrivate)
+	constantCols, _, _, _ := c.ExtractConstantGroupingColsAndBuildDummy(input, groupingPrivate)
 	return constantCols
 }
 
 func (c *CustomFuncs) GetConstantValues(
 	input memo.RelExpr, groupingPrivate *memo.GroupingPrivate,
 ) memo.ScalarListExpr {
-	_, constantValues, _, _ := c.extractConstantGroupingColsAndBuildDummy(input, groupingPrivate)
+	_, constantValues, _, _ := c.ExtractConstantGroupingColsAndBuildDummy(input, groupingPrivate)
 	return constantValues
 }
 
 func (c *CustomFuncs) GetDummyCols(
 	input memo.RelExpr, groupingPrivate *memo.GroupingPrivate,
 ) opt.ColList {
-	_, _, dummyCols, _ := c.extractConstantGroupingColsAndBuildDummy(input, groupingPrivate)
+	_, _, dummyCols, _ := c.ExtractConstantGroupingColsAndBuildDummy(input, groupingPrivate)
 	return dummyCols
 }
 
@@ -150,7 +150,7 @@ func (c *CustomFuncs) ConstructAggregateProjectConstantToDummyJoin(
 ) memo.RelExpr {
 	project := input.(*memo.ProjectExpr)
 
-	constantCols, constantValues, dummyCols, ok := c.extractConstantGroupingColsAndBuildDummy(project, groupingPrivate)
+	constantCols, constantValues, dummyCols, ok := c.ExtractConstantGroupingColsAndBuildDummy(project, groupingPrivate)
 	if !ok {
 		panic(errors.AssertionFailedf("should have matched"))
 	}
