@@ -809,47 +809,6 @@ func (c *CustomFuncs) BindFiltersToProjections(
 }
 
 
-func deriveGroupByRejectNullCols(
-	mem *memo.Memo, in memo.RelExpr, disabledRules intsets.Fast,
-) opt.ColSet {
-	input := in.Child(0).(memo.RelExpr)
-	aggs := *in.Child(1).(*memo.AggregationsExpr)
-
-	var rejectNullCols opt.ColSet
-	var savedInColID opt.ColumnID
-	for i := range aggs {
-		agg := memo.ExtractAggFunc(aggs[i].Agg)
-		aggOp := agg.Op()
-
-		if aggOp == opt.ConstAggOp {
-			continue
-		}
-
-		if !opt.AggregateIgnoresNulls(aggOp) || !opt.AggregateIsNullOnEmpty(aggOp) {
-			return opt.ColSet{}
-		}
-
-		var inColID opt.ColumnID
-		if v, ok := agg.Child(0).(*memo.VariableExpr); ok {
-			inColID = v.Col
-		} else {
-			return opt.ColSet{}
-		}
-
-		if savedInColID != 0 && savedInColID != inColID {
-			return opt.ColSet{}
-		}
-		savedInColID = inColID
-
-		if !DeriveRejectNullCols(mem, input, disabledRules).Contains(inColID) {
-			return opt.ColSet{}
-		}
-
-		rejectNullCols.Add(aggs[i].Col)
-	}
-	return rejectNullCols
-}
-
 func (c *CustomFuncs) AllFiltersCanMapOnSetOp(filters memo.FiltersExpr) bool {
 	for i := range filters {
 		if !c.CanMapOnSetOp(&filters[i]) {
@@ -987,4 +946,3 @@ func (c *CustomFuncs) MakeSetPrivate(
 		OutCols:   outColsCopy,
 	}
 }
-
