@@ -771,7 +771,7 @@ func (c *CustomFuncs) IsSemiJoin(input memo.RelExpr) bool {
 	}
 }
 
-func (c *CustomFuncs) UnbindFiltersFromProjections(
+func (c *CustomFuncs) RebuildFiltersWithRemappedCols(
 	projections memo.ProjectionsExpr, filters memo.FiltersExpr,
 ) memo.FiltersExpr {
 	var colMap opt.ColMap
