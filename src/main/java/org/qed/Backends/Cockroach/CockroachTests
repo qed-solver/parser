@@ -135,7 +135,7 @@ values
 # --------------------------------------------------
 # ProjectMerge
 # --------------------------------------------------
-norm expect=ProjectMerge disable=(ProjectFilterTranspose,EliminateProject,PruneScanCols,JoinConditionPush,FilterProjectTranspose,JoinExtractFilter)
+norm expect=ProjectMerge disable=(MergeProjects,ProjectFilterTranspose,EliminateProject,PruneScanCols,JoinConditionPush,FilterProjectTranspose,JoinExtractFilter)
 SELECT id, name
 FROM (
     SELECT empno AS id, ename AS name, empno + 1 AS next_id
@@ -169,7 +169,7 @@ values
 # --------------------------------------------------
 # JoinReduceTrue
 # --------------------------------------------------
-norm expect=JoinReduceTrue disable=(JoinAddRedundantSemiJoin,ProjectFilterTranspose,SimplifyJoinFilters,SimplifyAndTrue,SimplifyTrueAnd,SimplifySelectFilters,JoinConditionPush,FilterProjectTranspose,MergeSelectInnerJoin,PushSelectIntoJoinLeft,PushSelectCondLeftIntoJoinLeftAndRight,JoinExtractFilter)
+norm expect=JoinReduceTrue disable=(JoinAddRedundantSemiJoin,ProjectFilterTranspose,SimplifyJoinFilters,SimplifyAndTrue,SimplifyTrueAnd,SimplifySelectFilters,JoinConditionPush,FilterProjectTranspose,MergeSelectInnerJoin,PushSelectIntoJoinLeft,PushSelectCondLeftIntoJoinLeftAndRight,JoinExtractFilter,PushFilterIntoJoinLeftAndRight,FilterIntoJoin,PushFilterIntoJoinLeft,PushFilterIntoJoinRight)
 SELECT *
 FROM emp
 INNER JOIN (
@@ -444,7 +444,7 @@ project
 # --------------------------------------------------
 # JoinReduceFalse
 # --------------------------------------------------
-norm expect=JoinReduceFalse disable=(JoinAddRedundantSemiJoin,ProjectFilterTranspose,SimplifyJoinFilters,SimplifyAndFalse,JoinConditionPush,FilterProjectTranspose,JoinExtractFilter)
+norm expect=JoinReduceFalse disable=(JoinAddRedundantSemiJoin,ProjectFilterTranspose,SimplifyJoinFilters,SimplifyAndFalse,JoinConditionPush,FilterProjectTranspose,JoinExtractFilter,PushFilterIntoJoinLeftAndRight,FilterIntoJoin,PushFilterIntoJoinLeft,PushFilterIntoJoinRight,DetectJoinContradiction)
 SELECT * FROM emp INNER JOIN dept ON emp.deptno = dept.deptno AND FALSE
 ----
 values
@@ -668,7 +668,7 @@ distinct-on
 # --------------------------------------------------
 # AggregateJoinJoinRemove
 # --------------------------------------------------
-norm expect=AggregateJoinJoinRemove disable=(ProjectFilterTranspose,EliminateJoinUnderGroupByLeft,EliminateJoinUnderGroupByRight,PruneScanCols,JoinConditionPush,FilterProjectTranspose,EliminateDistinct,EliminateGroupBy,EliminateProject,JoinExtractFilter)
+norm expect=AggregateJoinJoinRemove disable=(ProjectFilterTranspose,EliminateJoinUnderGroupByLeft,EliminateJoinUnderGroupByRight,JoinConditionPush,FilterProjectTranspose,EliminateDistinct,EliminateGroupBy,EliminateProject,JoinExtractFilter,ReduceGroupingCols)
 SELECT e.empno, d.deptno
 FROM emp e
 LEFT JOIN dept d2 ON e.deptno = d2.deptno
@@ -677,27 +677,23 @@ GROUP BY e.empno, d.deptno
 ----
 distinct-on
  ├── columns: empno:1!null deptno:16
- ├── grouping columns: empno:1!null
+ ├── grouping columns: empno:1!null d.deptno:16
  ├── key: (1)
  ├── fd: (1)-->(16)
- ├── left-join (hash)
- │    ├── columns: empno:1!null ename:2 job:3 mgr:4 hiredate:5 sal:6 comm:7 e.deptno:8 e.crdb_internal_mvcc_timestamp:9 e.tableoid:10 d.deptno:16 d.dname:17 d.loc:18 d.crdb_internal_mvcc_timestamp:19 d.tableoid:20
- │    ├── multiplicity: left-rows(exactly-one), right-rows(zero-or-more)
- │    ├── key: (1)
- │    ├── fd: (1)-->(2-10,16-20), (16)-->(17-20)
- │    ├── scan emp [as=e]
- │    │    ├── columns: empno:1!null ename:2 job:3 mgr:4 hiredate:5 sal:6 comm:7 e.deptno:8 e.crdb_internal_mvcc_timestamp:9 e.tableoid:10
- │    │    ├── key: (1)
- │    │    └── fd: (1)-->(2-10)
- │    ├── scan dept [as=d]
- │    │    ├── columns: d.deptno:16!null d.dname:17 d.loc:18 d.crdb_internal_mvcc_timestamp:19 d.tableoid:20
- │    │    ├── key: (16)
- │    │    └── fd: (16)-->(17-20)
- │    └── filters
- │         └── e.deptno:8 = d.deptno:16 [outer=(8,16), constraints=(/8: (/NULL - ]; /16: (/NULL - ]), fd=(8)==(16), (16)==(8)]
- └── aggregations
-      └── const-agg [as=d.deptno:16, outer=(16)]
-           └── d.deptno:16
+ └── left-join (hash)
+      ├── columns: empno:1!null e.deptno:8 d.deptno:16
+      ├── multiplicity: left-rows(exactly-one), right-rows(zero-or-more)
+      ├── key: (1)
+      ├── fd: (1)-->(8,16)
+      ├── scan emp [as=e]
+      │    ├── columns: empno:1!null e.deptno:8
+      │    ├── key: (1)
+      │    └── fd: (1)-->(8)
+      ├── scan dept [as=d]
+      │    ├── columns: d.deptno:16!null
+      │    └── key: (16)
+      └── filters
+           └── e.deptno:8 = d.deptno:16 [outer=(8,16), constraints=(/8: (/NULL - ]; /16: (/NULL - ]), fd=(8)==(16), (16)==(8)]
 
 # --------------------------------------------------
 # AggregateJoinRemove
@@ -720,7 +716,7 @@ distinct-on
 # --------------------------------------------------
 # AggregateProjectConstantToDummyJoin
 # --------------------------------------------------
-norm expect=AggregateProjectConstantToDummyJoin disable=(JoinAddRedundantSemiJoin,MergeSelectInnerJoin,ProjectInnerJoinValues,InlineJoinConstantsLeft,InlineJoinConstantsRight,ProjectMerge,EliminateJoinNoColsRight,EliminateJoinNoColsLeft,PruneJoinRightCols,PruneJoinLeftCols,HoistJoinProjectLeft,HoistJoinProjectRight,JoinExtractFilter)
+norm expect=AggregateProjectConstantToDummyJoin disable=(JoinAddRedundantSemiJoin,MergeSelectInnerJoin,ProjectInnerJoinValues,InlineJoinConstantsLeft,InlineJoinConstantsRight,ProjectMerge,EliminateJoinNoColsRight,EliminateJoinNoColsLeft,PruneJoinRightCols,PruneJoinLeftCols,HoistJoinProjectLeft,HoistJoinProjectRight,JoinExtractFilter,ReduceGroupingCols,AggregateProjectMerge)
 SELECT count(*)
 FROM (SELECT empno, 1 AS k FROM emp)
 GROUP BY k
