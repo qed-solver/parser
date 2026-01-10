@@ -16,7 +16,7 @@ public class AggregateProjectMerge extends RelRule<AggregateProjectMerge.Config>
 	@Override
 	public void onMatch(RelOptRuleCall call) {
 		var var_3 = call.builder();
-		call.transformTo(org.qed.HelperFunction.createMergedAggregateProject(call).build());
+		call.transformTo(org.qed.Backends.Calcite.HelperFunctions.createMergedAggregateProject(call).build());
 	}
 
 	public interface Config extends EmptyConfig {

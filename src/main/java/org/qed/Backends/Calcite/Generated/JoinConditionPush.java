@@ -17,9 +17,9 @@ public class JoinConditionPush extends RelRule<JoinConditionPush.Config> {
 	public void onMatch(RelOptRuleCall call) {
 		var var_4 = call.builder();
 		var var_5 = call.builder();
-		var var_6 = org.qed.HelperFunction.ConditionDecomposer.extractLeftOnlyConditions(((LogicalJoin) call.rel(0)).getCondition(), call.rel(1).getRowType().getFieldCount(), call);
-		var var_7 = org.qed.HelperFunction.ConditionDecomposer.extractRightOnlyConditions(((LogicalJoin) call.rel(0)).getCondition(), call.rel(1).getRowType().getFieldCount(), call.rel(1).getRowType().getFieldCount() + call.rel(2).getRowType().getFieldCount(), call);
-		var var_8 = org.qed.HelperFunction.ConditionDecomposer.extractJoinConditions(((LogicalJoin) call.rel(0)).getCondition(), call.rel(1).getRowType().getFieldCount(), call.rel(1).getRowType().getFieldCount() + call.rel(2).getRowType().getFieldCount(), call);
+		var var_6 = org.qed.Backends.Calcite.HelperFunctions.ConditionDecomposer.extractLeftOnlyConditions(((LogicalJoin) call.rel(0)).getCondition(), call.rel(1).getRowType().getFieldCount(), call);
+		var var_7 = org.qed.Backends.Calcite.HelperFunctions.ConditionDecomposer.extractRightOnlyConditions(((LogicalJoin) call.rel(0)).getCondition(), call.rel(1).getRowType().getFieldCount(), call.rel(1).getRowType().getFieldCount() + call.rel(2).getRowType().getFieldCount(), call);
+		var var_8 = org.qed.Backends.Calcite.HelperFunctions.ConditionDecomposer.extractJoinConditions(((LogicalJoin) call.rel(0)).getCondition(), call.rel(1).getRowType().getFieldCount(), call.rel(1).getRowType().getFieldCount() + call.rel(2).getRowType().getFieldCount(), call);
 		call.transformTo(var_5.push(call.rel(1)).filter(var_6).push(call.rel(2)).filter(var_7).join(JoinRelType.INNER, var_8).build());
 	}
 

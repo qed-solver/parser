@@ -8,33 +8,33 @@ import org.apache.calcite.rel.core.JoinRelType;
 import org.apache.calcite.rel.logical.*;
 import org.qed.Backends.Calcite.EmptyConfig;
 
-public class PruneZeroRowsTable extends RelRule<PruneZeroRowsTable.Config> {
-	protected PruneZeroRowsTable(Config config) {
+public class AggregateProjectConstantToDummyJoin extends RelRule<AggregateProjectConstantToDummyJoin.Config> {
+	protected AggregateProjectConstantToDummyJoin(Config config) {
 		super(config);
 	}
 
 	@Override
 	public void onMatch(RelOptRuleCall call) {
-		var var_1 = call.builder();
-		call.transformTo(var_1.push(call.rel(0)).build());
+		var var_3 = call.builder();
+		call.transformTo(org.qed.Backends.Calcite.HelperFunctions.aggregateProjectConstantToDummyJoin(call).build());
 	}
 
 	public interface Config extends EmptyConfig {
 		Config DEFAULT = new Config() {};
 
 		@Override
-		default PruneZeroRowsTable toRule() {
-			return new PruneZeroRowsTable(this);
+		default AggregateProjectConstantToDummyJoin toRule() {
+			return new AggregateProjectConstantToDummyJoin(this);
 		}
 
 		@Override
 		default String description() {
-			return "PruneZeroRowsTable";
+			return "AggregateProjectConstantToDummyJoin";
 		}
 
 		@Override
 		default RelRule.OperandTransform operandSupplier() {
-			return s_0 -> s_0.operand(RelNode.class).anyInputs();
+			return s_2 -> s_2.operand(LogicalAggregate.class).oneInput(s_1 -> s_1.operand(LogicalProject.class).oneInput(s_0 -> s_0.operand(RelNode.class).anyInputs()));
 		}
 
 	}

@@ -16,7 +16,7 @@ public class AggregateExtractProject extends RelRule<AggregateExtractProject.Con
 	@Override
 	public void onMatch(RelOptRuleCall call) {
 		var var_2 = call.builder();
-		call.transformTo(org.qed.HelperFunction.extractProjectForAggregate(call).build());
+		call.transformTo(org.qed.Backends.Calcite.HelperFunctions.extractProjectForAggregate(call).build());
 	}
 
 	public interface Config extends EmptyConfig {

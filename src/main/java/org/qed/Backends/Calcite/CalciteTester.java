@@ -70,12 +70,6 @@ public class CalciteTester {
         if (files != null) {
             for (java.io.File file : files) {
                 String className = file.getName().replace(".java", "");
-                if (className.equals("UnionPullUpConstants") ||
-                    className.equals("AggregateProjectConstantToDummyJoin") ||
-                    className.equals("ProjectAggregateMerge") ||
-                    className.equals("UnionToDistinct")) {
-                    continue;
-                }
                 
                 try {
                     Class<?> clazz = Class.forName("org.qed.RRuleInstances." + className);
@@ -172,17 +166,7 @@ public class CalciteTester {
         String targetExplain = target.explain();
         
         if(answerExplain.equals(targetExplain)) {
-            if(answerExplain.equals(source.explain()))
-            {
-                System.out.println("trivial");
-                System.out.println("> Given source RelNode:\n" + source.explain());
-                System.out.println("> Actual rewritten RelNode:\n" + answerExplain);
-                System.out.println("> Expected rewritten RelNode:\n" + targetExplain);
-            }
-            else 
-            {
-                System.out.println("succeeded");
-            }
+            System.out.println("succeeded");
             return;
         }
         System.out.println("failed");

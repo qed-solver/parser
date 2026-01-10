@@ -1,4 +1,4 @@
-package org.qed.Backends.Calcite.TrivialTests;
+package org.qed.Backends.Calcite.Tests;
 
 import kala.collection.Seq;
 import kala.tuple.Tuple;
@@ -7,7 +7,7 @@ import org.qed.RelType;
 import org.qed.RuleBuilder;
 import org.apache.calcite.rel.RelNode;
 
-public class PruneEmptyUnionTest {
+public class PruneEmptyMinusTest {
 
     public static void runTest() {
         var tester = new CalciteTester();
@@ -22,35 +22,24 @@ public class PruneEmptyUnionTest {
                 .scan(table.getName())
                 .build();
 
-        RelNode emptyA = builder
-                .push(scanA)
-                .empty()
-                .build();
-
         RelNode scanB = builder
                 .scan(table.getName())
-                .build();
-
-        RelNode emptyB = builder
-                .push(scanB)
-                .empty()
                 .build();
 
         RelNode before = builder
                 .push(scanA)
                 .push(scanB)
-                .union(false)
+                .minus(false)
                 .empty()
                 .build();
 
         RelNode after = builder
-                .push(emptyA)
-                .push(emptyB)
-                .union(false)
+                .push(scanA)
+                .empty()
                 .build();
 
         var runner = CalciteTester.loadRule(
-                org.qed.Backends.Calcite.Generated.PruneEmptyUnion.Config.DEFAULT.toRule()
+                org.qed.Backends.Calcite.Generated.PruneEmptyMinus.Config.DEFAULT.toRule()
         );
         tester.verify(runner, before, after);
     }

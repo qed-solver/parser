@@ -16,7 +16,7 @@ public class PruneEmptyIntersect extends RelRule<PruneEmptyIntersect.Config> {
 	@Override
 	public void onMatch(RelOptRuleCall call) {
 		var var_3 = call.builder();
-		call.transformTo(var_3.empty().empty().intersect(false, 2).build());
+		call.transformTo(var_3.push(call.rel(1)).empty().push(call.rel(2)).intersect(false, 2).build());
 	}
 
 	public interface Config extends EmptyConfig {

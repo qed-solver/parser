@@ -14,7 +14,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import javax.annotation.processing.Generated;
 
 public class CalciteGenerator implements CodeGenerator<CalciteGenerator.Env> {
-
+    
     @Override
     public Env preMatch(String rulename) {
         return Env.empty(rulename);
@@ -229,22 +229,6 @@ public class CalciteGenerator implements CodeGenerator<CalciteGenerator.Env> {
         return env.focus(env.current() + ".push(" + env.symbols().get(scan.name()) + ")");
     }
 
-//    @Override
-//    public Env onMatchCustom(Env env, RexRN custom) {
-//        return switch (custom) {
-//            case RRule.JoinConditionPush.JoinPred joinPred -> {
-//                var pred = env.expressions().first();
-//                var breakdown_env = assignVariable(env, STR."customSplitFilter(\{pred})");
-//                var breakdown = breakdown_env.expressions().first();
-//                yield breakdown_env
-//                        .symbol(joinPred.bothPred(), STR."\{breakdown}.getBoth()")
-//                        .symbol(joinPred.leftPred(), STR."\{breakdown}.getLeft()")
-//                        .symbol(joinPred.rightPred(), STR."\{breakdown}.getRight()");
-//            }
-//            default -> CodeGenerator.super.onMatchCustom(env, custom);
-//        };
-//    }
-
     @Override
     public Env transformFilter(Env env, RelRN.Filter filter) {
         var source_transform = transform(env, filter.source());
@@ -274,7 +258,7 @@ public class CalciteGenerator implements CodeGenerator<CalciteGenerator.Env> {
             return currentEnv.focus(env.current() + ".call(" + operatorCall + ", " + argsString + ")");
         }
         else if (env.rulename.equals("ProjectFilterTranspose")) {
-            return env.focus("org.qed.HelperFunction.mapFilterToProjectedColumns(call)");
+            return env.focus("org.qed.Backends.Calcite.HelperFunctions.mapFilterToProjectedColumns(call)");
         } 
         else if (env.rulename.equals("FilterProjectTranspose")) {
             return env.focus(
@@ -283,10 +267,10 @@ public class CalciteGenerator implements CodeGenerator<CalciteGenerator.Env> {
             );
         }
         else if (env.rulename.equals("AggregateFilterTranspose")) {
-            return env.focus("org.qed.HelperFunction.mapFilterToAggregatedColumns(call)");
+            return env.focus("org.qed.Backends.Calcite.HelperFunctions.mapFilterToAggregatedColumns(call)");
         }
         else if (env.rulename.equals("FilterAggregateTranspose")) {
-            return env.focus("org.qed.HelperFunction.pushFilterPastAggregate(call)");
+            return env.focus("org.qed.Backends.Calcite.HelperFunctions.pushFilterPastAggregate(call)");
         }
         else {
             return env.focus(env.symbols().get(pred.operator().getName()));
@@ -324,14 +308,14 @@ public class CalciteGenerator implements CodeGenerator<CalciteGenerator.Env> {
         var envWithBuilder = builderDecl.getValue();
         
         var leftCondDecl = envWithBuilder.declare(
-            "org.qed.HelperFunction.ConditionDecomposer.extractLeftOnlyConditions(" +
+            "org.qed.Backends.Calcite.HelperFunctions.ConditionDecomposer.extractLeftOnlyConditions(" +
             "((LogicalJoin) call.rel(0)).getCondition(), " +
             "call.rel(1).getRowType().getFieldCount(), call)"
         );
         var envWithLeftCond = leftCondDecl.getValue();
         
         var rightCondDecl = envWithLeftCond.declare(
-            "org.qed.HelperFunction.ConditionDecomposer.extractRightOnlyConditions(" +
+            "org.qed.Backends.Calcite.HelperFunctions.ConditionDecomposer.extractRightOnlyConditions(" +
             "((LogicalJoin) call.rel(0)).getCondition(), " +
             "call.rel(1).getRowType().getFieldCount(), " +
             "call.rel(1).getRowType().getFieldCount() + call.rel(2).getRowType().getFieldCount(), call)"
@@ -339,7 +323,7 @@ public class CalciteGenerator implements CodeGenerator<CalciteGenerator.Env> {
         var envWithRightCond = rightCondDecl.getValue();
         
         var joinCondDecl = envWithRightCond.declare(
-            "org.qed.HelperFunction.ConditionDecomposer.extractJoinConditions(" +
+            "org.qed.Backends.Calcite.HelperFunctions.ConditionDecomposer.extractJoinConditions(" +
             "((LogicalJoin) call.rel(0)).getCondition(), " +
             "call.rel(1).getRowType().getFieldCount(), " +
             "call.rel(1).getRowType().getFieldCount() + call.rel(2).getRowType().getFieldCount(), call)"
@@ -398,6 +382,15 @@ public class CalciteGenerator implements CodeGenerator<CalciteGenerator.Env> {
 
     @Override
     public Env transformIntersect(Env env, RelRN.Intersect intersect) {
+        if (env.rulename.equals("PruneEmptyIntersect")) {
+            // 特殊处理：直接生成正确的代码
+            String builderVar = env.statements().get(0).split(" ")[1];
+            return env.focus(
+                builderVar + ".push(call.rel(1)).empty()" +
+                ".push(call.rel(2))" +
+                ".intersect(false, 2)"
+            );
+        }
         boolean all = intersect.all();
         int sourceCount = intersect.sources().size();
         var current_env = env;
@@ -436,7 +429,7 @@ public class CalciteGenerator implements CodeGenerator<CalciteGenerator.Env> {
     @Override
     public Env transformProject(Env env, RelRN.Project project) {
         if (env.rulename.equals("ProjectMerge")) {
-            return env.focus("org.qed.HelperFunction.mergeProjections(call)");
+            return env.focus("org.qed.Backends.Calcite.HelperFunctions.mergeProjections(call)");
         }
 
         var source_transform = transform(env, project.source());
@@ -460,9 +453,114 @@ public class CalciteGenerator implements CodeGenerator<CalciteGenerator.Env> {
         return env.focus(env.current() + ".empty()");
     }
 
+    // @Override
+    // public Env onMatchCustom(Env env, RexRN custom) {
+    //     return switch (custom) {
+    //         case RRule.JoinConditionPush.JoinPred joinPred -> {
+    //             var pred = env.expressions().first();
+    //             var breakdown_env = assignVariable(env, STR."customSplitFilter(\{pred})");
+    //             var breakdown = breakdown_env.expressions().first();
+    //             yield breakdown_env
+    //                     .symbol(joinPred.bothPred(), STR."\{breakdown}.getBoth()")
+    //                     .symbol(joinPred.leftPred(), STR."\{breakdown}.getLeft()")
+    //                     .symbol(joinPred.rightPred(), STR."\{breakdown}.getRight()");
+    //         }
+    //         default -> CodeGenerator.super.onMatchCustom(env, custom);
+    //     };
+    // }
+
+    @Override
+    public Env onMatchCustom(Env env, RelRN custom) {
+        if (env.rulename.equals("AggregateProjectConstantToDummyJoin")) {
+            return switch (custom) {
+                case org.qed.RRuleInstances.AggregateProjectConstantToDummyJoin.SourceTable st ->
+                    env.next().grow("operand(RelNode.class).anyInputs()");
+                case org.qed.RRuleInstances.AggregateProjectConstantToDummyJoin.ProjectWithConstantLiterals p -> {
+                    var sourceMatch = onMatch(env, p.input());
+                    yield sourceMatch.grow("operand(LogicalProject.class).oneInput(" + sourceMatch.skeleton() + ")");
+                }
+                case org.qed.RRuleInstances.AggregateProjectConstantToDummyJoin.AggregateGroupingByConstants agg -> {
+                    var sourceMatch = onMatch(env, agg.input());
+                    yield sourceMatch.grow("operand(LogicalAggregate.class).oneInput(" + sourceMatch.skeleton() + ")");
+                }
+                default -> env;
+            };
+        }
+
+        if (env.rulename.equals("UnionToDistinct")) {
+            return switch (custom) {
+                case org.qed.RRuleInstances.UnionToDistinct.DistinctUnion u -> {
+                    var leftMatch = onMatch(env.next(), u.left());
+                    var rightMatch = onMatch(leftMatch.next(), u.right());
+                    // Match Union DISTINCT (all=false)
+                    yield rightMatch.grow(
+                        "operand(LogicalUnion.class)" +
+                        ".predicate(union -> !union.all)" +
+                        ".anyInputs()"
+                    );
+                }
+                default -> env;
+            };
+        }
+        
+        if (env.rulename.equals("UnionPullUpConstants")) {
+            return switch (custom) {
+                case org.qed.RRuleInstances.UnionPullUpConstants.UnionWithConstantColumns u -> {
+                    var leftMatch = onMatch(env.next(), u.left());
+                    var rightMatch = onMatch(leftMatch.next(), u.right());
+                    // Match Union ALL with field count > 1
+                    yield rightMatch.grow(
+                        "operand(LogicalUnion.class)" +
+                        ".predicate(union -> union.getRowType().getFieldCount() > 1)" +
+                        ".anyInputs()"
+                    );
+                }
+                case org.qed.RRuleInstances.UnionPullUpConstants.LeftProjectionWithConstants left -> {
+                    var sourceMatch = onMatch(env, left.input());
+                    yield sourceMatch.grow("operand(LogicalProject.class).oneInput(" + sourceMatch.skeleton() + ")");
+                }
+                case org.qed.RRuleInstances.UnionPullUpConstants.RightProjectionWithConstants right -> {
+                    var sourceMatch = onMatch(env, right.input());
+                    yield sourceMatch.grow("operand(LogicalProject.class).oneInput(" + sourceMatch.skeleton() + ")");
+                }
+                default -> env;
+            };
+        }
+        
+        if (env.rulename.equals("ProjectAggregateMerge")) {
+            return switch (custom) {
+                case org.qed.RRuleInstances.ProjectAggregateMerge.ProjectUsingSubsetOfAggregates p -> {
+                    var sourceMatch = onMatch(env, p.input());
+                    yield sourceMatch.grow("operand(LogicalProject.class).oneInput(" + sourceMatch.skeleton() + ")");
+                }
+                case org.qed.RRuleInstances.ProjectAggregateMerge.AggregateWithMultipleCalls a -> {
+                    var sourceMatch = onMatch(env, a.input());
+                    yield sourceMatch.grow("operand(LogicalAggregate.class).oneInput(" + sourceMatch.skeleton() + ")");
+                }
+                case org.qed.RRuleInstances.ProjectAggregateMerge.SourceTable st -> {
+                    yield env.next().grow("operand(RelNode.class).anyInputs()");
+                }
+                default -> env;
+            };
+        }
+        
+        return CodeGenerator.super.onMatchCustom(env, custom);
+    }
 
     @Override
     public Env transformCustom(Env env, RelRN custom) {
+        if (env.rulename.equals("AggregateProjectConstantToDummyJoin")) {
+            return env.focus("org.qed.Backends.Calcite.HelperFunctions.aggregateProjectConstantToDummyJoin(call)");
+        }
+        if (env.rulename.equals("UnionToDistinct")) {
+            return env.focus("org.qed.Backends.Calcite.HelperFunctions.unionToDistinct(call)");
+        }
+        if (env.rulename.equals("UnionPullUpConstants")) {
+            return env.focus("org.qed.Backends.Calcite.HelperFunctions.unionPullUpConstants(call)");
+        }
+        if (env.rulename.equals("ProjectAggregateMerge")) {
+            return env.focus("org.qed.Backends.Calcite.HelperFunctions.projectAggregateMerge(call)");
+        }
         return switch (custom) {
             case org.qed.RRuleInstances.JoinCommute.ProjectionRelRN projection -> {
                 var sourceEnv = transform(env, projection.source());
@@ -536,10 +634,29 @@ public class CalciteGenerator implements CodeGenerator<CalciteGenerator.Env> {
     @Override
     public Env transformAggregate(Env env, RelRN.Aggregate aggregate) {
         if (env.rulename.equals("AggregateProjectMerge")) {
-            return env.focus("org.qed.HelperFunction.createMergedAggregateProject(call)");
+            return env.focus("org.qed.Backends.Calcite.HelperFunctions.createMergedAggregateProject(call)");
         }
         else if (env.rulename.equals("AggregateExtractProject")) {
-            return env.focus("org.qed.HelperFunction.extractProjectForAggregate(call)");
+            return env.focus("org.qed.Backends.Calcite.HelperFunctions.extractProjectForAggregate(call)");
+        }
+        else if (env.rulename.equals("AggregateJoinRemove")) {
+            // 直接手动构建，不用递归transform
+            var groupSetDecl = env.declare("((LogicalAggregate) call.rel(0)).getGroupSet()");
+            var envWithGroupSet = groupSetDecl.getValue();
+            var aggCallsDecl = envWithGroupSet.declare("((LogicalAggregate) call.rel(0)).getAggCallList()");
+            var envWithAggCalls = aggCallsDecl.getValue();
+            
+            // 从statements里提取builder变量名 (第一个statement就是 "var var_X = call.builder();")
+            String builderVar = env.statements().get(0).split(" ")[1];
+            
+            return envWithAggCalls.focus(
+                builderVar + ".push(call.rel(3)).push(call.rel(4))" +
+                ".join(JoinRelType.INNER, " + builderVar + ".literal(true))" +
+                ".aggregate(" + builderVar + ".groupKey(" + groupSetDecl.getKey() + "), " + aggCallsDecl.getKey() + ")"
+            );
+        }
+        else if (env.rulename.equals("AggregateJoinJoinRemove")) {
+            return env.focus("org.qed.Backends.Calcite.HelperFunctions.aggregateJoinJoinRemove(call)");
         }
         
         // Default aggregate transformation for other rules

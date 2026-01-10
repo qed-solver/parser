@@ -17,9 +17,9 @@ public class FilterAggregateTranspose extends RelRule<FilterAggregateTranspose.C
 	public void onMatch(RelOptRuleCall call) {
 		var var_3 = call.builder();
 		var var_4 = ((LogicalAggregate) call.rel(1)).getGroupSet();
-		var var_5 = var_3.push(call.rel(2)).filter(org.qed.HelperFunction.pushFilterPastAggregate(call)).groupKey(var_4);
+		var var_5 = var_3.push(call.rel(2)).filter(org.qed.Backends.Calcite.HelperFunctions.pushFilterPastAggregate(call)).groupKey(var_4);
 		var var_6 = ((LogicalAggregate) call.rel(1)).getAggCallList();
-		call.transformTo(var_3.push(call.rel(2)).filter(org.qed.HelperFunction.pushFilterPastAggregate(call)).aggregate(var_5, var_6).build());
+		call.transformTo(var_3.push(call.rel(2)).filter(org.qed.Backends.Calcite.HelperFunctions.pushFilterPastAggregate(call)).aggregate(var_5, var_6).build());
 	}
 
 	public interface Config extends EmptyConfig {

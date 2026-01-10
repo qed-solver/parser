@@ -8,33 +8,33 @@ import org.apache.calcite.rel.core.JoinRelType;
 import org.apache.calcite.rel.logical.*;
 import org.qed.Backends.Calcite.EmptyConfig;
 
-public class SemiJoinRemove extends RelRule<SemiJoinRemove.Config> {
-	protected SemiJoinRemove(Config config) {
+public class UnionPullUpConstants extends RelRule<UnionPullUpConstants.Config> {
+	protected UnionPullUpConstants(Config config) {
 		super(config);
 	}
 
 	@Override
 	public void onMatch(RelOptRuleCall call) {
-		var var_4 = call.builder();
-		call.transformTo(var_4.push(call.rel(1)).build());
+		var var_3 = call.builder();
+		call.transformTo(org.qed.Backends.Calcite.HelperFunctions.unionPullUpConstants(call).build());
 	}
 
 	public interface Config extends EmptyConfig {
 		Config DEFAULT = new Config() {};
 
 		@Override
-		default SemiJoinRemove toRule() {
-			return new SemiJoinRemove(this);
+		default UnionPullUpConstants toRule() {
+			return new UnionPullUpConstants(this);
 		}
 
 		@Override
 		default String description() {
-			return "SemiJoinRemove";
+			return "UnionPullUpConstants";
 		}
 
 		@Override
 		default RelRule.OperandTransform operandSupplier() {
-			return s_2 -> s_2.operand(LogicalJoin.class).inputs(s_0 -> s_0.operand(RelNode.class).anyInputs(), s_1 -> s_1.operand(RelNode.class).anyInputs());
+			return s_2 -> s_2.operand(LogicalUnion.class).predicate(union -> union.getRowType().getFieldCount() > 1).anyInputs();
 		}
 
 	}

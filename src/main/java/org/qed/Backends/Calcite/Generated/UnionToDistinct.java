@@ -8,33 +8,33 @@ import org.apache.calcite.rel.core.JoinRelType;
 import org.apache.calcite.rel.logical.*;
 import org.qed.Backends.Calcite.EmptyConfig;
 
-public class PruneLeftEmptyJoin extends RelRule<PruneLeftEmptyJoin.Config> {
-	protected PruneLeftEmptyJoin(Config config) {
+public class UnionToDistinct extends RelRule<UnionToDistinct.Config> {
+	protected UnionToDistinct(Config config) {
 		super(config);
 	}
 
 	@Override
 	public void onMatch(RelOptRuleCall call) {
 		var var_3 = call.builder();
-		call.transformTo(var_3.push(call.rel(2)).build());
+		call.transformTo(org.qed.Backends.Calcite.HelperFunctions.unionToDistinct(call).build());
 	}
 
 	public interface Config extends EmptyConfig {
 		Config DEFAULT = new Config() {};
 
 		@Override
-		default PruneLeftEmptyJoin toRule() {
-			return new PruneLeftEmptyJoin(this);
+		default UnionToDistinct toRule() {
+			return new UnionToDistinct(this);
 		}
 
 		@Override
 		default String description() {
-			return "PruneLeftEmptyJoin";
+			return "UnionToDistinct";
 		}
 
 		@Override
 		default RelRule.OperandTransform operandSupplier() {
-			return s_2 -> s_2.operand(LogicalJoin.class).inputs(s_0 -> s_0.operand(LogicalValues.class).noInputs(), s_1 -> s_1.operand(RelNode.class).anyInputs());
+			return s_2 -> s_2.operand(LogicalUnion.class).predicate(union -> !union.all).anyInputs();
 		}
 
 	}

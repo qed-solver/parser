@@ -16,7 +16,7 @@ public class ProjectFilterTranspose extends RelRule<ProjectFilterTranspose.Confi
 	@Override
 	public void onMatch(RelOptRuleCall call) {
 		var var_3 = call.builder();
-		call.transformTo(var_3.push(call.rel(2)).project(((LogicalProject) call.rel(0)).getProjects()).filter(org.qed.HelperFunction.mapFilterToProjectedColumns(call)).build());
+		call.transformTo(var_3.push(call.rel(2)).project(((LogicalProject) call.rel(0)).getProjects()).filter(org.qed.Backends.Calcite.HelperFunctions.mapFilterToProjectedColumns(call)).build());
 	}
 
 	public interface Config extends EmptyConfig {

@@ -19,7 +19,7 @@ public class AggregateFilterTranspose extends RelRule<AggregateFilterTranspose.C
 		var var_4 = ((LogicalAggregate) call.rel(0)).getGroupSet();
 		var var_5 = var_3.push(call.rel(2)).groupKey(var_4);
 		var var_6 = ((LogicalAggregate) call.rel(0)).getAggCallList();
-		call.transformTo(var_3.push(call.rel(2)).aggregate(var_5, var_6).filter(org.qed.HelperFunction.mapFilterToAggregatedColumns(call)).build());
+		call.transformTo(var_3.push(call.rel(2)).aggregate(var_5, var_6).filter(org.qed.Backends.Calcite.HelperFunctions.mapFilterToAggregatedColumns(call)).build());
 	}
 
 	public interface Config extends EmptyConfig {
