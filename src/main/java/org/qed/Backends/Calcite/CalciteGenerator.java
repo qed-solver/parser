@@ -383,7 +383,6 @@ public class CalciteGenerator implements CodeGenerator<CalciteGenerator.Env> {
     @Override
     public Env transformIntersect(Env env, RelRN.Intersect intersect) {
         if (env.rulename.equals("PruneEmptyIntersect")) {
-            // 特殊处理：直接生成正确的代码
             String builderVar = env.statements().get(0).split(" ")[1];
             return env.focus(
                 builderVar + ".push(call.rel(1)).empty()" +
@@ -492,7 +491,6 @@ public class CalciteGenerator implements CodeGenerator<CalciteGenerator.Env> {
                 case org.qed.RRuleInstances.UnionToDistinct.DistinctUnion u -> {
                     var leftMatch = onMatch(env.next(), u.left());
                     var rightMatch = onMatch(leftMatch.next(), u.right());
-                    // Match Union DISTINCT (all=false)
                     yield rightMatch.grow(
                         "operand(LogicalUnion.class)" +
                         ".predicate(union -> !union.all)" +
@@ -640,13 +638,11 @@ public class CalciteGenerator implements CodeGenerator<CalciteGenerator.Env> {
             return env.focus("org.qed.Backends.Calcite.HelperFunctions.extractProjectForAggregate(call)");
         }
         else if (env.rulename.equals("AggregateJoinRemove")) {
-            // 直接手动构建，不用递归transform
             var groupSetDecl = env.declare("((LogicalAggregate) call.rel(0)).getGroupSet()");
             var envWithGroupSet = groupSetDecl.getValue();
             var aggCallsDecl = envWithGroupSet.declare("((LogicalAggregate) call.rel(0)).getAggCallList()");
             var envWithAggCalls = aggCallsDecl.getValue();
             
-            // 从statements里提取builder变量名 (第一个statement就是 "var var_X = call.builder();")
             String builderVar = env.statements().get(0).split(" ")[1];
             
             return envWithAggCalls.focus(
@@ -659,7 +655,6 @@ public class CalciteGenerator implements CodeGenerator<CalciteGenerator.Env> {
             return env.focus("org.qed.Backends.Calcite.HelperFunctions.aggregateJoinJoinRemove(call)");
         }
         
-        // Default aggregate transformation for other rules
         var sourceTransform = transform(env, aggregate.source());
         String builderWithSource = sourceTransform.current();
 
