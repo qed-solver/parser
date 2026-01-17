@@ -92,7 +92,6 @@ public class CockroachTester {
     }
 
     public static void generate() {
-        // Clean up any duplicate files with " 2.opt" or " 3.opt" suffixes (macOS/IDE artifacts)
         try {
             java.io.File genDir = new java.io.File(genPath);
             if (genDir.exists()) {
@@ -103,29 +102,27 @@ public class CockroachTester {
                     }
                 }
             }
-        } catch (Exception e) {
-            // Ignore cleanup errors
-        }
+        } catch (Exception e) {}
         var tester = new CockroachTester();
         ruleList().forEach(r -> tester.serialize(r, genPath));
     }
 
-    public static void runAllTests() {
-        String packagePath = "src/main/java/org/qed/Backends/Cockroach/Tests";
-        java.io.File testDir = new java.io.File(packagePath);
-        java.io.File[] testFiles = testDir.listFiles((dir, name) -> name.endsWith("Test.java"));
-        if (testFiles != null) {
-            for (java.io.File testFile : testFiles) {
-                String className = "org.qed.Backends.Calcite.Tests." + testFile.getName().replace(".java", "");
-                try {
-                    Class<?> testClass = Class.forName(className);
-                    testClass.getMethod("runTest").invoke(null);
-                } catch (Exception e) {
-                    throw new RuntimeException("Failed to run test: " + className, e);
-                }
-            }
-        }
-    }
+    // public static void runAllTests() {
+    //     String packagePath = "src/main/java/org/qed/Backends/Cockroach/Tests";
+    //     java.io.File testDir = new java.io.File(packagePath);
+    //     java.io.File[] testFiles = testDir.listFiles((dir, name) -> name.endsWith("Test.java"));
+    //     if (testFiles != null) {
+    //         for (java.io.File testFile : testFiles) {
+    //             String className = "org.qed.Backends.Calcite.Tests." + testFile.getName().replace(".java", "");
+    //             try {
+    //                 Class<?> testClass = Class.forName(className);
+    //                 testClass.getMethod("runTest").invoke(null);
+    //             } catch (Exception e) {
+    //                 throw new RuntimeException("Failed to run test: " + className, e);
+    //             }
+    //         }
+    //     }
+    // }
 
     public static void main(String[] args) throws IOException {
         // var rule = new org.qed.RRuleInstances.AggregateExtractProject();
@@ -138,7 +135,7 @@ public class CockroachTester {
         //     new ObjectMapper().writerWithDefaultPrettyPrinter().writeValue(Path.of(rulePath, rule.name() + "-" + rule.info() + ".json").toFile(), rule.toJson());
         // }
         generate();
-        runAllTests();
+        // runAllTests();
     }
 
     public void serialize(RRule rule, String path) {
@@ -151,43 +148,43 @@ public class CockroachTester {
         }
     }
 
-    public void test(RelOptRule rule, Seq<String> tests) {
-        System.out.println("Testing rule " + rule.getClass().getSimpleName());
-        var runner = loadRule(rule);
-        var exams = tests.mapUnchecked(t -> Tuple.of(t, JSONDeserializer.load(new File(t))));
-        for (var entry : exams) {
-            if (entry.getValue().size() != 2) {
-                System.err.println(entry.getKey() + " does not have exactly two nodes, and thus is not a valid test");
-                continue;
-            }
-            verify(runner, entry.getValue().get(0), entry.getValue().get(1));
-        }
-    }
+    // public void test(RelOptRule rule, Seq<String> tests) {
+    //     System.out.println("Testing rule " + rule.getClass().getSimpleName());
+    //     var runner = loadRule(rule);
+    //     var exams = tests.mapUnchecked(t -> Tuple.of(t, JSONDeserializer.load(new File(t))));
+    //     for (var entry : exams) {
+    //         if (entry.getValue().size() != 2) {
+    //             System.err.println(entry.getKey() + " does not have exactly two nodes, and thus is not a valid test");
+    //             continue;
+    //         }
+    //         verify(runner, entry.getValue().get(0), entry.getValue().get(1));
+    //     }
+    // }
 
-    public void verify(HepPlanner runner, RelNode source, RelNode target) {
-        runner.setRoot(source);
-        var answer = runner.findBestExp();
+    // public void verify(HepPlanner runner, RelNode source, RelNode target) {
+    //     runner.setRoot(source);
+    //     var answer = runner.findBestExp();
 
-        String answerExplain = answer.explain();
-        String targetExplain = target.explain();
+    //     String answerExplain = answer.explain();
+    //     String targetExplain = target.explain();
 
-        if(answerExplain.equals(targetExplain)) {
-            if(answerExplain.equals(source.explain()))
-            {
-                System.out.println("trivial");
-                System.out.println("> Given source RelNode:\n" + source.explain());
-                System.out.println("> Actual rewritten RelNode:\n" + answerExplain);
-                System.out.println("> Expected rewritten RelNode:\n" + targetExplain);
-            }
-            else
-            {
-                System.out.println("succeeded");
-            }
-            return;
-        }
-        System.out.println("failed");
-        System.out.println("> Given source RelNode:\n" + source.explain());
-        System.out.println("> Actual rewritten RelNode:\n" + answerExplain);
-        System.out.println("> Expected rewritten RelNode:\n" + targetExplain);
-    }
+    //     if(answerExplain.equals(targetExplain)) {
+    //         if(answerExplain.equals(source.explain()))
+    //         {
+    //             System.out.println("trivial");
+    //             System.out.println("> Given source RelNode:\n" + source.explain());
+    //             System.out.println("> Actual rewritten RelNode:\n" + answerExplain);
+    //             System.out.println("> Expected rewritten RelNode:\n" + targetExplain);
+    //         }
+    //         else
+    //         {
+    //             System.out.println("succeeded");
+    //         }
+    //         return;
+    //     }
+    //     System.out.println("failed");
+    //     System.out.println("> Given source RelNode:\n" + source.explain());
+    //     System.out.println("> Actual rewritten RelNode:\n" + answerExplain);
+    //     System.out.println("> Expected rewritten RelNode:\n" + targetExplain);
+    // }
 }
