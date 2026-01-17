@@ -17,43 +17,41 @@ public class CockroachTester {
     public static String genPath = "src/main/java/org/qed/Backends/Cockroach/Generated";
     public static String rulePath = "rules";
 
-    public static HepPlanner loadRules(java.util.List<RelOptRule> rules) {
-        System.out.printf("Loading Rules: %s\n",
-                rules.stream()
-                        .map(rule -> rule.getClass().getSimpleName())
-                        .collect(java.util.stream.Collectors.joining(", ")));
+    // public static HepPlanner loadRules(java.util.List<RelOptRule> rules) {
+    //     System.out.printf("Loading Rules: %s\n",
+    //             rules.stream()
+    //                     .map(rule -> rule.getClass().getSimpleName())
+    //                     .collect(java.util.stream.Collectors.joining(", ")));
 
-        var builder = new HepProgramBuilder();
-        for (var rule : rules) {
-            builder.addRuleInstance(rule);
-        }
-        return new HepPlanner(builder.build());
-    }
+    //     var builder = new HepProgramBuilder();
+    //     for (var rule : rules) {
+    //         builder.addRuleInstance(rule);
+    //     }
+    //     return new HepPlanner(builder.build());
+    // }
 
-    public static HepPlanner loadRules(RelOptRule... rules) {
-        return loadRules(java.util.Arrays.asList(rules));
-    }
+    // public static HepPlanner loadRules(RelOptRule... rules) {
+    //     return loadRules(java.util.Arrays.asList(rules));
+    // }
 
-    public static HepPlanner loadRule(RelOptRule rule) {
-        System.out.printf("Loading Rule: %s\n", rule.getClass().getSimpleName());
-        var builder = new HepProgramBuilder().addRuleInstance(rule);
-        return new HepPlanner(builder.build());
-    }
+    // public static HepPlanner loadRule(RelOptRule rule) {
+    //     System.out.printf("Loading Rule: %s\n", rule.getClass().getSimpleName());
+    //     var builder = new HepProgramBuilder().addRuleInstance(rule);
+    //     return new HepPlanner(builder.build());
+    // }
 
-    public static HepPlanner loadRule(RelOptRule rule, int matchLimit) {
-        System.out.printf("Loading Rule: %s (match limit: %d)\n", rule.getClass().getSimpleName(), matchLimit);
-        var builder = new HepProgramBuilder()
-                .addMatchLimit(matchLimit)
-                .addRuleInstance(rule);
-        return new HepPlanner(builder.build());
-    }
+    // public static HepPlanner loadRule(RelOptRule rule, int matchLimit) {
+    //     System.out.printf("Loading Rule: %s (match limit: %d)\n", rule.getClass().getSimpleName(), matchLimit);
+    //     var builder = new HepProgramBuilder()
+    //             .addMatchLimit(matchLimit)
+    //             .addRuleInstance(rule);
+    //     return new HepPlanner(builder.build());
+    // }
 
     public static Seq<RRule> ruleList() {
         java.io.File ruleDir = new java.io.File("src/main/java/org/qed/RRuleInstances");
         java.io.File[] files = ruleDir.listFiles((dir, name) -> name.endsWith(".java"));
-
         java.util.List<RRule> rules = new java.util.ArrayList<>();
-
         if (files != null) {
             for (java.io.File file : files) {
                 String className = file.getName().replace(".java", "");
@@ -72,9 +70,7 @@ public class CockroachTester {
                 }
             }
         }
-
         return Seq.from(rules);
-
         // var families = Seq.from(reflections.getSubTypesOf(RRule.RRuleFamily.class))
         //         .filter(clazz -> !clazz.isInterface() && !Modifier.isAbstract(clazz.getModifiers()))
         //         .mapUnchecked(clazz -> {
@@ -83,13 +79,12 @@ public class CockroachTester {
         //             return constructor.newInstance();
         //         })
         //         .map(r -> (RRule.RRuleFamily) r);
-
         // return individuals.appendedAll(families.flatMap(RRule.RRuleFamily::family));
     }
 
-    public static void verify() {
-        ruleList().forEachUnchecked(rule -> rule.dump(rulePath + "/" + rule.name() + ".json"));
-    }
+    // public static void verify() {
+    //     ruleList().forEachUnchecked(rule -> rule.dump(rulePath + "/" + rule.name() + ".json"));
+    // }
 
     public static void generate() {
         try {
