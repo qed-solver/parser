@@ -66,7 +66,7 @@ For each input file, the parser will dump a `.json` file as the input to `qed-pr
 
 ## License
 
-Copyright 2021 The Qed Team
+Copyright 2026 The Qed Team
 
 Licensed under the Apache License, Version 2.0 (the "License"); you may not use this project except in compliance with
 the License. You may obtain a copy of the License at
