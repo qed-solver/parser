@@ -69,7 +69,7 @@ For a full description of the rule language and available operators, see the [pa
 
 ## Apache DataFusion Backend
 
-A separate Rust implementation targeting Apache DataFusion is available at [github.com/qed-solver/rulescript](https://github.com/qed-solver/rulescript).
+A separate Rust implementation targeting Apache DataFusion is available at [here](https://github.com/qed-solver/rulescript).
 
 ## Test Cases
 
@@ -87,7 +87,7 @@ The generated `.opt` rule files live in `src/main/java/org/qed/Backends/Cockroac
 
 To run them against CockroachDB:
 
-1. Clone the [CockroachDB repository](https://github.com/cockroachdb/cockroach) and check out commit `4b80cd59c6299f26b2b4f02a96064d5127ccad94` — this is the exact state of the codebase the rules were developed against (the CockroachDB optimizer changes frequently, so using the latest commit is not recommended).
+1. Clone the [CockroachDB repository](https://github.com/cockroachdb/cockroach) and check out commit `4b80cd59c6299f26b2b4f02a96064d5127ccad94` — this is the exact state of the codebase the rules were developed against.
 
 2. Copy the generated rule files and test data into the CockroachDB source tree:
    - Rule files → `pkg/sql/opt/norm/rules/`
