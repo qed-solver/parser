@@ -10,15 +10,19 @@
         $rightFilters_3:*
     )
     $aggregations_4:[]
-    $groupingPrivate_5:* &
+    $groupingPrivate_5:(GroupingPrivate $groupingCols_6:* $ordering_7:*) &
         (ColsAreEmpty
             (IntersectionCols
                 (OutputCols $middle_1)
                 (UnionCols
                     (FilterOuterCols $rightFilters_3)
-                    (GroupingCols $groupingPrivate_5)
+                    $groupingCols_6
                 )
             )
+        ) &
+        (OrderingCanProjectCols
+            $ordering_7
+            (UnionCols (OutputCols $left_0) (OutputCols $right_2))
         )
 )
 =>

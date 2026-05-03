@@ -5,4 +5,4 @@
     $passthrough:*
 )
 =>
-$input_0
+(ConstructEmptyValues (UnionCols (ProjectionCols $projections) $passthrough))

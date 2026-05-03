@@ -96,28 +96,31 @@ FROM (SELECT * FROM emp LIMIT 0) AS e
 CROSS JOIN dept
 WHERE TRUE
 ----
-inner-join (cross)
- ├── columns: empno:1!null ename:2 job:3 mgr:4 hiredate:5 sal:6 comm:7 deptno:8 deptno:11!null dname:12 loc:13  [hidden: emp.crdb_internal_mvcc_timestamp:9 emp.tableoid:10 dept.crdb_internal_mvcc_timestamp:14 dept.tableoid:15]
+values
+ ├── columns: empno:1!null ename:2!null job:3!null mgr:4!null hiredate:5!null sal:6!null comm:7!null deptno:8!null deptno:11!null dname:12!null loc:13!null
  ├── cardinality: [0 - 0]
- ├── multiplicity: left-rows(zero-or-more), right-rows(zero-or-one)
- ├── key: (11)
- ├── fd: ()-->(1-10), (11)-->(12-15)
- ├── limit
- │    ├── columns: empno:1!null ename:2 job:3 mgr:4 hiredate:5 sal:6 comm:7 emp.deptno:8 emp.crdb_internal_mvcc_timestamp:9 emp.tableoid:10
- │    ├── cardinality: [0 - 0]
- │    ├── key: ()
- │    ├── fd: ()-->(1-10)
- │    ├── scan emp
- │    │    ├── columns: empno:1!null ename:2 job:3 mgr:4 hiredate:5 sal:6 comm:7 emp.deptno:8 emp.crdb_internal_mvcc_timestamp:9 emp.tableoid:10
- │    │    ├── key: (1)
- │    │    ├── fd: (1)-->(2-10)
- │    │    └── limit hint: 1.00
- │    └── 0
- ├── scan dept
- │    ├── columns: dept.deptno:11!null dname:12 loc:13 dept.crdb_internal_mvcc_timestamp:14 dept.tableoid:15
- │    ├── key: (11)
- │    └── fd: (11)-->(12-15)
- └── filters (true)
+ ├── key: ()
+ └── fd: ()-->(1-8,11-13)
+
+norm expect-not=PruneEmptyFilter disable=(JoinAddRedundantSemiJoin,ProjectFilterTranspose,SimplifySelectFilters,FilterReduceTrue,SimplifyZeroCardinalityGroup,SimplifyJoinFilters,EliminateProject,PruneScanCols,PruneJoinRightCols,JoinPushTransitivePredicates,JoinConditionPush,FilterProjectTranspose,FilterIntoJoin,JoinExtractFilter)
+SELECT *
+FROM emp
+WHERE deptno > 10
+----
+project
+ ├── columns: empno:1!null ename:2 job:3 mgr:4 hiredate:5 sal:6 comm:7 deptno:8!null
+ ├── key: (1)
+ ├── fd: (1)-->(2-8)
+ └── select
+      ├── columns: empno:1!null ename:2 job:3 mgr:4 hiredate:5 sal:6 comm:7 deptno:8!null crdb_internal_mvcc_timestamp:9 tableoid:10
+      ├── key: (1)
+      ├── fd: (1)-->(2-10)
+      ├── scan emp
+      │    ├── columns: empno:1!null ename:2 job:3 mgr:4 hiredate:5 sal:6 comm:7 deptno:8 crdb_internal_mvcc_timestamp:9 tableoid:10
+      │    ├── key: (1)
+      │    └── fd: (1)-->(2-10)
+      └── filters
+           └── deptno:8 > 10 [outer=(8), constraints=(/8: [/11 - ]; tight)]
 
 # --------------------------------------------------
 # PruneEmptyProject
@@ -132,10 +135,31 @@ values
  ├── key: ()
  └── fd: ()-->(1)
 
+norm expect=PruneEmptyProject disable=(ProjectFilterTranspose,JoinConditionPush,EliminateProject,FilterProjectTranspose,JoinExtractFilter)
+SELECT empno + 1 AS next_id FROM (SELECT empno FROM emp WHERE FALSE)
+----
+values
+ ├── columns: next_id:11!null
+ ├── cardinality: [0 - 0]
+ ├── key: ()
+ └── fd: ()-->(11)
+
+norm expect-not=PruneEmptyProject disable=(ProjectFilterTranspose,JoinConditionPush,EliminateProject,FilterProjectTranspose,JoinExtractFilter)
+SELECT empno + 1 AS next_id FROM emp
+----
+project
+ ├── columns: next_id:11!null
+ ├── immutable
+ ├── scan emp
+ │    ├── columns: empno:1!null
+ │    └── key: (1)
+ └── projections
+      └── empno:1 + 1 [as=next_id:11, outer=(1), immutable]
+
 # --------------------------------------------------
 # ProjectMerge
 # --------------------------------------------------
-norm expect=ProjectMerge disable=(MergeProjects,ProjectFilterTranspose,EliminateProject,PruneScanCols,JoinConditionPush,FilterProjectTranspose,JoinExtractFilter)
+norm expect=ProjectMerge disable=(ProjectFilterTranspose,EliminateProject,PruneScanCols,JoinConditionPush,FilterProjectTranspose,JoinExtractFilter)
 SELECT id, name
 FROM (
     SELECT empno AS id, ename AS name, empno + 1 AS next_id
@@ -150,6 +174,20 @@ project
       ├── columns: empno:1!null ename:2 job:3 mgr:4 hiredate:5 sal:6 comm:7 deptno:8 crdb_internal_mvcc_timestamp:9 tableoid:10
       ├── key: (1)
       └── fd: (1)-->(2-10)
+
+norm expect-not=ProjectMerge disable=(ProjectFilterTranspose,EliminateProject,PruneScanCols,JoinConditionPush,FilterProjectTranspose,JoinExtractFilter)
+SELECT next_id * 2 AS doubled
+FROM (SELECT empno + 1 AS next_id FROM emp)
+----
+project
+ ├── columns: doubled:12!null
+ ├── immutable
+ ├── scan emp
+ │    ├── columns: empno:1!null ename:2 job:3 mgr:4 hiredate:5 sal:6 comm:7 deptno:8 crdb_internal_mvcc_timestamp:9 tableoid:10
+ │    ├── key: (1)
+ │    └── fd: (1)-->(2-10)
+ └── projections
+      └── (empno:1 + 1) * 2 [as=doubled:12, outer=(1), immutable]
 
 # --------------------------------------------------
 # PruneEmptyMinus
@@ -166,10 +204,19 @@ values
  ├── key: ()
  └── fd: ()-->(1)
 
+norm expect-not=PruneEmptyMinus disable=(ProjectFilterTranspose,JoinConditionPush,FilterProjectTranspose,JoinExtractFilter)
+SELECT empno FROM emp
+EXCEPT
+SELECT empno FROM emp WHERE FALSE
+----
+scan emp
+ ├── columns: empno:1!null
+ └── key: (1)
+
 # --------------------------------------------------
 # JoinReduceTrue
 # --------------------------------------------------
-norm expect=JoinReduceTrue disable=(JoinAddRedundantSemiJoin,ProjectFilterTranspose,SimplifyJoinFilters,SimplifyAndTrue,SimplifyTrueAnd,SimplifySelectFilters,JoinConditionPush,FilterProjectTranspose,MergeSelectInnerJoin,PushSelectIntoJoinLeft,PushSelectCondLeftIntoJoinLeftAndRight,JoinExtractFilter,PushFilterIntoJoinLeftAndRight,FilterIntoJoin,PushFilterIntoJoinLeft,PushFilterIntoJoinRight)
+norm expect=JoinReduceTrue disable=(JoinAddRedundantSemiJoin,ProjectFilterTranspose,SimplifyJoinFilters,SimplifyAndTrue,SimplifyTrueAnd,SimplifySelectFilters,JoinConditionPush,FilterProjectTranspose,MergeSelectInnerJoin,PushSelectIntoJoinLeft,PushSelectCondLeftIntoJoinLeftAndRight,JoinExtractFilter)
 SELECT *
 FROM emp
 INNER JOIN (
@@ -194,6 +241,25 @@ inner-join (hash)
  │    │    └── key: (11)
  │    └── filters
  │         └── true
+ └── filters
+      └── emp.deptno:8 = dept.deptno:11 [outer=(8,11), constraints=(/8: (/NULL - ]; /11: (/NULL - ]), fd=(8)==(11), (11)==(8)]
+
+norm expect-not=JoinReduceTrue disable=(JoinAddRedundantSemiJoin,ProjectFilterTranspose,SimplifyJoinFilters,SimplifyAndTrue,SimplifyTrueAnd,SimplifySelectFilters,JoinConditionPush,FilterProjectTranspose,MergeSelectInnerJoin,PushSelectIntoJoinLeft,PushSelectCondLeftIntoJoinLeftAndRight,JoinExtractFilter)
+SELECT * FROM emp INNER JOIN dept ON emp.deptno = dept.deptno
+----
+inner-join (hash)
+ ├── columns: empno:1!null ename:2 job:3 mgr:4 hiredate:5 sal:6 comm:7 deptno:8!null deptno:11!null dname:12 loc:13
+ ├── multiplicity: left-rows(zero-or-one), right-rows(zero-or-more)
+ ├── key: (1)
+ ├── fd: (1)-->(2-8), (11)-->(12,13), (8)==(11), (11)==(8)
+ ├── scan emp
+ │    ├── columns: empno:1!null ename:2 job:3 mgr:4 hiredate:5 sal:6 comm:7 emp.deptno:8
+ │    ├── key: (1)
+ │    └── fd: (1)-->(2-8)
+ ├── scan dept
+ │    ├── columns: dept.deptno:11!null dname:12 loc:13
+ │    ├── key: (11)
+ │    └── fd: (11)-->(12,13)
  └── filters
       └── emp.deptno:8 = dept.deptno:11 [outer=(8,11), constraints=(/8: (/NULL - ]; /11: (/NULL - ]), fd=(8)==(11), (11)==(8)]
 
@@ -226,6 +292,31 @@ group-by (streaming)
       └── const-agg [as=job:3, outer=(3)]
            └── job:3
 
+norm expect-not=FilterAggregateTranspose disable=(ProjectFilterTranspose,PushSelectIntoGroupBy,AggregateFilterTranspose,EliminateProject,JoinConditionPush,FilterProjectTranspose,JoinExtractFilter)
+SELECT job, cnt
+FROM (
+    SELECT job, COUNT(*) as cnt
+    FROM emp
+    GROUP BY job
+) AS grouped
+WHERE cnt > 5
+----
+select
+ ├── columns: job:3 cnt:11!null
+ ├── key: (3)
+ ├── fd: (3)-->(11)
+ ├── group-by (hash)
+ │    ├── columns: job:3 count_rows:11!null
+ │    ├── grouping columns: job:3
+ │    ├── key: (3)
+ │    ├── fd: (3)-->(11)
+ │    ├── scan emp
+ │    │    └── columns: job:3
+ │    └── aggregations
+ │         └── count-rows [as=count_rows:11]
+ └── filters
+      └── count_rows:11 > 5 [outer=(11), constraints=(/11: [/6 - ]; tight)]
+
 # --------------------------------------------------
 # ProjectAggregateMerge
 # --------------------------------------------------
@@ -251,6 +342,27 @@ project
       └── aggregations
            └── sum [as=sum:11, outer=(6)]
                 └── sal:6
+
+norm expect-not=ProjectAggregateMerge disable=(ProjectFilterTranspose,PruneAggCols,JoinConditionPush,FilterProjectTranspose,EliminateProject,AggregateProjectMerge,JoinExtractFilter)
+SELECT job, sumsal, minfoo
+FROM (
+    SELECT job, SUM(sal) AS sumsal, MIN(ename) AS minfoo
+    FROM emp
+    GROUP BY job
+) AS grouped
+----
+group-by (hash)
+ ├── columns: job:3 sumsal:11 minfoo:12
+ ├── grouping columns: job:3
+ ├── key: (3)
+ ├── fd: (3)-->(11,12)
+ ├── scan emp
+ │    └── columns: ename:2 job:3 sal:6
+ └── aggregations
+      ├── sum [as=sum:11, outer=(6)]
+      │    └── sal:6
+      └── min [as=min:12, outer=(2)]
+           └── ename:2
 
 # --------------------------------------------------
 # AggregateFilterTranspose
@@ -282,6 +394,31 @@ project
       └── filters
            └── deptno:8 > 10 [outer=(8), constraints=(/8: [/11 - ]; tight)]
 
+norm expect-not=AggregateFilterTranspose disable=(ProjectFilterTranspose,PushSelectIntoGroupBy,EliminateProject,FilterAggregateTranspose,JoinConditionPush,FilterProjectTranspose,JoinExtractFilter)
+SELECT job, COUNT(*) as cnt
+FROM (
+    SELECT job, sal
+    FROM emp
+    WHERE sal > 5000
+) AS filtered
+GROUP BY job
+----
+group-by (hash)
+ ├── columns: job:3 cnt:11!null
+ ├── grouping columns: job:3
+ ├── immutable
+ ├── key: (3)
+ ├── fd: (3)-->(11)
+ ├── select
+ │    ├── columns: job:3 sal:6!null
+ │    ├── immutable
+ │    ├── scan emp
+ │    │    └── columns: job:3 sal:6
+ │    └── filters
+ │         └── sal:6 > 5000 [outer=(6), immutable, constraints=(/6: (/5000 - ]; tight)]
+ └── aggregations
+      └── count-rows [as=count_rows:11]
+
 # --------------------------------------------------
 # SemiJoinFilterTranspose
 # --------------------------------------------------
@@ -312,6 +449,35 @@ semi-join (hash)
  │    └── key: (11)
  └── filters
       └── emp.deptno:8 = dept.deptno:11 [outer=(8,11), constraints=(/8: (/NULL - ]; /11: (/NULL - ]), fd=(8)==(11), (11)==(8)]
+
+norm expect-not=SemiJoinFilterTranspose disable=(ProjectFilterTranspose,PushSelectIntoJoinLeft,EliminateSelect,JoinConditionPush,FilterProjectTranspose,JoinExtractFilter,JoinPushTransitivePredicates,FilterIntoJoin,MergeSelectInnerJoin,PushSelectCondLeftIntoJoinLeftAndRight,JoinAddRedundantSemiJoin)
+SELECT *
+FROM emp
+INNER JOIN dept ON emp.deptno = dept.deptno
+WHERE emp.sal > 1000
+----
+select
+ ├── columns: empno:1!null ename:2 job:3 mgr:4 hiredate:5 sal:6!null comm:7 deptno:8!null deptno:11!null dname:12 loc:13
+ ├── immutable
+ ├── key: (1)
+ ├── fd: (1)-->(2-8), (11)-->(12,13), (8)==(11), (11)==(8)
+ ├── inner-join (hash)
+ │    ├── columns: empno:1!null ename:2 job:3 mgr:4 hiredate:5 sal:6 comm:7 emp.deptno:8!null dept.deptno:11!null dname:12 loc:13
+ │    ├── multiplicity: left-rows(zero-or-one), right-rows(zero-or-more)
+ │    ├── key: (1)
+ │    ├── fd: (1)-->(2-8), (11)-->(12,13), (8)==(11), (11)==(8)
+ │    ├── scan emp
+ │    │    ├── columns: empno:1!null ename:2 job:3 mgr:4 hiredate:5 sal:6 comm:7 emp.deptno:8
+ │    │    ├── key: (1)
+ │    │    └── fd: (1)-->(2-8)
+ │    ├── scan dept
+ │    │    ├── columns: dept.deptno:11!null dname:12 loc:13
+ │    │    ├── key: (11)
+ │    │    └── fd: (11)-->(12,13)
+ │    └── filters
+ │         └── emp.deptno:8 = dept.deptno:11 [outer=(8,11), constraints=(/8: (/NULL - ]; /11: (/NULL - ]), fd=(8)==(11), (11)==(8)]
+ └── filters
+      └── sal:6 > 1000 [outer=(6), immutable, constraints=(/6: (/1000 - ]; tight)]
 
 # --------------------------------------------------
 # JoinPushTransitivePredicates
@@ -349,6 +515,31 @@ inner-join (hash)
       ├── emp.deptno:8 = dept.deptno:11 [outer=(8,11), constraints=(/8: (/NULL - ]; /11: (/NULL - ]), fd=(8)==(11), (11)==(8)]
       └── sal:6 > 1000 [outer=(6), immutable, constraints=(/6: (/1000 - ]; tight)]
 
+norm expect-not=JoinPushTransitivePredicates disable=(ProjectFilterTranspose,PushFilterIntoJoinLeftAndRight,PushFilterIntoJoinLeft,PushFilterIntoJoinRight,MapFilterIntoJoinLeft,MapFilterIntoJoinRight,JoinConditionPush,FilterProjectTranspose,MergeSelectInnerJoin,PushSelectIntoJoinLeft,PushSelectCondLeftIntoJoinLeftAndRight,JoinExtractFilter)
+SELECT * FROM emp INNER JOIN dept ON TRUE WHERE emp.sal > 1000
+----
+inner-join (cross)
+ ├── columns: empno:1!null ename:2 job:3 mgr:4 hiredate:5 sal:6!null comm:7 deptno:8 deptno:11!null dname:12 loc:13
+ ├── immutable
+ ├── key: (1,11)
+ ├── fd: (1)-->(2-8), (11)-->(12,13)
+ ├── semi-join (cross)
+ │    ├── columns: empno:1!null ename:2 job:3 mgr:4 hiredate:5 sal:6 comm:7 emp.deptno:8
+ │    ├── key: (1)
+ │    ├── fd: (1)-->(2-8)
+ │    ├── scan emp
+ │    │    ├── columns: empno:1!null ename:2 job:3 mgr:4 hiredate:5 sal:6 comm:7 emp.deptno:8
+ │    │    ├── key: (1)
+ │    │    └── fd: (1)-->(2-8)
+ │    ├── scan dept
+ │    └── filters (true)
+ ├── scan dept
+ │    ├── columns: dept.deptno:11!null dname:12 loc:13
+ │    ├── key: (11)
+ │    └── fd: (11)-->(12,13)
+ └── filters
+      └── sal:6 > 1000 [outer=(6), immutable, constraints=(/6: (/1000 - ]; tight)]
+
 # --------------------------------------------------
 # ProjectFilterTranspose
 # --------------------------------------------------
@@ -371,6 +562,27 @@ select
  │         └── fd: (1)-->(8)
  └── filters
       └── deptno:8 > 10 [outer=(8), constraints=(/8: [/11 - ]; tight)]
+
+norm expect-not=ProjectFilterTranspose disable=(FilterProjectTranspose,EliminateProject,JoinConditionPush,PushSelectIntoProject,PushSelectIntoInlinableProject,JoinExtractFilter)
+SELECT empno
+FROM emp
+WHERE sal > 1000
+----
+project
+ ├── columns: empno:1!null
+ ├── immutable
+ ├── key: (1)
+ └── select
+      ├── columns: empno:1!null sal:6!null
+      ├── immutable
+      ├── key: (1)
+      ├── fd: (1)-->(6)
+      ├── scan emp
+      │    ├── columns: empno:1!null sal:6
+      │    ├── key: (1)
+      │    └── fd: (1)-->(6)
+      └── filters
+           └── sal:6 > 1000 [outer=(6), immutable, constraints=(/6: (/1000 - ]; tight)]
 
 # --------------------------------------------------
 # FilterProjectTranspose
@@ -398,6 +610,32 @@ project
       └── filters
            └── empno:1 > 100 [outer=(1), constraints=(/1: [/101 - ]; tight)]
 
+norm expect-not=FilterProjectTranspose disable=(ProjectFilterTranspose,PushSelectIntoProject,PushSelectIntoInlinableProject,EliminateProject,JoinConditionPush,JoinExtractFilter)
+SELECT id, id_plus_one
+FROM (
+    SELECT empno AS id, empno + 1 AS id_plus_one
+    FROM emp
+) AS projected
+WHERE id_plus_one > 100
+----
+select
+ ├── columns: id:1!null id_plus_one:11!null
+ ├── immutable
+ ├── key: (1)
+ ├── fd: (1)-->(11)
+ ├── project
+ │    ├── columns: id_plus_one:11!null empno:1!null
+ │    ├── immutable
+ │    ├── key: (1)
+ │    ├── fd: (1)-->(11)
+ │    ├── scan emp
+ │    │    ├── columns: empno:1!null
+ │    │    └── key: (1)
+ │    └── projections
+ │         └── empno:1 + 1 [as=id_plus_one:11, outer=(1), immutable]
+ └── filters
+      └── id_plus_one:11 > 100 [outer=(11), constraints=(/11: [/101 - ]; tight)]
+
 # --------------------------------------------------
 # PruneEmptyIntersect
 # --------------------------------------------------
@@ -412,6 +650,23 @@ values
  ├── cardinality: [0 - 0]
  ├── key: ()
  └── fd: ()-->(1)
+
+norm expect-not=PruneEmptyIntersect disable=(ProjectFilterTranspose,SimplifyZeroCardinalityGroup,PruneEmptyFilter,JoinConditionPush,FilterProjectTranspose,JoinExtractFilter)
+SELECT empno FROM emp
+INTERSECT
+SELECT empno FROM emp
+----
+intersect-all
+ ├── columns: empno:1!null
+ ├── left columns: empno:1!null
+ ├── right columns: empno:11
+ ├── key: (1)
+ ├── scan emp
+ │    ├── columns: empno:1!null
+ │    └── key: (1)
+ └── scan emp
+      ├── columns: empno:11!null
+      └── key: (11)
 
 # --------------------------------------------------
 # JoinCommute
@@ -444,7 +699,7 @@ project
 # --------------------------------------------------
 # JoinReduceFalse
 # --------------------------------------------------
-norm expect=JoinReduceFalse disable=(JoinAddRedundantSemiJoin,ProjectFilterTranspose,SimplifyJoinFilters,SimplifyAndFalse,JoinConditionPush,FilterProjectTranspose,JoinExtractFilter,PushFilterIntoJoinLeftAndRight,FilterIntoJoin,PushFilterIntoJoinLeft,PushFilterIntoJoinRight,DetectJoinContradiction)
+norm expect=JoinReduceFalse disable=(JoinAddRedundantSemiJoin,ProjectFilterTranspose,SimplifyJoinFilters,SimplifyAndFalse,JoinConditionPush,FilterProjectTranspose,JoinExtractFilter)
 SELECT * FROM emp INNER JOIN dept ON emp.deptno = dept.deptno AND FALSE
 ----
 values
@@ -452,6 +707,25 @@ values
  ├── cardinality: [0 - 0]
  ├── key: ()
  └── fd: ()-->(1-8,11-13)
+
+norm expect-not=JoinReduceFalse disable=(JoinAddRedundantSemiJoin,ProjectFilterTranspose,SimplifyJoinFilters,SimplifyAndFalse,JoinConditionPush,FilterProjectTranspose,JoinExtractFilter)
+SELECT * FROM emp INNER JOIN dept ON emp.deptno = dept.deptno
+----
+inner-join (hash)
+ ├── columns: empno:1!null ename:2 job:3 mgr:4 hiredate:5 sal:6 comm:7 deptno:8!null deptno:11!null dname:12 loc:13
+ ├── multiplicity: left-rows(zero-or-one), right-rows(zero-or-more)
+ ├── key: (1)
+ ├── fd: (1)-->(2-8), (11)-->(12,13), (8)==(11), (11)==(8)
+ ├── scan emp
+ │    ├── columns: empno:1!null ename:2 job:3 mgr:4 hiredate:5 sal:6 comm:7 emp.deptno:8
+ │    ├── key: (1)
+ │    └── fd: (1)-->(2-8)
+ ├── scan dept
+ │    ├── columns: dept.deptno:11!null dname:12 loc:13
+ │    ├── key: (11)
+ │    └── fd: (11)-->(12,13)
+ └── filters
+      └── emp.deptno:8 = dept.deptno:11 [outer=(8,11), constraints=(/8: (/NULL - ]; /11: (/NULL - ]), fd=(8)==(11), (11)==(8)]
 
 # --------------------------------------------------
 # UnionPullUpConstants
@@ -482,6 +756,67 @@ project
  └── projections
       └── 'ACTIVE' [as=status:26]
 
+norm expect-not=UnionPullUpConstants disable=(ProjectFilterTranspose,JoinConditionPush,FilterProjectTranspose,EliminateProject,JoinExtractFilter)
+SELECT empno, 'ACTIVE' AS status, ename FROM emp
+UNION
+SELECT empno, 'ACTIVE' AS status, ename FROM emp
+----
+union
+ ├── columns: empno:23!null status:24!null ename:25
+ ├── left columns: emp.empno:1 status:11 emp.ename:2
+ ├── right columns: emp.empno:12 status:22 emp.ename:13
+ ├── key: (23-25)
+ ├── project
+ │    ├── columns: status:11!null emp.empno:1!null emp.ename:2
+ │    ├── key: (1)
+ │    ├── fd: ()-->(11), (1)-->(2)
+ │    ├── scan emp
+ │    │    ├── columns: emp.empno:1!null emp.ename:2
+ │    │    ├── key: (1)
+ │    │    └── fd: (1)-->(2)
+ │    └── projections
+ │         └── 'ACTIVE' [as=status:11]
+ └── project
+      ├── columns: status:22!null emp.empno:12!null emp.ename:13
+      ├── key: (12)
+      ├── fd: ()-->(22), (12)-->(13)
+      ├── scan emp
+      │    ├── columns: emp.empno:12!null emp.ename:13
+      │    ├── key: (12)
+      │    └── fd: (12)-->(13)
+      └── projections
+           └── 'ACTIVE' [as=status:22]
+
+# Matching constants at union column positions are required on both sides.
+norm expect-not=UnionPullUpConstants disable=(ProjectFilterTranspose,JoinConditionPush,FilterProjectTranspose,EliminateProject,JoinExtractFilter)
+SELECT empno, 'A' AS status, ename FROM emp
+UNION ALL
+SELECT empno, 'B' AS status, ename FROM emp
+----
+union-all
+ ├── columns: empno:23!null status:24!null ename:25
+ ├── left columns: emp.empno:1 status:11 emp.ename:2
+ ├── right columns: emp.empno:12 status:22 emp.ename:13
+ ├── project
+ │    ├── columns: status:11!null emp.empno:1!null emp.ename:2
+ │    ├── key: (1)
+ │    ├── fd: ()-->(11), (1)-->(2)
+ │    ├── scan emp
+ │    │    ├── columns: emp.empno:1!null emp.ename:2
+ │    │    ├── key: (1)
+ │    │    └── fd: (1)-->(2)
+ │    └── projections
+ │         └── 'A' [as=status:11]
+ └── project
+      ├── columns: status:22!null emp.empno:12!null emp.ename:13
+      ├── key: (12)
+      ├── fd: ()-->(22), (12)-->(13)
+      ├── scan emp
+      │    ├── columns: emp.empno:12!null emp.ename:13
+      │    ├── key: (12)
+      │    └── fd: (12)-->(13)
+      └── projections
+           └── 'B' [as=status:22]
 
 
 # --------------------------------------------------
@@ -497,6 +832,18 @@ values
  ├── cardinality: [0 - 0]
  ├── key: ()
  └── fd: ()-->(3)
+
+norm expect-not=PruneEmptyUnion disable=(ProjectFilterTranspose,JoinConditionPush,FilterProjectTranspose,JoinExtractFilter)
+SELECT * FROM (VALUES (1)) AS t1(x) WHERE FALSE
+UNION
+SELECT * FROM (VALUES (2)) AS t2(x)
+----
+values
+ ├── columns: x:3!null
+ ├── cardinality: [1 - 1]
+ ├── key: ()
+ ├── fd: ()-->(3)
+ └── (2,)
 
 # --------------------------------------------------
 # JoinConditionPush
@@ -531,6 +878,25 @@ inner-join (hash)
  │    │    └── fd: (11)-->(12,13)
  │    └── filters
  │         └── loc:13 = 'NEW YORK' [outer=(13), constraints=(/13: [/'NEW YORK' - /'NEW YORK']; tight), fd=()-->(13)]
+ └── filters
+      └── emp.deptno:8 = dept.deptno:11 [outer=(8,11), constraints=(/8: (/NULL - ]; /11: (/NULL - ]), fd=(8)==(11), (11)==(8)]
+
+norm expect-not=JoinConditionPush disable=(JoinAddRedundantSemiJoin,ProjectFilterTranspose,PushFilterIntoJoinLeft,PushFilterIntoJoinRight,FilterProjectTranspose,MergeSelectInnerJoin,PushSelectIntoJoinLeft,PushSelectCondLeftIntoJoinLeftAndRight,JoinExtractFilter)
+SELECT * FROM emp INNER JOIN dept ON emp.deptno = dept.deptno
+----
+inner-join (hash)
+ ├── columns: empno:1!null ename:2 job:3 mgr:4 hiredate:5 sal:6 comm:7 deptno:8!null deptno:11!null dname:12 loc:13
+ ├── multiplicity: left-rows(zero-or-one), right-rows(zero-or-more)
+ ├── key: (1)
+ ├── fd: (1)-->(2-8), (11)-->(12,13), (8)==(11), (11)==(8)
+ ├── scan emp
+ │    ├── columns: empno:1!null ename:2 job:3 mgr:4 hiredate:5 sal:6 comm:7 emp.deptno:8
+ │    ├── key: (1)
+ │    └── fd: (1)-->(2-8)
+ ├── scan dept
+ │    ├── columns: dept.deptno:11!null dname:12 loc:13
+ │    ├── key: (11)
+ │    └── fd: (11)-->(12,13)
  └── filters
       └── emp.deptno:8 = dept.deptno:11 [outer=(8,11), constraints=(/8: (/NULL - ]; /11: (/NULL - ]), fd=(8)==(11), (11)==(8)]
 
@@ -593,6 +959,35 @@ union
       └── scan dept
            ├── columns: dept.deptno:22!null
            └── key: (22)
+
+norm expect-not=UnionMerge disable=(ProjectFilterTranspose,JoinConditionPush,FilterProjectTranspose,JoinExtractFilter)
+SELECT empno FROM emp
+UNION
+(
+  SELECT empno FROM emp
+  UNION
+  SELECT deptno FROM dept
+)
+----
+union
+ ├── columns: empno:27!null
+ ├── left columns: emp.empno:1
+ ├── right columns: empno:26
+ ├── key: (27)
+ ├── scan emp
+ │    ├── columns: emp.empno:1!null
+ │    └── key: (1)
+ └── union
+      ├── columns: empno:26!null
+      ├── left columns: emp.empno:11
+      ├── right columns: dept.deptno:21
+      ├── key: (26)
+      ├── scan emp
+      │    ├── columns: emp.empno:11!null
+      │    └── key: (11)
+      └── scan dept
+           ├── columns: dept.deptno:21!null
+           └── key: (21)
 
 # --------------------------------------------------
 # FilterSetOpTranspose
@@ -665,10 +1060,57 @@ distinct-on
       └── const-agg [as=ename:22, outer=(22)]
            └── ename:22
 
+norm expect-not=(UnionToDistinct,ConvertUnionToDistinctUnionAll) disable=(ProjectFilterTranspose,JoinConditionPush,FilterProjectTranspose,EliminateProject,JoinExtractFilter)
+SELECT empno FROM emp
+UNION
+SELECT empno FROM emp
+----
+union
+ ├── columns: empno:21!null
+ ├── left columns: emp.empno:1
+ ├── right columns: emp.empno:11
+ ├── key: (21)
+ ├── project
+ │    ├── columns: emp.empno:1!null
+ │    ├── key: (1)
+ │    └── scan emp
+ │         ├── columns: emp.empno:1!null
+ │         └── key: (1)
+ └── project
+      ├── columns: emp.empno:11!null
+      ├── key: (11)
+      └── scan emp
+           ├── columns: emp.empno:11!null
+           └── key: (11)
+
+# Columns must map to the same base table on both sides.
+norm expect-not=(UnionToDistinct,ConvertUnionToDistinctUnionAll) disable=(ProjectFilterTranspose,JoinConditionPush,FilterProjectTranspose,EliminateProject,JoinExtractFilter)
+SELECT empno FROM emp
+UNION
+SELECT deptno FROM dept
+----
+union
+ ├── columns: empno:16!null
+ ├── left columns: emp.empno:1
+ ├── right columns: dept.deptno:11
+ ├── key: (16)
+ ├── project
+ │    ├── columns: emp.empno:1!null
+ │    ├── key: (1)
+ │    └── scan emp
+ │         ├── columns: emp.empno:1!null
+ │         └── key: (1)
+ └── project
+      ├── columns: dept.deptno:11!null
+      ├── key: (11)
+      └── scan dept
+           ├── columns: dept.deptno:11!null
+           └── key: (11)
+
 # --------------------------------------------------
 # AggregateJoinJoinRemove
 # --------------------------------------------------
-norm expect=AggregateJoinJoinRemove disable=(ProjectFilterTranspose,EliminateJoinUnderGroupByLeft,EliminateJoinUnderGroupByRight,JoinConditionPush,FilterProjectTranspose,EliminateDistinct,EliminateGroupBy,EliminateProject,JoinExtractFilter,ReduceGroupingCols)
+norm expect=AggregateJoinJoinRemove disable=(ProjectFilterTranspose,EliminateJoinUnderGroupByLeft,EliminateJoinUnderGroupByRight,PruneScanCols,JoinConditionPush,FilterProjectTranspose,EliminateDistinct,EliminateGroupBy,EliminateProject,JoinExtractFilter)
 SELECT e.empno, d.deptno
 FROM emp e
 LEFT JOIN dept d2 ON e.deptno = d2.deptno
@@ -677,23 +1119,64 @@ GROUP BY e.empno, d.deptno
 ----
 distinct-on
  ├── columns: empno:1!null deptno:16
- ├── grouping columns: empno:1!null d.deptno:16
+ ├── grouping columns: empno:1!null
  ├── key: (1)
  ├── fd: (1)-->(16)
+ ├── left-join (hash)
+ │    ├── columns: empno:1!null ename:2 job:3 mgr:4 hiredate:5 sal:6 comm:7 e.deptno:8 e.crdb_internal_mvcc_timestamp:9 e.tableoid:10 d.deptno:16 d.dname:17 d.loc:18 d.crdb_internal_mvcc_timestamp:19 d.tableoid:20
+ │    ├── multiplicity: left-rows(exactly-one), right-rows(zero-or-more)
+ │    ├── key: (1)
+ │    ├── fd: (1)-->(2-10,16-20), (16)-->(17-20)
+ │    ├── scan emp [as=e]
+ │    │    ├── columns: empno:1!null ename:2 job:3 mgr:4 hiredate:5 sal:6 comm:7 e.deptno:8 e.crdb_internal_mvcc_timestamp:9 e.tableoid:10
+ │    │    ├── key: (1)
+ │    │    └── fd: (1)-->(2-10)
+ │    ├── scan dept [as=d]
+ │    │    ├── columns: d.deptno:16!null d.dname:17 d.loc:18 d.crdb_internal_mvcc_timestamp:19 d.tableoid:20
+ │    │    ├── key: (16)
+ │    │    └── fd: (16)-->(17-20)
+ │    └── filters
+ │         └── e.deptno:8 = d.deptno:16 [outer=(8,16), constraints=(/8: (/NULL - ]; /16: (/NULL - ]), fd=(8)==(16), (16)==(8)]
+ └── aggregations
+      └── const-agg [as=d.deptno:16, outer=(16)]
+           └── d.deptno:16
+
+norm expect-not=AggregateJoinJoinRemove disable=(ProjectFilterTranspose,EliminateJoinUnderGroupByLeft,EliminateJoinUnderGroupByRight,PruneScanCols,JoinConditionPush,FilterProjectTranspose,EliminateDistinct,EliminateGroupBy,EliminateProject,JoinExtractFilter)
+SELECT e.empno, d.deptno
+FROM emp e
+LEFT JOIN dept d2 ON e.empno = d2.deptno
+LEFT JOIN dept d ON d2.loc = d.loc
+GROUP BY e.empno, d.deptno
+----
+distinct-on
+ ├── columns: empno:1!null deptno:16
+ ├── grouping columns: empno:1!null d.deptno:16
+ ├── key: (1,16)
  └── left-join (hash)
-      ├── columns: empno:1!null e.deptno:8 d.deptno:16
-      ├── multiplicity: left-rows(exactly-one), right-rows(zero-or-more)
-      ├── key: (1)
-      ├── fd: (1)-->(8,16)
-      ├── scan emp [as=e]
-      │    ├── columns: empno:1!null e.deptno:8
+      ├── columns: empno:1!null ename:2 job:3 mgr:4 hiredate:5 sal:6 comm:7 e.deptno:8 e.crdb_internal_mvcc_timestamp:9 e.tableoid:10 d2.deptno:11 d2.dname:12 d2.loc:13 d2.crdb_internal_mvcc_timestamp:14 d2.tableoid:15 d.deptno:16 d.dname:17 d.loc:18 d.crdb_internal_mvcc_timestamp:19 d.tableoid:20
+      ├── key: (1,16)
+      ├── fd: (1)-->(2-15), (11)-->(12-15), (16)-->(17-20)
+      ├── left-join (hash)
+      │    ├── columns: empno:1!null ename:2 job:3 mgr:4 hiredate:5 sal:6 comm:7 e.deptno:8 e.crdb_internal_mvcc_timestamp:9 e.tableoid:10 d2.deptno:11 d2.dname:12 d2.loc:13 d2.crdb_internal_mvcc_timestamp:14 d2.tableoid:15
+      │    ├── multiplicity: left-rows(exactly-one), right-rows(zero-or-one)
       │    ├── key: (1)
-      │    └── fd: (1)-->(8)
+      │    ├── fd: (1)-->(2-15), (11)-->(12-15)
+      │    ├── scan emp [as=e]
+      │    │    ├── columns: empno:1!null ename:2 job:3 mgr:4 hiredate:5 sal:6 comm:7 e.deptno:8 e.crdb_internal_mvcc_timestamp:9 e.tableoid:10
+      │    │    ├── key: (1)
+      │    │    └── fd: (1)-->(2-10)
+      │    ├── scan dept [as=d2]
+      │    │    ├── columns: d2.deptno:11!null d2.dname:12 d2.loc:13 d2.crdb_internal_mvcc_timestamp:14 d2.tableoid:15
+      │    │    ├── key: (11)
+      │    │    └── fd: (11)-->(12-15)
+      │    └── filters
+      │         └── empno:1 = d2.deptno:11 [outer=(1,11), constraints=(/1: (/NULL - ]; /11: (/NULL - ]), fd=(1)==(11), (11)==(1)]
       ├── scan dept [as=d]
-      │    ├── columns: d.deptno:16!null
-      │    └── key: (16)
+      │    ├── columns: d.deptno:16!null d.dname:17 d.loc:18 d.crdb_internal_mvcc_timestamp:19 d.tableoid:20
+      │    ├── key: (16)
+      │    └── fd: (16)-->(17-20)
       └── filters
-           └── e.deptno:8 = d.deptno:16 [outer=(8,16), constraints=(/8: (/NULL - ]; /16: (/NULL - ]), fd=(8)==(16), (16)==(8)]
+           └── d2.loc:13 = d.loc:18 [outer=(13,18), constraints=(/13: (/NULL - ]; /18: (/NULL - ]), fd=(13)==(18), (18)==(13)]
 
 # --------------------------------------------------
 # AggregateJoinRemove
@@ -713,22 +1196,71 @@ distinct-on
       ├── key: (1)
       └── fd: (1)-->(2-10)
 
+norm expect-not=AggregateJoinRemove disable=(ProjectFilterTranspose,EliminateJoinUnderGroupByLeft,EliminateJoinUnderGroupByRight,PruneScanCols,JoinConditionPush,FilterProjectTranspose,EliminateDistinct,EliminateGroupBy,EliminateProject,EliminateJoinUnderProjectLeft,JoinExtractFilter)
+SELECT e.job, d.loc
+FROM emp e
+LEFT JOIN dept d ON e.deptno = d.deptno
+GROUP BY e.job, d.loc
+----
+distinct-on
+ ├── columns: job:3 loc:13
+ ├── grouping columns: job:3 loc:13
+ ├── key: (3,13)
+ └── left-join (hash)
+      ├── columns: empno:1!null ename:2 job:3 mgr:4 hiredate:5 sal:6 comm:7 e.deptno:8 e.crdb_internal_mvcc_timestamp:9 e.tableoid:10 d.deptno:11 dname:12 loc:13 d.crdb_internal_mvcc_timestamp:14 d.tableoid:15
+      ├── multiplicity: left-rows(exactly-one), right-rows(zero-or-more)
+      ├── key: (1)
+      ├── fd: (1)-->(2-15), (11)-->(12-15)
+      ├── scan emp [as=e]
+      │    ├── columns: empno:1!null ename:2 job:3 mgr:4 hiredate:5 sal:6 comm:7 e.deptno:8 e.crdb_internal_mvcc_timestamp:9 e.tableoid:10
+      │    ├── key: (1)
+      │    └── fd: (1)-->(2-10)
+      ├── scan dept [as=d]
+      │    ├── columns: d.deptno:11!null dname:12 loc:13 d.crdb_internal_mvcc_timestamp:14 d.tableoid:15
+      │    ├── key: (11)
+      │    └── fd: (11)-->(12-15)
+      └── filters
+           └── e.deptno:8 = d.deptno:11 [outer=(8,11), constraints=(/8: (/NULL - ]; /11: (/NULL - ]), fd=(8)==(11), (11)==(8)]
+
 # --------------------------------------------------
 # AggregateProjectConstantToDummyJoin
 # --------------------------------------------------
-norm expect=AggregateProjectConstantToDummyJoin disable=(JoinAddRedundantSemiJoin,MergeSelectInnerJoin,ProjectInnerJoinValues,InlineJoinConstantsLeft,InlineJoinConstantsRight,ProjectMerge,EliminateJoinNoColsRight,EliminateJoinNoColsLeft,PruneJoinRightCols,PruneJoinLeftCols,HoistJoinProjectLeft,HoistJoinProjectRight,JoinExtractFilter,ReduceGroupingCols,AggregateProjectMerge)
+norm expect=AggregateProjectConstantToDummyJoin disable=(JoinAddRedundantSemiJoin,MergeSelectInnerJoin,ProjectInnerJoinValues,InlineJoinConstantsLeft,InlineJoinConstantsRight,ProjectMerge,EliminateJoinNoColsRight,EliminateJoinNoColsLeft,PruneJoinRightCols,PruneJoinLeftCols,HoistJoinProjectLeft,HoistJoinProjectRight,JoinExtractFilter)
 SELECT count(*)
 FROM (SELECT empno, 1 AS k FROM emp)
 GROUP BY k
 ----
+group-by (streaming)
+ ├── columns: count:12!null
+ ├── cardinality: [0 - 1]
+ ├── key: ()
+ ├── fd: ()-->(12)
+ ├── scan emp
+ └── aggregations
+      └── count-rows [as=count_rows:12]
+
+norm expect-not=AggregateProjectConstantToDummyJoin disable=(JoinAddRedundantSemiJoin,MergeSelectInnerJoin,ProjectInnerJoinValues,InlineJoinConstantsLeft,InlineJoinConstantsRight,ProjectMerge,EliminateJoinNoColsRight,EliminateJoinNoColsLeft,PruneJoinRightCols,PruneJoinLeftCols,HoistJoinProjectLeft,HoistJoinProjectRight,JoinExtractFilter)
+SELECT count(*)
+FROM (SELECT empno, empno + 1 AS k FROM emp)
+GROUP BY k
+----
 project
  ├── columns: count:12!null
+ ├── immutable
  └── group-by (hash)
-      ├── columns: count_rows:12!null column14:14
-      ├── grouping columns: column14:14
-      ├── key: (14)
-      ├── fd: (14)-->(12)
-      ├── scan emp
+      ├── columns: k:11!null count_rows:12!null
+      ├── grouping columns: k:11!null
+      ├── immutable
+      ├── key: (11)
+      ├── fd: (11)-->(12)
+      ├── project
+      │    ├── columns: k:11!null
+      │    ├── immutable
+      │    ├── scan emp
+      │    │    ├── columns: empno:1!null
+      │    │    └── key: (1)
+      │    └── projections
+      │         └── empno:1 + 1 [as=k:11, outer=(1), immutable]
       └── aggregations
            └── count-rows [as=count_rows:12]
 
@@ -756,25 +1288,52 @@ project
            └── sum [as=sum:12, outer=(1), immutable]
                 └── empno:1 + 1
 
+norm expect-not=AggregateProjectMerge disable=(AggregateExtractProject,MergeSelectInnerJoin,ProjectInnerJoinValues,InlineJoinConstantsLeft,InlineJoinConstantsRight,ProjectMerge,EliminateJoinNoColsRight,EliminateJoinNoColsLeft,PruneJoinRightCols,PruneJoinLeftCols,HoistJoinProjectLeft,HoistJoinProjectRight,JoinExtractFilter)
+SELECT sum(sal)
+FROM (SELECT sal, empno + 1 AS k FROM emp)
+GROUP BY k
+----
+project
+ ├── columns: sum:12
+ ├── immutable
+ └── group-by (hash)
+      ├── columns: k:11!null sum:12
+      ├── grouping columns: k:11!null
+      ├── immutable
+      ├── key: (11)
+      ├── fd: (11)-->(12)
+      ├── project
+      │    ├── columns: k:11!null sal:6
+      │    ├── immutable
+      │    ├── scan emp
+      │    │    ├── columns: empno:1!null sal:6
+      │    │    ├── key: (1)
+      │    │    └── fd: (1)-->(6)
+      │    └── projections
+      │         └── empno:1 + 1 [as=k:11, outer=(1), immutable]
+      └── aggregations
+           └── sum [as=sum:12, outer=(6)]
+                └── sal:6
+
 # --------------------------------------------------
 # AggregateExtractProject
 # --------------------------------------------------
 norm expect=AggregateExtractProject disable=(ProjectMerge,EliminateProject,PruneScanCols,JoinConditionPush,FilterProjectTranspose,JoinExtractFilter)
-SELECT sum(empno + 1), count(empno + 1)
+SELECT sum(sal + 1), avg(sal + 1)
 FROM emp
 GROUP BY empno
 ----
 project
- ├── columns: sum:12!null count:13!null
+ ├── columns: sum:12 avg:13
  ├── immutable
  └── group-by (hash)
-      ├── columns: empno:1!null sum:12!null count:13!null
+      ├── columns: empno:1!null sum:12 avg:13
       ├── grouping columns: empno:1!null
       ├── immutable
       ├── key: (1)
       ├── fd: (1)-->(12,13)
       ├── project
-      │    ├── columns: column14:14!null empno:1!null
+      │    ├── columns: column14:14 empno:1!null
       │    ├── immutable
       │    ├── key: (1)
       │    ├── fd: (1)-->(14)
@@ -783,11 +1342,12 @@ project
       │    │    ├── key: (1)
       │    │    └── fd: (1)-->(2-10)
       │    └── projections
-      │         └── empno:1 + 1 [as=column14:14, outer=(1), immutable]
+      │         └── sal:6 + 1 [as=column14:14, outer=(6), immutable]
       └── aggregations
            ├── sum [as=sum:12, outer=(14)]
            │    └── column14:14
-           └── count-rows [as=count:13]
+           └── avg [as=avg:13, outer=(14)]
+                └── column14:14
 
 # --------------------------------------------------
 # JoinExtractFilter
@@ -802,32 +1362,87 @@ project
  ├── immutable
  ├── key: (1,11)
  ├── fd: (1)-->(2-8), (11)-->(12,13)
- └── inner-join (cross)
+ └── select
       ├── columns: empno:1!null ename:2 job:3 mgr:4 hiredate:5 sal:6!null comm:7 emp.deptno:8 emp.crdb_internal_mvcc_timestamp:9 emp.tableoid:10 dept.deptno:11!null dname:12 loc:13 dept.crdb_internal_mvcc_timestamp:14 dept.tableoid:15
       ├── immutable
       ├── key: (1,11)
       ├── fd: (1)-->(2-10), (11)-->(12-15)
-      ├── semi-join (cross)
-      │    ├── columns: empno:1!null ename:2 job:3 mgr:4 hiredate:5 sal:6!null comm:7 emp.deptno:8 emp.crdb_internal_mvcc_timestamp:9 emp.tableoid:10
-      │    ├── immutable
-      │    ├── key: (1)
-      │    ├── fd: (1)-->(2-10)
-      │    ├── select
-      │    │    ├── columns: empno:1!null ename:2 job:3 mgr:4 hiredate:5 sal:6!null comm:7 emp.deptno:8 emp.crdb_internal_mvcc_timestamp:9 emp.tableoid:10
-      │    │    ├── immutable
+      ├── inner-join (cross)
+      │    ├── columns: empno:1!null ename:2 job:3 mgr:4 hiredate:5 sal:6 comm:7 emp.deptno:8 emp.crdb_internal_mvcc_timestamp:9 emp.tableoid:10 dept.deptno:11!null dname:12 loc:13 dept.crdb_internal_mvcc_timestamp:14 dept.tableoid:15
+      │    ├── key: (1,11)
+      │    ├── fd: (1)-->(2-10), (11)-->(12-15)
+      │    ├── semi-join (cross)
+      │    │    ├── columns: empno:1!null ename:2 job:3 mgr:4 hiredate:5 sal:6 comm:7 emp.deptno:8 emp.crdb_internal_mvcc_timestamp:9 emp.tableoid:10
       │    │    ├── key: (1)
       │    │    ├── fd: (1)-->(2-10)
       │    │    ├── scan emp
       │    │    │    ├── columns: empno:1!null ename:2 job:3 mgr:4 hiredate:5 sal:6 comm:7 emp.deptno:8 emp.crdb_internal_mvcc_timestamp:9 emp.tableoid:10
       │    │    │    ├── key: (1)
       │    │    │    └── fd: (1)-->(2-10)
-      │    │    └── filters
-      │    │         └── sal:6 > 1000 [outer=(6), immutable, constraints=(/6: (/1000 - ]; tight)]
+      │    │    ├── scan dept
+      │    │    │    ├── columns: dept.deptno:11!null dname:12 loc:13 dept.crdb_internal_mvcc_timestamp:14 dept.tableoid:15
+      │    │    │    ├── key: (11)
+      │    │    │    └── fd: (11)-->(12-15)
+      │    │    └── filters (true)
       │    ├── scan dept
       │    │    ├── columns: dept.deptno:11!null dname:12 loc:13 dept.crdb_internal_mvcc_timestamp:14 dept.tableoid:15
       │    │    ├── key: (11)
       │    │    └── fd: (11)-->(12-15)
       │    └── filters (true)
+      └── filters
+           └── sal:6 > 1000 [outer=(6), immutable, constraints=(/6: (/1000 - ]; tight)]
+
+norm expect=JoinExtractFilter disable=(MergeSelectInnerJoin,PushFilterIntoJoinLeft,PushFilterIntoJoinRight,PushSelectIntoJoinLeft,PushSelectCondLeftIntoJoinLeftAndRight,FilterIntoJoin,FilterProjectTranspose,JoinAddRedundantSemiJoin,JoinConditionPush,SemiJoinFilterTranspose,SimplifyJoinFilters,EliminateProject,PruneScanCols,PruneJoinLeftCols,PruneJoinRightCols,PruneSemiAntiJoinRightCols,ProjectFilterTranspose)
+SELECT * FROM emp INNER JOIN dept ON emp.deptno = dept.deptno
+----
+project
+ ├── columns: empno:1!null ename:2 job:3 mgr:4 hiredate:5 sal:6 comm:7 deptno:8!null deptno:11!null dname:12 loc:13
+ ├── key: (1)
+ ├── fd: (1)-->(2-8,11-13), (11)-->(12,13), (8)==(11), (11)==(8)
+ └── select
+      ├── columns: empno:1!null ename:2 job:3 mgr:4 hiredate:5 sal:6 comm:7 emp.deptno:8!null emp.crdb_internal_mvcc_timestamp:9 emp.tableoid:10 dept.deptno:11!null dname:12 loc:13 dept.crdb_internal_mvcc_timestamp:14 dept.tableoid:15
+      ├── key: (1)
+      ├── fd: (1)-->(2-10), (11)-->(12-15), (8)==(11), (11)==(8)
+      ├── inner-join (cross)
+      │    ├── columns: empno:1!null ename:2 job:3 mgr:4 hiredate:5 sal:6 comm:7 emp.deptno:8 emp.crdb_internal_mvcc_timestamp:9 emp.tableoid:10 dept.deptno:11!null dname:12 loc:13 dept.crdb_internal_mvcc_timestamp:14 dept.tableoid:15
+      │    ├── key: (1,11)
+      │    ├── fd: (1)-->(2-10), (11)-->(12-15)
+      │    ├── semi-join (cross)
+      │    │    ├── columns: empno:1!null ename:2 job:3 mgr:4 hiredate:5 sal:6 comm:7 emp.deptno:8 emp.crdb_internal_mvcc_timestamp:9 emp.tableoid:10
+      │    │    ├── key: (1)
+      │    │    ├── fd: (1)-->(2-10)
+      │    │    ├── scan emp
+      │    │    │    ├── columns: empno:1!null ename:2 job:3 mgr:4 hiredate:5 sal:6 comm:7 emp.deptno:8 emp.crdb_internal_mvcc_timestamp:9 emp.tableoid:10
+      │    │    │    ├── key: (1)
+      │    │    │    └── fd: (1)-->(2-10)
+      │    │    ├── scan dept
+      │    │    │    ├── columns: dept.deptno:11!null dname:12 loc:13 dept.crdb_internal_mvcc_timestamp:14 dept.tableoid:15
+      │    │    │    ├── key: (11)
+      │    │    │    └── fd: (11)-->(12-15)
+      │    │    └── filters (true)
+      │    ├── scan dept
+      │    │    ├── columns: dept.deptno:11!null dname:12 loc:13 dept.crdb_internal_mvcc_timestamp:14 dept.tableoid:15
+      │    │    ├── key: (11)
+      │    │    └── fd: (11)-->(12-15)
+      │    └── filters (true)
+      └── filters
+           └── emp.deptno:8 = dept.deptno:11 [outer=(8,11), constraints=(/8: (/NULL - ]; /11: (/NULL - ]), fd=(8)==(11), (11)==(8)]
+
+norm expect-not=JoinExtractFilter disable=(MergeSelectInnerJoin,PushFilterIntoJoinLeft,PushFilterIntoJoinRight,PushSelectIntoJoinLeft,PushSelectCondLeftIntoJoinLeftAndRight,FilterIntoJoin,FilterProjectTranspose,JoinAddRedundantSemiJoin,JoinConditionPush,SemiJoinFilterTranspose,SimplifyJoinFilters,EliminateProject,PruneScanCols,PruneJoinLeftCols,PruneJoinRightCols,PruneSemiAntiJoinRightCols,ProjectFilterTranspose)
+SELECT * FROM emp INNER JOIN dept ON TRUE
+----
+project
+ ├── columns: empno:1!null ename:2 job:3 mgr:4 hiredate:5 sal:6 comm:7 deptno:8 deptno:11!null dname:12 loc:13
+ ├── key: (1,11)
+ ├── fd: (1)-->(2-8), (11)-->(12,13)
+ └── inner-join (cross)
+      ├── columns: empno:1!null ename:2 job:3 mgr:4 hiredate:5 sal:6 comm:7 emp.deptno:8 emp.crdb_internal_mvcc_timestamp:9 emp.tableoid:10 dept.deptno:11!null dname:12 loc:13 dept.crdb_internal_mvcc_timestamp:14 dept.tableoid:15
+      ├── key: (1,11)
+      ├── fd: (1)-->(2-10), (11)-->(12-15)
+      ├── scan emp
+      │    ├── columns: empno:1!null ename:2 job:3 mgr:4 hiredate:5 sal:6 comm:7 emp.deptno:8 emp.crdb_internal_mvcc_timestamp:9 emp.tableoid:10
+      │    ├── key: (1)
+      │    └── fd: (1)-->(2-10)
       ├── scan dept
       │    ├── columns: dept.deptno:11!null dname:12 loc:13 dept.crdb_internal_mvcc_timestamp:14 dept.tableoid:15
       │    ├── key: (11)
@@ -932,3 +1547,33 @@ except
       │                   └── sal:26 < 500 [outer=(26), immutable, constraints=(/26: (/NULL - /500); tight)]
       └── projections
            └── column31:31 [as=empno:21, outer=(31)]
+
+norm expect-not=MinusMerge disable=(UnionMerge,IntersectMerge,SimplifyExcept,ProjectFilterTranspose,JoinConditionPush,FilterProjectTranspose,JoinExtractFilter)
+SELECT empno FROM emp
+EXCEPT
+SELECT empno FROM emp WHERE sal > 1000
+----
+except
+ ├── columns: empno:1!null
+ ├── left columns: empno:1!null
+ ├── right columns: empno:11
+ ├── immutable
+ ├── key: (1)
+ ├── scan emp
+ │    ├── columns: empno:1!null
+ │    └── key: (1)
+ └── project
+      ├── columns: empno:11!null
+      ├── immutable
+      ├── key: (11)
+      └── select
+           ├── columns: empno:11!null sal:16!null
+           ├── immutable
+           ├── key: (11)
+           ├── fd: (11)-->(16)
+           ├── scan emp
+           │    ├── columns: empno:11!null sal:16
+           │    ├── key: (11)
+           │    └── fd: (11)-->(16)
+           └── filters
+                └── sal:16 > 1000 [outer=(16), immutable, constraints=(/16: (/1000 - ]; tight)]

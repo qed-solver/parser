@@ -5,7 +5,7 @@
     $aggregations_2:*
     $private_4:*
 )
-    $cond_5:*
+    $cond_5:* & (FiltersBoundBy $cond_5 (GroupingCols $private_4))
 )
 =>
 (GroupBy

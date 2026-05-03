@@ -3,7 +3,7 @@
     (InnerJoin
     $input_0:*
     $input_1:*
-    $cond_2:*
+    $cond_2:* & ^(IsFilterEmpty $cond_2)
     $private_3:*
 )
     $cond_7:*

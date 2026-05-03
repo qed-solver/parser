@@ -5,7 +5,7 @@
     $cond_1:*
 )
     $proj_2:*
-    $passthrough_3:*
+    $passthrough_3:* & (FiltersBoundBy $cond_1 $passthrough_3)
 )
 =>
 (Select

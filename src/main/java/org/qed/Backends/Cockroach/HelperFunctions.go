@@ -25,13 +25,13 @@ func (c *CustomFuncs) extractConstantGroupingColsAndBuildDummy(
 
 	groupingCols := groupingPrivate.GroupingCols
 	constantCols = opt.ColSet{}
-	constantValues = make(memo.ScalarListExpr, 0)
+	constantToValue := make(map[opt.ColumnID]opt.ScalarExpr)
 
 	for i := range project.Projections {
 		item := &project.Projections[i]
 		if groupingCols.Contains(item.Col) && opt.IsConstValueOp(item.Element) {
 			constantCols.Add(item.Col)
-			constantValues = append(constantValues, item.Element)
+			constantToValue[item.Col] = item.Element
 		}
 	}
 
@@ -40,9 +40,12 @@ func (c *CustomFuncs) extractConstantGroupingColsAndBuildDummy(
 	}
 
 	md := c.mem.Metadata()
-	dummyCols = make(opt.ColList, len(constantValues))
-	for i := range constantValues {
-		dummyCols[i] = md.AddColumn("", constantValues[i].DataType())
+	constantColList := constantCols.ToList()
+	constantValues = make(memo.ScalarListExpr, len(constantColList))
+	dummyCols = make(opt.ColList, len(constantColList))
+	for i, col := range constantColList {
+		constantValues[i] = constantToValue[col]
+		dummyCols[i] = md.AddColumn("", constantToValue[col].DataType())
 	}
 
 	return constantCols, constantValues, dummyCols, true
@@ -165,8 +168,7 @@ func (c *CustomFuncs) ConstructAggregateProjectConstantToDummyJoin(
 	newProjections := c.RemapProjectionsForDummyJoin(project.Projections, constantCols, dummyCols)
 	newProject := c.f.ConstructProject(join, newProjections, project.Passthrough)
 
-	newGroupingPrivate := c.RemapGroupingColsForDummyJoin(groupingPrivate, constantCols, dummyCols)
-	return c.f.ConstructGroupBy(newProject, aggregations, newGroupingPrivate)
+	return c.f.ConstructGroupBy(newProject, aggregations, groupingPrivate)
 }
 
 func (c *CustomFuncs) CanMergeProjectIntoAggregate(
@@ -470,44 +472,18 @@ func (c *CustomFuncs) CanExtractJoinFilter(
 	if c.HasOuterCols(left) || c.HasOuterCols(right) {
 		return false
 	}
+
+	allCols := left.Relational().OutputCols.Union(right.Relational().OutputCols)
 	hasNonTrueCondition := false
 	for i := range on {
 		if on[i].Condition.Op() != opt.TrueOp {
 			hasNonTrueCondition = true
-			break
-		}
-	}
-	if !hasNonTrueCondition {
-		return false
-	}
-
-	leftCols := left.Relational().OutputCols
-	rightCols := right.Relational().OutputCols
-	hasBoundCondition := false
-	allBoundByOneSide := true
-	for i := range on {
-		if on[i].Condition.Op() != opt.TrueOp {
-			boundByLeft := c.IsBoundBy(&on[i], leftCols)
-			boundByRight := c.IsBoundBy(&on[i], rightCols)
-			if !boundByLeft && !boundByRight {
+			if !c.IsBoundBy(&on[i], allCols) {
 				return false
 			}
-			if boundByLeft && boundByRight {
-				allBoundByOneSide = false
-			}
-			hasBoundCondition = true
 		}
 	}
-
-	if !hasBoundCondition {
-		return false
-	}
-
-	if !allBoundByOneSide {
-		return false
-	}
-
-	return true
+	return hasNonTrueCondition
 }
 
 func (c *CustomFuncs) ConstructJoinExtractFilterResult(
@@ -519,6 +495,7 @@ func (c *CustomFuncs) ConstructJoinExtractFilterResult(
 	var disabledRules intsets.Fast
 	disabledRules.Add(int(opt.FilterIntoJoin))
 	disabledRules.Add(int(opt.MergeSelectInnerJoin))
+	disabledRules.Add(int(opt.JoinPushTransitivePredicates))
 
 	var result memo.RelExpr
 	c.f.DisableOptimizationRulesTemporarily(disabledRules, func() {
@@ -641,6 +618,10 @@ func (c *CustomFuncs) ConstructAggregateExtractProject(
 	var pb projectBuilder
 	pb.init(c, inputCols)
 
+	// exprToVar deduplicates: multiple aggregates using the same expression share
+	// one projected column rather than each getting a separate copy.
+	exprToVar := make(map[opt.ScalarExpr]opt.ScalarExpr)
+
 	newAggs := make(memo.AggregationsExpr, len(aggregations))
 	for i := range aggregations {
 		agg := aggregations[i].Agg
@@ -649,7 +630,12 @@ func (c *CustomFuncs) ConstructAggregateExtractProject(
 		if agg.ChildCount() > 0 {
 			arg := agg.Child(0)
 			if scalarArg, ok := arg.(opt.ScalarExpr); ok {
-				newArg = pb.add(scalarArg)
+				if varExpr, exists := exprToVar[scalarArg]; exists {
+					newArg = varExpr
+				} else {
+					newArg = pb.add(scalarArg)
+					exprToVar[scalarArg] = newArg
+				}
 			} else {
 				newArg = nil
 			}
@@ -771,23 +757,6 @@ func (c *CustomFuncs) IsSemiJoin(input memo.RelExpr) bool {
 	}
 }
 
-func (c *CustomFuncs) UnbindFiltersFromProjections(
-	projections memo.ProjectionsExpr, filters memo.FiltersExpr,
-) memo.FiltersExpr {
-	var colMap opt.ColMap
-	for i := range projections {
-		from := projections[i].Col
-		to := projections[i].Element.(*memo.VariableExpr).Col
-		colMap.Set(int(from), int(to))
-	}
-	newFilters := make(memo.FiltersExpr, len(filters))
-	for i := range filters {
-		newCondition := c.f.RemapCols(filters[i].Condition, colMap)
-		newFilters[i] = c.f.ConstructFiltersItem(newCondition)
-	}
-	return newFilters
-}
-
 func (c *CustomFuncs) BindFiltersToProjections(
 	projections memo.ProjectionsExpr, passthrough opt.ColSet, filters memo.FiltersExpr,
 ) memo.FiltersExpr {
@@ -808,47 +777,6 @@ func (c *CustomFuncs) BindFiltersToProjections(
 	return newFilters
 }
 
-
-func deriveGroupByRejectNullCols(
-	mem *memo.Memo, in memo.RelExpr, disabledRules intsets.Fast,
-) opt.ColSet {
-	input := in.Child(0).(memo.RelExpr)
-	aggs := *in.Child(1).(*memo.AggregationsExpr)
-
-	var rejectNullCols opt.ColSet
-	var savedInColID opt.ColumnID
-	for i := range aggs {
-		agg := memo.ExtractAggFunc(aggs[i].Agg)
-		aggOp := agg.Op()
-
-		if aggOp == opt.ConstAggOp {
-			continue
-		}
-
-		if !opt.AggregateIgnoresNulls(aggOp) || !opt.AggregateIsNullOnEmpty(aggOp) {
-			return opt.ColSet{}
-		}
-
-		var inColID opt.ColumnID
-		if v, ok := agg.Child(0).(*memo.VariableExpr); ok {
-			inColID = v.Col
-		} else {
-			return opt.ColSet{}
-		}
-
-		if savedInColID != 0 && savedInColID != inColID {
-			return opt.ColSet{}
-		}
-		savedInColID = inColID
-
-		if !DeriveRejectNullCols(mem, input, disabledRules).Contains(inColID) {
-			return opt.ColSet{}
-		}
-
-		rejectNullCols.Add(aggs[i].Col)
-	}
-	return rejectNullCols
-}
 
 func (c *CustomFuncs) AllFiltersCanMapOnSetOp(filters memo.FiltersExpr) bool {
 	for i := range filters {
@@ -909,12 +837,10 @@ func (c *CustomFuncs) ConstructMinusMergeResult(
 	outerPrivate *memo.SetPrivate,
 ) memo.RelExpr {
 	md := c.mem.Metadata()
-	
-	colType := md.ColumnMeta(innerPrivate.RightCols[0]).Type
-	
+
 	outCols := make(opt.ColList, len(innerPrivate.RightCols))
-	for i := range outCols {
-		outCols[i] = md.AddColumn("", colType)
+	for i, col := range innerPrivate.RightCols {
+		outCols[i] = md.AddColumn("", md.ColumnMeta(col).Type)
 	}
 	
 	unionPrivate := &memo.SetPrivate{
