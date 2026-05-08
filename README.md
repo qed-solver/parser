@@ -3,8 +3,6 @@
 SQL parser for the [Qed Solver](https://github.com/qed-solver/prover)
 based on that of [Apache Calcite](https://calcite.apache.org).
 
-> **RuleScript** — We also introduce RuleScript, an engine-agnostic DSL for developing query rewrite rules. See the [`dsl` branch](../../tree/dsl) and the [RuleScript repository](https://github.com/qed-solver/rulescript) for the full implementation and documentation.
-
 ## Requirements
 
 Java version 19.
