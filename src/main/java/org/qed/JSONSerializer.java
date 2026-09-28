@@ -9,13 +9,16 @@ import kala.collection.immutable.ImmutableMap;
 import kala.collection.mutable.MutableList;
 import org.apache.calcite.plan.RelOptTable;
 import org.apache.calcite.rel.RelNode;
+import org.apache.calcite.rel.core.AggregateCall;
 import org.apache.calcite.rel.core.CorrelationId;
 import org.apache.calcite.rel.core.TableScan;
 import org.apache.calcite.rel.logical.*;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rex.*;
+import org.apache.calcite.sql.SqlKind;
 import org.apache.calcite.util.ImmutableBitSet;
 
+import java.util.EnumSet;
 import java.util.Set;
 
 public record JSONSerializer(Env env) {
@@ -103,7 +106,7 @@ public record JSONSerializer(Env env) {
                             Map.of("operator", string(call.getAggregation().getName()), "operand",
                                     array(Seq.from(call.getArgList()).map(col -> object(
                                             Map.of("column", integer(level + col), "type", inputTypes.get(col))))),
-                                    "distinct", bool(call.isDistinct()), "ignoreNulls", bool(call.ignoreNulls()),
+                                    "distinct", bool(call.isDistinct()), "ignoreNulls", bool(skipsNulls(call)),
                                     "type", type(call.getType())))));
                     yield object(Map.of("group",
                             object(Map.of("keys", keys, "function", aggs, "source", serialize(input)))));
@@ -165,6 +168,23 @@ public record JSONSerializer(Env env) {
                 default -> throw new RuntimeException("Not implemented: " + rex.getKind());
             };
         }
+    }
+
+    private static final Set<SqlKind> NULL_SKIPPING =
+            EnumSet.of(SqlKind.COUNT, SqlKind.SUM, SqlKind.SUM0, SqlKind.AVG, SqlKind.MIN, SqlKind.MAX);
+
+    /**
+     * Whether the aggregate call skips NULL arguments, which is what the prover's {@code ignoreNulls}
+     * field means. This is not {@link AggregateCall#ignoreNulls()} alone: that reports the
+     * {@code IGNORE NULLS} null-treatment clause, which plain {@code COUNT(x)}, {@code SUM(x)}, etc.
+     * never carry even though they skip NULLs by definition. {@code COUNT(*)} has no argument and must
+     * stay {@code false}, since the prover would otherwise require the whole row to be non-NULL; an
+     * aggregate whose NULL handling is not known here also stays {@code false}, which can only cost a
+     * proof, never produce a wrong one.
+     */
+    static boolean skipsNulls(AggregateCall call) {
+        return call.ignoreNulls()
+                || (!call.getArgList().isEmpty() && NULL_SKIPPING.contains(call.getAggregation().getKind()));
     }
 
     private static ArrayNode array(Seq<JsonNode> objs) {

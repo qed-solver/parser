@@ -199,7 +199,7 @@ public record RelJSONShuttle(Env env) {
                                 array(Seq.from(call.getArgList()).map(target -> object(
                                         Map.of("column", new IntNode(level + groupCount + target), "type",
                                                 types.get(target))))), "distinct", bool(call.isDistinct()),
-                                "ignoreNulls", bool(call.ignoreNulls()), "type",
+                                "ignoreNulls", bool(JSONSerializer.skipsNulls(call)), "type",
                                 new TextNode(call.getType().toString())))));
                 var aggregated = object(Map.of("aggregate", object(Map.of("function", aggs, "source",
                         object(Map.of("filter", object(Map.of("condition", condition, "source",
